@@ -42,8 +42,10 @@ New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $root "link-checker.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "gui-server.mjs") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $root "convert-ut1-rules.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "check-links.cmd") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "gui.cmd") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $root "analyzer.cmd") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "public") -Destination $packageDir -Recurse
 Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $runtimeDir "node.exe")
@@ -55,14 +57,17 @@ $portableReadme = @(
   "1. Extract the whole folder.",
   "2. Run gui.cmd.",
   "3. Open http://127.0.0.1:8787 in your browser.",
+  "4. Run analyzer.cmd or open http://127.0.0.1:8787/analyzer.html to analyze external link exports.",
   "",
   "Command line:",
   "  check-links.cmd https://example.com",
+  "  runtime\node.exe convert-ut1-rules.mjs --input path\to\ut1\blacklists --output ut1-rules.json --pretty",
   "",
   "Notes:",
   "- Keep the whole folder together. Do not move only one cmd file.",
   "- runtime\node.exe is bundled, so users do not need to install Node.js.",
   "- GUI checks automatically save logs under the logs folder.",
+  "- External Link Analyzer imports report.json or external-links.csv and optional domain rules JSON.",
   "- The GUI queue can check multiple sites concurrently on this machine.",
   "- Keep concurrent site checks low for public/government websites."
 ) -join [Environment]::NewLine

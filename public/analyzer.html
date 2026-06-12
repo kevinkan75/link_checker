@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>External Link Analyzer</title>
+    <link rel="stylesheet" href="/analyzer.css">
+  </head>
+  <body>
+    <main class="analyzer-shell">
+      <header class="app-header">
+        <div>
+          <h1>External Link Analyzer</h1>
+          <p>匯入 Link Checker 產出的外連清單，套用分類規則與白名單後產生稽核報告。</p>
+        </div>
+        <nav>
+          <a href="/">Link Checker</a>
+        </nav>
+      </header>
+
+      <section class="setup-panel" aria-labelledby="setup-title">
+        <div class="section-heading">
+          <h2 id="setup-title">資料來源</h2>
+          <span id="load-state">尚未匯入資料</span>
+        </div>
+
+        <div class="setup-grid">
+          <label class="file-field">
+            <span>外連清單</span>
+            <input id="links-file" type="file" accept=".csv,.json,application/json,text/csv">
+          </label>
+
+          <label class="file-field">
+            <span>分類規則 JSON</span>
+            <input id="rules-file" type="file" accept=".json,application/json">
+          </label>
+
+          <label>
+            <span>搜尋</span>
+            <input id="search" type="search" placeholder="URL、網域、分類或來源頁">
+          </label>
+
+          <label>
+            <span>風險篩選</span>
+            <select id="risk-filter">
+              <option value="all">全部</option>
+              <option value="high">高風險</option>
+              <option value="medium">需檢視</option>
+              <option value="low">一般</option>
+              <option value="trusted">白名單</option>
+              <option value="uncategorized">未分類</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="rules-grid">
+          <label>
+            <span>高風險分類</span>
+            <input id="high-risk-categories" type="text" value="malware,phishing,cryptojacking,ddos,hacking,stalkerware,dialer">
+          </label>
+
+          <label>
+            <span>需檢視分類</span>
+            <input id="medium-risk-categories" type="text" value="shortener,vpn,redirector,strict_redirector,strong_redirector,filehosting,publicite,tracking_or_analytics">
+          </label>
+
+          <label class="trusted-field">
+            <span>白名單網域</span>
+            <textarea id="trusted-domains" rows="3" placeholder="example.gov.tw&#10;cdn.example.com"></textarea>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="analyze-button" type="button">分析</button>
+          <button id="export-json-button" type="button" disabled>匯出 JSON</button>
+          <button id="export-csv-button" type="button" disabled>匯出 CSV</button>
+        </div>
+      </section>
+
+      <section class="ut1-panel panel" aria-labelledby="ut1-title">
+        <div class="section-heading">
+          <h2 id="ut1-title">UT1 規則轉換</h2>
+          <span id="ut1-state">尚未選擇 UT1 blacklists 資料夾；若上方欄位無法讀取子資料夾，請用遞迴選擇資料夾</span>
+        </div>
+
+        <div class="ut1-grid">
+          <label class="file-field">
+            <span>UT1 blacklists 資料夾</span>
+            <input id="ut1-folder" type="file" webkitdirectory directory mozdirectory multiple>
+          </label>
+          <label>
+            <span>最少網域數</span>
+            <input id="ut1-min-domains" type="number" min="1" value="1">
+          </label>
+          <label>
+            <span>分類搜尋</span>
+            <input id="ut1-search" type="search" placeholder="social、phishing、webmail">
+          </label>
+        </div>
+
+        <div class="ut1-actions">
+          <button id="ut1-picker-button" type="button">遞迴選擇資料夾</button>
+          <button id="ut1-common-button" type="button" disabled>常用稽核分類</button>
+          <button id="ut1-security-button" type="button" disabled>安全風險分類</button>
+          <button id="ut1-select-all-button" type="button" disabled>全選</button>
+          <button id="ut1-clear-button" type="button" disabled>全不選</button>
+          <button id="ut1-apply-button" type="button" disabled>產生並套用</button>
+          <button id="ut1-download-button" type="button" disabled>下載 ut1-rules.json</button>
+        </div>
+
+        <div class="table-wrap ut1-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>納入</th>
+                <th>分類</th>
+                <th>domains 數量</th>
+              </tr>
+            </thead>
+            <tbody id="ut1-category-table">
+              <tr class="empty-row"><td colspan="3">選擇 UT1 blacklists 資料夾後會顯示分類。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="metric-grid" aria-label="外連分析摘要">
+        <div><span>外連筆數</span><strong id="metric-links">0</strong></div>
+        <div><span>外部網域</span><strong id="metric-domains">0</strong></div>
+        <div><span>高風險</span><strong id="metric-high">0</strong></div>
+        <div><span>需檢視</span><strong id="metric-medium">0</strong></div>
+        <div><span>未分類</span><strong id="metric-uncategorized">0</strong></div>
+        <div><span>外部表單/嵌入/腳本</span><strong id="metric-sensitive">0</strong></div>
+      </section>
+
+      <section class="analysis-layout">
+        <section class="panel">
+          <div class="section-heading">
+            <h2>網域彙整</h2>
+            <span id="domain-summary-count">0 個網域</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>風險</th>
+                  <th>網域</th>
+                  <th>筆數</th>
+                  <th>類型</th>
+                  <th>分類</th>
+                </tr>
+              </thead>
+              <tbody id="domain-table">
+                <tr class="empty-row"><td colspan="5">匯入資料後會顯示網域彙整。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <h2>分類統計</h2>
+            <span id="category-summary-count">0 個分類</span>
+          </div>
+          <div id="category-list" class="category-list">
+            <p class="empty-note">尚無分類資料。</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel links-panel">
+        <div class="section-heading">
+          <h2>外連明細</h2>
+          <span id="links-summary">0 筆</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>風險</th>
+                <th>URL</th>
+                <th>網域</th>
+                <th>類型</th>
+                <th>分類</th>
+                <th>來源頁</th>
+              </tr>
+            </thead>
+            <tbody id="links-table">
+              <tr class="empty-row"><td colspan="6">匯入資料後會顯示外連明細。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/analyzer.js" defer></script>
+  </body>
+</html>

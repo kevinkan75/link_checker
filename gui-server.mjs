@@ -1059,4 +1059,5 @@ const port = parsePort(process.argv.slice(2));
 const server = createAppServer();
 server.listen(port, "127.0.0.1", () => {
   console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);
+  console.log(`External Link Analyzer is running at http://127.0.0.1:${port}/analyzer.html`);
 });
