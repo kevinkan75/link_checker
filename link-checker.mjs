@@ -965,6 +965,7 @@ async function request(url, method, {
       });
 
       if (redirectChain.length > maxRedirects) {
+        await releaseResponseBody(response);
         return buildRedirectFailureResult({
           url,
           finalUrl: nextUrl,
@@ -982,6 +983,7 @@ async function request(url, method, {
 
       const visitUrl = normalizeRedirectVisitUrl(nextUrl);
       if (seenUrls.has(visitUrl)) {
+        await releaseResponseBody(response);
         return buildRedirectFailureResult({
           url,
           finalUrl: nextUrl,
@@ -997,6 +999,7 @@ async function request(url, method, {
         });
       }
 
+      await releaseResponseBody(response);
       seenUrls.add(visitUrl);
       currentUrl = nextUrl;
       currentMethod = getRedirectMethod(currentMethod, response.status);
@@ -1071,17 +1074,37 @@ async function buildResponseResult(response, {
     result.body = await response.text();
   } else if (!result.ok && isHtml(contentType)) {
     result.diagnosticBody = (await response.text()).slice(0, 4096);
+  } else {
+    await releaseResponseBody(response);
   }
 
-    applyRedirectMetadata(result, {
-      originalUrl: url,
-      redirectChain,
-      maxRedirects,
-      longRedirectThreshold,
-    });
-    applyResponseClassification(result, response.headers);
-    applyRedirectIssueClassification(result);
-    return result;
+  applyRedirectMetadata(result, {
+    originalUrl: url,
+    redirectChain,
+    maxRedirects,
+    longRedirectThreshold,
+  });
+  applyResponseClassification(result, response.headers);
+  applyRedirectIssueClassification(result);
+  return result;
+}
+
+async function releaseResponseBody(response, { maxDrainBytes = 64 * 1024 } = {}) {
+  if (!response.body) {
+    return;
+  }
+
+  try {
+    const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
+    if (Number.isFinite(contentLength) && contentLength <= maxDrainBytes) {
+      await response.arrayBuffer();
+      return;
+    }
+
+    await response.body.cancel();
+  } catch {
+    // Cleanup is best-effort; keep the original HTTP result intact.
+  }
 }
 
 function buildRedirectFailureResult({
