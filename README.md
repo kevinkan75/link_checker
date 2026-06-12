@@ -1,0 +1,196 @@
+# Local Link Checker
+
+這是一個可在本機執行的網站無效連結檢查工具。它會從指定網址開始讀取 HTML，解析頁面中的連結與資源，繼續爬行同網域頁面，並回報 HTTP 400 以上或連線失敗的連結。
+
+## 使用方式
+
+```powershell
+.\check-links.cmd https://example.com
+```
+
+或直接使用 Node.js：
+
+```powershell
+node .\link-checker.mjs https://example.com
+```
+
+## 圖形介面
+
+啟動本機 GUI：
+
+```powershell
+.\gui.cmd
+```
+
+開啟瀏覽器並前往：
+
+```text
+http://127.0.0.1:8787
+```
+
+GUI 可以輸入網站 URL、設定檢查頁數、深度、全域併發、每 host 併發、請求間隔、逾時、重試次數與語言標頭，選擇是否檢查外部連結，查看即時進度、瀏覽問題連結表格，並下載 JSON 報告。
+
+若要批次檢查多個網站，可在「待檢核網站佇列」輸入多個網址，一行一個。按「加入佇列」後再按「開始佇列」，工具會以單機本機佇列檢查；「同時檢查網站數」預設為 `1`，可設定 `1` 到 `5`。政府網站建議使用 `1` 或 `2`，較高併行數可能增加 `403`、`429` 或逾時。完成後可在佇列表格點「查看」載入該站報告。
+
+多網站併行檢查時，佇列表格中的執行中網站會提供「監看」按鈕。GUI 會先自動監看第一個執行中的網站；手動點選「監看」後，即時進度、事件紀錄與問題連結表會切換到該網站，後續輪詢不會自動切回其他網站。
+
+GUI 每次檢查結束後會自動保存記錄檔到 `logs/` 目錄，資料夾命名格式為 `YYYYMMDD-HHMMSS--host--status`。內容包含完整 `report.json`、摘要 `summary.json`、可用 Excel 開啟的 `broken.csv`，以及檢查過程 `events.log`。
+
+## 建立可攜版
+
+產生 Windows 可攜版 zip：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
+```
+
+輸出檔案會放在：
+
+```text
+dist\LinkChecker-portable.zip
+```
+
+可攜版內含 `runtime\node.exe`，使用者解壓縮後不需要另外安裝 Node.js。
+
+## 常用參數
+
+```powershell
+.\check-links.cmd https://example.com --max-pages 200 --max-depth 8
+.\check-links.cmd https://example.com --global-concurrency 20 --per-host-concurrency 4
+.\check-links.cmd https://example.com --request-delay 1.5 --retry-count 2
+.\check-links.cmd https://example.com --max-redirects 10 --long-redirect-threshold 3
+.\check-links.cmd https://example.com --external
+.\check-links.cmd https://example.com --progress
+.\check-links.cmd https://example.com --verbose
+.\check-links.cmd https://example.com --output report.json
+```
+
+- `--max-pages <n>`：最多爬行幾個同網域頁面，預設 `100`。
+- `--max-depth <n>`：從起始頁往下爬行的最大深度，預設 `2`。
+- `--concurrency <n>`：全域同時請求數，預設 `12`。
+- `--global-concurrency <n>`：同 `--concurrency`。
+- `--per-host-concurrency <n>`：每個 host 的同時請求數，預設 `4`。
+- `--request-delay-ms <n>`：同一 host 兩次請求的最小間隔毫秒數，預設 `500`。
+- `--request-delay <s>`：同一 host 兩次請求的最小間隔秒數，例如 `1.5`。
+- `--timeout <ms>`：單一請求逾時毫秒數，預設 `15000`。
+- `--timeout-seconds <n>`：單一請求逾時秒數。
+- `--retry-count <n>`：暫時性錯誤的重試次數，預設 `2`。
+- `--max-redirects <n>`：最多跟隨幾次 HTTP redirect，預設 `10`，可設 `0` 到 `20`。
+- `--long-redirect-threshold <n>`：redirect 次數超過此值時標示為轉址鏈過長，預設 `3`。
+- `--accept-language <value>`：送出的語言標頭，預設 `zh-TW,zh;q=0.9,en;q=0.8`。
+- `--user-agent <value>`：送出的 User-Agent。預設使用瀏覽器相容字串並包含 `LocalLinkChecker/1.0` 識別。
+- `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
+- `--progress`：執行時顯示單行即時狀態。
+- `--verbose`：逐行顯示爬行、請求、略過與檢查結果事件。
+- `--output <file>`：把完整結果輸出成 JSON。
+- `--json`：在畫面上輸出完整 JSON。
+
+## 執行狀態
+
+需要掌握檢查進度時，可以使用：
+
+```powershell
+.\check-links.cmd https://example.com --progress
+```
+
+進度列會顯示已爬頁面數、待爬佇列、已檢查 URL 數、目前請求數、問題連結數、略過外部連結數與已執行時間。
+
+需要追查每個事件時，可以使用：
+
+```powershell
+.\check-links.cmd https://example.com --verbose
+```
+
+也可以一起使用：
+
+```powershell
+.\check-links.cmd https://example.com --progress --verbose
+```
+
+使用 `--json` 時不會顯示進度或詳細事件，以避免破壞 JSON 輸出。
+
+## 友善檢查設定
+
+工具預設採用較保守的檢查方式：
+
+- 全域最多 `12` 個請求。
+- 每個 host 最多 `4` 個請求。
+- 同一 host 兩次請求至少間隔 `500ms`。
+- 暫時性錯誤最多重試 `2` 次。
+- 預設送出 `Accept-Language: zh-TW,zh;q=0.9,en;q=0.8`。
+
+重試只會用在逾時、部分網路錯誤、`429`、`500`、`502`、`503`、`504`。`404` 與已判定為防護阻擋的結果不會重試。
+
+部分檔案下載 API 可能對 `HEAD` 回傳錯誤，但 `GET` 實際可取得檔案。工具會在 `HEAD` 回傳 `403`、`404`、`405`、`501` 或伺服器錯誤時改用 `GET` 確認，避免把可下載的 PDF、檔案資源誤判為失效。
+
+若 `GET` 仍回傳 `403 Forbidden`，且沒有防護層特徵，報告會記為 `access_denied`。這代表伺服器拒絕目前工具請求，可能與權限、登入、Cookie、Referer、User-Agent、地區或網站政策有關；GUI 會獨立顯示為「存取被拒」，不再混入一般 HTTP 錯誤。
+
+若起始網址是網站根目錄 `/`，但根目錄回傳 `403 Forbidden`，工具會額外嘗試同站的 `/Default.aspx`。這可處理部分 ASP.NET 政府網站實際首頁位於 `Default.aspx`、但根目錄對程式化請求回 403 的情況。成功時報告會保留 `homepageFallback: true` 與 `homepageFallbackUrl`。
+
+部分網站的 `HEAD` 與 `GET` redirect 行為不同，例如 `HEAD` 被導到尾端 `/` 路徑後失敗，但一般瀏覽器 `GET` 原網址可正常開啟。工具會在 `HEAD` 出現 redirect error、redirect loop 或 too many redirects 時改用 `GET` 原網址確認。
+
+部分網站會依 User-Agent 套用不同 redirect 規則。工具預設使用瀏覽器相容 User-Agent，避免只因 `LocalLinkChecker/1.0` 這類非瀏覽器 UA 被導到錯誤頁；仍可用 `--user-agent` 明確覆蓋。
+
+檢查同站圖片、CSS、PDF 等頁面資源時，工具會帶上來源頁作為 `Referer`，模擬瀏覽器載入資源的行為。這可避免部分網站對沒有 `Referer` 的圖片請求回傳 `404`，造成可讀取資源被誤判。
+
+若同站資源的 `HEAD` 回 `404`，工具會用帶 `Referer` 的 `GET` 再確認一次。JSON 報告中的 `requestReferer` 可用來確認該次檢查實際送出的來源頁。
+
+工具會尊重 HTML 的 `<base href="...">`。若頁面是無副檔名的路由，例如 `/About/FormerMinisters`，且相對資源用 `img/file.jpg` 這類寫法，工具在標準 URL 解析得到 `404` 時，會再依序嘗試站台根目錄 `/img/file.jpg` 與路由目錄 `/About/FormerMinisters/img/file.jpg`，避免因 URL 正規化差異誤判。
+
+## Redirect 判讀
+
+工具會手動追蹤 HTTP redirect，並在報告中保存：
+
+- `redirected`：是否發生轉址。
+- `redirectCount`：轉址次數。
+- `redirectType`：永久、暫時或混合轉址。
+- `redirectIssues`：跨 host、過長、轉址後錯誤、轉址循環等提醒或錯誤。
+- `redirectChain`：每一步 `from / status / to`。
+
+不直接算失效，只列為提醒：
+
+- `permanent_redirect`：`301`、`308`。
+- `temporary_redirect`：`302`、`303`、`307`。
+- `mixed_redirect`：同一 chain 同時有永久與暫時轉址。
+- `cross_host_redirect`：最終 host 與原始 host 不同。
+- `long_redirect_chain`：轉址次數超過 `--long-redirect-threshold`。
+
+會算入失效連結：
+
+- `redirect_to_error`：轉址後最終 HTTP 狀態為 `400` 以上。
+- `too_many_redirects`：超過 `--max-redirects`。
+- `redirect_loop`：redirect chain 中 URL 重複。
+
+## 結果判讀
+
+工具會列出：
+
+- 爬行頁面數
+- 檢查 URL 數
+- 問題連結數
+- 問題連結分類統計
+- 每個問題連結的 HTTP 狀態或錯誤訊息
+- 問題連結是在哪些頁面與標籤屬性中發現
+- 若網站回應像 Cloudflare、Akamai、Imperva、Sucuri 等防護頁，會標示為被防護層阻擋
+
+問題連結分類包含：
+
+- `404`：頁面或資源不存在。
+- `防護阻擋`：Cloudflare、Akamai、Imperva、Sucuri 等防護層拒絕程式化請求。
+- `存取被拒`：HTTP 403，伺服器拒絕目前工具請求，通常需要人工確認。
+- `HTTP 錯誤`：除了 404、防護阻擋與存取被拒以外的 HTTP 400 以上狀態。
+- `逾時`：請求超過設定時間沒有完成。
+- `網路錯誤`：DNS、連線拒絕、權限阻擋等未取得 HTTP 回應的錯誤。
+- `其他`：無法歸入上述類型的錯誤。
+
+程式結束代碼：
+
+- `0`：沒有發現失效連結
+- `1`：執行參數或程式錯誤
+- `2`：有發現失效連結
+
+## 注意事項
+
+部分網站會阻擋自動化請求，可能導致 `403` 或逾時。這種情況不一定代表網站真的有壞連結，需要再用瀏覽器確認。
+
+當結果顯示「Blocked by protection layer」或 GUI 顯示「防護阻擋」時，通常代表網站前方的防護服務拒絕程式化請求。這不一定是連結失效，建議用一般瀏覽器人工確認，或請網站管理方允許檢查來源。

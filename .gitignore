@@ -1,0 +1,5 @@
+dist/
+logs/
+report.json
+
+*.log

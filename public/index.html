@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Link Checker</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="control-panel" aria-labelledby="title">
+        <div class="title-block">
+          <h1 id="title">Link Checker</h1>
+          <p>輸入網站網址，檢查站內無效連結與資源。</p>
+        </div>
+
+        <form id="check-form" class="form-grid">
+          <label class="url-field">
+            <span>網站 URL</span>
+            <input id="url" name="url" type="url" placeholder="https://example.com" required>
+          </label>
+
+          <label>
+            <span>最多頁面</span>
+            <input id="max-pages" name="maxPages" type="number" min="1" max="5000" value="100">
+          </label>
+
+          <label>
+            <span>最大深度</span>
+            <input id="max-depth" name="maxDepth" type="number" min="1" max="50" value="2">
+          </label>
+
+          <label>
+            <span>全域併發</span>
+            <input id="concurrency" name="concurrency" type="number" min="1" max="100" value="12">
+          </label>
+
+          <label>
+            <span>每 host 併發</span>
+            <input id="per-host-concurrency" name="perHostConcurrency" type="number" min="1" max="50" value="4">
+          </label>
+
+          <label>
+            <span>間隔毫秒</span>
+            <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="500">
+          </label>
+
+          <label>
+            <span>逾時毫秒</span>
+            <input id="timeout" name="timeoutMs" type="number" min="1000" max="120000" step="500" value="15000">
+          </label>
+
+          <label>
+            <span>重試次數</span>
+            <input id="retry-count" name="retryCount" type="number" min="0" max="5" value="2">
+          </label>
+
+          <label>
+            <span>最大轉址</span>
+            <input id="max-redirects" name="maxRedirects" type="number" min="0" max="20" value="10">
+          </label>
+
+          <label>
+            <span>轉址過長門檻</span>
+            <input id="long-redirect-threshold" name="longRedirectThreshold" type="number" min="0" max="20" value="3">
+          </label>
+
+          <label class="language-field">
+            <span>語言標頭</span>
+            <input id="accept-language" name="acceptLanguage" type="text" value="zh-TW,zh;q=0.9,en;q=0.8">
+          </label>
+
+          <label class="language-field">
+            <span>User-Agent</span>
+            <input id="user-agent" name="userAgent" type="text" value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LocalLinkChecker/1.0">
+          </label>
+
+          <label class="toggle-field">
+            <input id="external" name="checkExternal" type="checkbox">
+            <span>檢查外部連結</span>
+          </label>
+
+          <div class="actions">
+            <button id="start-button" type="submit">開始檢查</button>
+            <button id="stop-button" type="button" disabled>停止</button>
+            <button id="download-button" type="button" disabled>下載 JSON</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="queue-panel">
+        <div class="section-heading">
+          <h2>待檢核網站佇列</h2>
+          <span id="queue-summary">尚未加入網站</span>
+        </div>
+        <label class="batch-field">
+          <span>批次網址</span>
+          <textarea id="batch-urls" rows="4" placeholder="https://www.example.gov.tw/&#10;https://www.example2.gov.tw/"></textarea>
+        </label>
+        <label class="site-concurrency-field">
+          <span>同時檢查網站數</span>
+          <input id="max-concurrent-sites" type="number" min="1" max="5" value="1">
+        </label>
+        <p class="queue-hint">較高併行數可能增加 403、429 或逾時；政府網站建議使用 1 或 2。</p>
+        <div class="queue-actions">
+          <button id="add-queue-button" type="button">加入佇列</button>
+          <button id="start-queue-button" type="button">開始佇列</button>
+          <button id="stop-queue-button" type="button" disabled>停止佇列</button>
+        </div>
+        <div class="table-wrap queue-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>狀態</th>
+                <th>網站</th>
+                <th>已檢查</th>
+                <th>問題</th>
+                <th>記錄</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="queue-table">
+              <tr class="empty-row">
+                <td colspan="6">尚未加入待檢核網站。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="status-panel" aria-live="polite">
+        <div class="status-heading">
+          <div>
+            <span id="state-badge" class="badge idle">待命</span>
+            <strong id="status-title">尚未開始</strong>
+          </div>
+          <span id="elapsed">0s</span>
+        </div>
+        <p id="watching-site" class="watching-site" hidden></p>
+        <div class="progress-track" aria-hidden="true">
+          <div id="progress-bar"></div>
+        </div>
+        <div class="metric-grid">
+          <div><span>已爬頁面</span><strong id="pages">0 / 100</strong></div>
+          <div><span>已檢查 URL</span><strong id="checked">0</strong></div>
+          <div><span>目前請求</span><strong id="active">0</strong></div>
+          <div><span>待爬佇列</span><strong id="queue">0</strong></div>
+          <div><span>問題連結</span><strong id="broken-count">0</strong></div>
+          <div><span>略過外部</span><strong id="skipped">0</strong></div>
+        </div>
+        <div class="issue-grid">
+          <div><span>404</span><strong id="issue-not-found">0</strong></div>
+          <div><span>防護阻擋</span><strong id="issue-protected">0</strong></div>
+          <div><span>存取被拒</span><strong id="issue-access-denied">0</strong></div>
+          <div><span>HTTP 錯誤</span><strong id="issue-http">0</strong></div>
+          <div><span>逾時</span><strong id="issue-timeout">0</strong></div>
+          <div><span>網路錯誤</span><strong id="issue-network">0</strong></div>
+          <div><span>其他</span><strong id="issue-unknown">0</strong></div>
+        </div>
+        <div class="redirect-grid">
+          <div><span>轉址 URL</span><strong id="redirect-total">0</strong></div>
+          <div><span>永久轉址</span><strong id="redirect-permanent">0</strong></div>
+          <div><span>暫時轉址</span><strong id="redirect-temporary">0</strong></div>
+          <div><span>跨 host</span><strong id="redirect-cross-host">0</strong></div>
+          <div><span>轉址過長</span><strong id="redirect-long">0</strong></div>
+          <div><span>未完成轉址</span><strong id="redirect-unresolved">0</strong></div>
+        </div>
+        <p id="current-url" class="current-url">目前沒有處理中的 URL</p>
+        <p id="log-location" class="log-location" hidden></p>
+      </section>
+
+      <section class="results-layout">
+        <div class="results-panel">
+          <div class="section-heading">
+            <h2>問題連結</h2>
+            <span id="result-summary">尚無結果</span>
+          </div>
+          <div id="filter-bar" class="filter-bar" aria-label="問題連結分類篩選">
+            <button type="button" class="active" data-filter="all">全部 <span>0</span></button>
+            <button type="button" data-filter="not_found">404 <span>0</span></button>
+            <button type="button" data-filter="protected">防護阻擋 <span>0</span></button>
+            <button type="button" data-filter="access_denied">存取被拒 <span>0</span></button>
+            <button type="button" data-filter="http_error">HTTP 錯誤 <span>0</span></button>
+            <button type="button" data-filter="timeout">逾時 <span>0</span></button>
+            <button type="button" data-filter="network_error">網路錯誤 <span>0</span></button>
+            <button type="button" data-filter="unknown_error">其他 <span>0</span></button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>狀態</th>
+                  <th>URL</th>
+                  <th>發現位置</th>
+                </tr>
+              </thead>
+              <tbody id="broken-table">
+                <tr class="empty-row">
+                  <td colspan="3">開始檢查後，問題連結會顯示在這裡。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="log-panel">
+          <div class="section-heading">
+            <h2>事件紀錄</h2>
+            <button id="clear-log" type="button">清除</button>
+          </div>
+          <ol id="event-log"></ol>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>

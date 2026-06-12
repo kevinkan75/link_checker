@@ -1,0 +1,803 @@
+const form = document.querySelector("#check-form");
+const urlInput = document.querySelector("#url");
+const maxPagesInput = document.querySelector("#max-pages");
+const maxDepthInput = document.querySelector("#max-depth");
+const concurrencyInput = document.querySelector("#concurrency");
+const perHostConcurrencyInput = document.querySelector("#per-host-concurrency");
+const requestDelayInput = document.querySelector("#request-delay");
+const timeoutInput = document.querySelector("#timeout");
+const retryCountInput = document.querySelector("#retry-count");
+const maxRedirectsInput = document.querySelector("#max-redirects");
+const longRedirectThresholdInput = document.querySelector("#long-redirect-threshold");
+const acceptLanguageInput = document.querySelector("#accept-language");
+const userAgentInput = document.querySelector("#user-agent");
+const externalInput = document.querySelector("#external");
+const startButton = document.querySelector("#start-button");
+const stopButton = document.querySelector("#stop-button");
+const downloadButton = document.querySelector("#download-button");
+const batchUrlsInput = document.querySelector("#batch-urls");
+const maxConcurrentSitesInput = document.querySelector("#max-concurrent-sites");
+const addQueueButton = document.querySelector("#add-queue-button");
+const startQueueButton = document.querySelector("#start-queue-button");
+const stopQueueButton = document.querySelector("#stop-queue-button");
+const queueSummary = document.querySelector("#queue-summary");
+const queueTable = document.querySelector("#queue-table");
+const clearLogButton = document.querySelector("#clear-log");
+const stateBadge = document.querySelector("#state-badge");
+const statusTitle = document.querySelector("#status-title");
+const watchingSite = document.querySelector("#watching-site");
+const elapsed = document.querySelector("#elapsed");
+const progressBar = document.querySelector("#progress-bar");
+const pages = document.querySelector("#pages");
+const checked = document.querySelector("#checked");
+const active = document.querySelector("#active");
+const queue = document.querySelector("#queue");
+const brokenCount = document.querySelector("#broken-count");
+const skipped = document.querySelector("#skipped");
+const currentUrl = document.querySelector("#current-url");
+const logLocation = document.querySelector("#log-location");
+const brokenTable = document.querySelector("#broken-table");
+const resultSummary = document.querySelector("#result-summary");
+const eventLog = document.querySelector("#event-log");
+const issueNotFound = document.querySelector("#issue-not-found");
+const issueProtected = document.querySelector("#issue-protected");
+const issueAccessDenied = document.querySelector("#issue-access-denied");
+const issueHttp = document.querySelector("#issue-http");
+const issueTimeout = document.querySelector("#issue-timeout");
+const issueNetwork = document.querySelector("#issue-network");
+const issueUnknown = document.querySelector("#issue-unknown");
+const redirectTotal = document.querySelector("#redirect-total");
+const redirectPermanent = document.querySelector("#redirect-permanent");
+const redirectTemporary = document.querySelector("#redirect-temporary");
+const redirectCrossHost = document.querySelector("#redirect-cross-host");
+const redirectLong = document.querySelector("#redirect-long");
+const redirectUnresolved = document.querySelector("#redirect-unresolved");
+const filterBar = document.querySelector("#filter-bar");
+
+let currentJobId = null;
+let eventSource = null;
+let currentReport = null;
+let currentFilter = "all";
+let queuePollTimer = null;
+let watchedQueueItemId = null;
+let watchedQueueUrl = null;
+let manualWatchSelected = false;
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await startCheck();
+});
+
+stopButton.addEventListener("click", async () => {
+  if (!currentJobId) {
+    return;
+  }
+  await fetch(`/api/jobs/${currentJobId}/stop`, { method: "POST" });
+  setState("stopping");
+});
+
+downloadButton.addEventListener("click", () => {
+  if (!currentReport) {
+    return;
+  }
+  const blob = new Blob([`${JSON.stringify(currentReport, null, 2)}\n`], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `link-check-report-${Date.now()}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+});
+
+addQueueButton.addEventListener("click", async () => {
+  await addQueueItems();
+});
+
+startQueueButton.addEventListener("click", async () => {
+  await fetch("/api/queue/start", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      maxConcurrentSites: maxConcurrentSitesInput.value,
+    }),
+  });
+  await refreshQueue();
+  startQueuePolling();
+});
+
+stopQueueButton.addEventListener("click", async () => {
+  await fetch("/api/queue/stop", { method: "POST" });
+  await refreshQueue();
+});
+
+queueTable.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) {
+    return;
+  }
+
+  const id = button.dataset.id;
+  if (button.dataset.action === "view") {
+    await viewQueueReport(id);
+  }
+  if (button.dataset.action === "watch") {
+    await watchQueueItem(id);
+  }
+  if (button.dataset.action === "remove") {
+    await removeQueueItem(id);
+  }
+});
+
+clearLogButton.addEventListener("click", () => {
+  eventLog.replaceChildren();
+});
+
+filterBar.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-filter]");
+  if (!button) {
+    return;
+  }
+
+  currentFilter = button.dataset.filter;
+  updateActiveFilter();
+  if (currentReport) {
+    renderBrokenTable(currentReport.broken || []);
+  }
+});
+
+async function startCheck() {
+  closeEvents();
+  currentReport = null;
+  currentJobId = null;
+  watchedQueueItemId = null;
+  watchedQueueUrl = null;
+  manualWatchSelected = false;
+  currentFilter = "all";
+  downloadButton.disabled = true;
+  brokenTable.innerHTML = '<tr class="empty-row"><td colspan="3">檢查中，發現問題連結後會顯示在這裡。</td></tr>';
+  resultSummary.textContent = "檢查中";
+  updateIssueBreakdown(emptyBreakdown(), 0);
+  updateFilterCounts(emptyBreakdown(), 0);
+  updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
+  updateActiveFilter();
+  showLogLocation(null);
+  updateWatchingSite();
+  eventLog.replaceChildren();
+  setState("running");
+  setBusy(true);
+
+  const payload = {
+    url: urlInput.value.trim(),
+    ...getCheckOptions(),
+  };
+
+  try {
+    const response = await fetch("/api/jobs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "無法開始檢查");
+    }
+
+    currentJobId = data.id;
+    connectEvents(data.eventsUrl);
+  } catch (error) {
+    setState("failed");
+    statusTitle.textContent = error.message;
+    setBusy(false);
+  }
+}
+
+function getCheckOptions() {
+  return {
+    maxPages: maxPagesInput.value,
+    maxDepth: maxDepthInput.value,
+    concurrency: concurrencyInput.value,
+    perHostConcurrency: perHostConcurrencyInput.value,
+    requestDelayMs: requestDelayInput.value,
+    timeoutMs: timeoutInput.value,
+    retryCount: retryCountInput.value,
+    maxRedirects: maxRedirectsInput.value,
+    longRedirectThreshold: longRedirectThresholdInput.value,
+    acceptLanguage: acceptLanguageInput.value.trim(),
+    userAgent: userAgentInput.value.trim(),
+    checkExternal: externalInput.checked,
+  };
+}
+
+async function addQueueItems() {
+  const urls = batchUrlsInput.value.trim();
+  if (!urls) {
+    statusTitle.textContent = "請先輸入批次網址";
+    return;
+  }
+
+  const response = await fetch("/api/queue/items", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      urls,
+      ...getCheckOptions(),
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    statusTitle.textContent = data.error || "無法加入佇列";
+    return;
+  }
+
+  batchUrlsInput.value = "";
+  renderQueue(data.queue);
+  startQueuePolling();
+}
+
+function startQueuePolling() {
+  if (queuePollTimer) {
+    return;
+  }
+  queuePollTimer = setInterval(refreshQueue, 1000);
+}
+
+function stopQueuePollingIfIdle(queueState) {
+  if (!queuePollTimer || queueState?.running) {
+    return;
+  }
+  clearInterval(queuePollTimer);
+  queuePollTimer = null;
+}
+
+async function refreshQueue() {
+  const response = await fetch("/api/queue");
+  if (!response.ok) {
+    return;
+  }
+  const queueState = await response.json();
+  renderQueue(queueState);
+  connectRunningQueueJob(queueState);
+  stopQueuePollingIfIdle(queueState);
+}
+
+function renderQueue(queueState) {
+  const totals = queueState?.totals || {};
+  const total = totals.total || 0;
+  const activeSites = queueState?.activeSites || totals.running || 0;
+  const maxConcurrentSites = queueState?.maxConcurrentSites || maxConcurrentSitesInput.value || 1;
+  queueSummary.textContent = total
+    ? `共 ${total} 個，執行中 ${activeSites} / ${maxConcurrentSites}，等待 ${totals.queued || 0}，完成 ${totals.finished || 0}，失敗 ${totals.failed || 0}，停止 ${totals.stopped || 0}`
+    : "尚未加入網站";
+  startQueueButton.disabled = Boolean(queueState?.running) || !(totals.queued > 0);
+  stopQueueButton.disabled = !queueState?.running;
+  maxConcurrentSitesInput.disabled = Boolean(queueState?.running);
+
+  const items = queueState?.items || [];
+  if (items.length === 0) {
+    queueTable.innerHTML = '<tr class="empty-row"><td colspan="6">尚未加入待檢核網站。</td></tr>';
+    return;
+  }
+
+  queueTable.replaceChildren(...items.map((item) => {
+    const row = document.createElement("tr");
+    const state = document.createElement("td");
+    state.append(makeQueueStateBadge(item.state));
+
+    const url = document.createElement("td");
+    url.className = "queue-url";
+    url.textContent = item.url;
+
+    const checkedCell = document.createElement("td");
+    checkedCell.textContent = item.summary?.urlsChecked ?? "";
+
+    const issueCell = document.createElement("td");
+    issueCell.textContent = item.summary?.brokenLinks ?? "";
+
+    const log = document.createElement("td");
+    log.textContent = item.logRelativePath || item.logError || "";
+
+    const actions = document.createElement("td");
+    actions.className = "queue-actions-cell";
+    if (item.state === "running" && item.jobId) {
+      const watch = document.createElement("button");
+      watch.type = "button";
+      watch.dataset.action = "watch";
+      watch.dataset.id = item.id;
+      watch.disabled = item.id === watchedQueueItemId;
+      watch.textContent = item.id === watchedQueueItemId ? "監看中" : "監看";
+      actions.append(watch);
+    }
+    if (item.summary) {
+      const view = document.createElement("button");
+      view.type = "button";
+      view.dataset.action = "view";
+      view.dataset.id = item.id;
+      view.textContent = "查看";
+      actions.append(view);
+    }
+    if (item.state !== "running") {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.dataset.action = "remove";
+      remove.dataset.id = item.id;
+      remove.textContent = "移除";
+      actions.append(remove);
+    }
+
+    row.append(state, url, checkedCell, issueCell, log, actions);
+    return row;
+  }));
+}
+
+function makeQueueStateBadge(state) {
+  const span = document.createElement("span");
+  span.className = `badge ${state}`;
+  const labels = {
+    queued: "等待中",
+    running: "執行中",
+    finished: "完成",
+    stopped: "已停止",
+    failed: "失敗",
+  };
+  span.textContent = labels[state] || state;
+  return span;
+}
+
+function connectRunningQueueJob(queueState) {
+  const items = queueState.items || [];
+  const watched = watchedQueueItemId
+    ? items.find((item) => item.id === watchedQueueItemId)
+    : null;
+  if (watched) {
+    watchedQueueUrl = watched.url;
+    updateWatchingSite();
+    if (!manualWatchSelected && watched.state !== "running") {
+      watchedQueueItemId = null;
+      watchedQueueUrl = null;
+      updateWatchingSite();
+    } else {
+      return;
+    }
+  }
+
+  if (manualWatchSelected) {
+    return;
+  }
+
+  const running = items.find((item) => item.state === "running" && item.jobId);
+  if (!running || running.jobId === currentJobId) {
+    return;
+  }
+
+  watchQueueItemObject(running, { manual: false });
+}
+
+async function watchQueueItem(id) {
+  const queueState = await fetch("/api/queue").then((item) => item.json());
+  const item = (queueState.items || []).find((candidate) => candidate.id === id);
+  if (!item || !item.jobId) {
+    statusTitle.textContent = "該網站目前沒有可監看的執行工作";
+    return;
+  }
+
+  watchQueueItemObject(item, { manual: true });
+  renderQueue(queueState);
+}
+
+function watchQueueItemObject(item, { manual }) {
+  currentJobId = item.jobId;
+  watchedQueueItemId = item.id;
+  watchedQueueUrl = item.url;
+  manualWatchSelected = manual || manualWatchSelected;
+  currentReport = null;
+  currentFilter = "all";
+  downloadButton.disabled = true;
+  eventLog.replaceChildren();
+  renderBrokenTable([]);
+  resultSummary.textContent = "檢查中";
+  showLogLocation(null);
+  updateWatchingSite();
+  closeEvents();
+  connectEvents(`/api/jobs/${item.jobId}/events`);
+  setBusy(true);
+}
+
+function updateWatchingSite() {
+  if (!watchingSite) {
+    return;
+  }
+  if (!watchedQueueUrl) {
+    watchingSite.hidden = true;
+    watchingSite.textContent = "";
+    return;
+  }
+  watchingSite.hidden = false;
+  watchingSite.textContent = `目前監看：${watchedQueueUrl}`;
+}
+
+async function viewQueueReport(id) {
+  const response = await fetch(`/api/queue/items/${id}/report`);
+  const data = await response.json();
+  if (!response.ok || response.status === 202) {
+    statusTitle.textContent = data.error || "該項目尚未產生報告";
+    return;
+  }
+
+  closeEvents();
+  currentJobId = null;
+  watchedQueueItemId = id;
+  watchedQueueUrl = null;
+  manualWatchSelected = true;
+  currentReport = data;
+  currentFilter = "all";
+  renderReport(data);
+  setState("finished");
+  setBusy(false);
+  downloadButton.disabled = false;
+  const queueState = await fetch("/api/queue").then((item) => item.json());
+  const queueItem = (queueState.items || []).find((item) => item.id === id);
+  watchedQueueUrl = queueItem?.url || data.startUrl || null;
+  updateWatchingSite();
+  showLogLocation(queueItem || null);
+}
+
+async function removeQueueItem(id) {
+  const response = await fetch(`/api/queue/items/${id}/remove`, { method: "POST" });
+  const data = await response.json();
+  if (!response.ok) {
+    statusTitle.textContent = data.error || "無法移除佇列項目";
+    return;
+  }
+  renderQueue(data);
+}
+
+function connectEvents(url) {
+  eventSource = new EventSource(url);
+  eventSource.addEventListener("status", (event) => {
+    updateStatus(JSON.parse(event.data));
+  });
+  eventSource.addEventListener("log", (event) => {
+    appendLog(JSON.parse(event.data));
+  });
+  eventSource.addEventListener("complete", (event) => {
+    const data = JSON.parse(event.data);
+    currentReport = data.report;
+    renderReport(currentReport);
+    showLogLocation(data);
+    setState(data.state);
+    setBusy(false);
+    downloadButton.disabled = false;
+    closeEvents();
+  });
+  eventSource.addEventListener("error", (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      statusTitle.textContent = data.message;
+      showLogLocation(data);
+    } catch {
+      statusTitle.textContent = "連線中斷";
+    }
+    setState("failed");
+    setBusy(false);
+    closeEvents();
+  });
+}
+
+function closeEvents() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+}
+
+function showLogLocation(data) {
+  if (!logLocation) {
+    return;
+  }
+
+  if (!data) {
+    logLocation.hidden = true;
+    logLocation.textContent = "";
+    return;
+  }
+
+  if (data.logRelativePath) {
+    logLocation.hidden = false;
+    logLocation.textContent = `記錄已保存：${data.logRelativePath}`;
+    return;
+  }
+
+  if (data.logError) {
+    logLocation.hidden = false;
+    logLocation.textContent = `記錄保存失敗：${data.logError}`;
+  }
+}
+
+function updateStatus(status) {
+  setState(status.state || "running");
+  elapsed.textContent = `${status.elapsedSeconds || 0}s`;
+  pages.textContent = `${status.pagesCrawled || 0} / ${status.maxPages || maxPagesInput.value}`;
+  checked.textContent = status.urlsChecked || 0;
+  active.textContent = status.activeRequests || 0;
+  queue.textContent = status.queuedPages || 0;
+  brokenCount.textContent = status.brokenLinks || 0;
+  skipped.textContent = status.skippedExternal || 0;
+  currentUrl.textContent = status.currentUrl || "目前沒有處理中的 URL";
+  updateIssueBreakdown(status.brokenByType || emptyBreakdown(), status.brokenLinks || 0);
+  updateFilterCounts(status.brokenByType || emptyBreakdown(), status.brokenLinks || 0);
+  updateRedirectBreakdown(status.redirectByType || emptyRedirectBreakdown(), status.redirects || 0);
+
+  const maxPages = Number(status.maxPages || maxPagesInput.value || 1);
+  const crawled = Number(status.pagesCrawled || 0);
+  const width = Math.max(0, Math.min(100, (crawled / maxPages) * 100));
+  progressBar.style.width = `${width}%`;
+}
+
+function setState(state) {
+  stateBadge.className = `badge ${state}`;
+  const labels = {
+    idle: "待命",
+    running: "執行中",
+    stopping: "停止中",
+    stopped: "已停止",
+    finished: "完成",
+    failed: "失敗",
+  };
+  stateBadge.textContent = labels[state] || state;
+
+  const titles = {
+    idle: "尚未開始",
+    running: "正在檢查網站連結",
+    stopping: "正在停止檢查",
+    stopped: "檢查已停止",
+    finished: "檢查完成",
+    failed: "檢查失敗",
+  };
+  statusTitle.textContent = titles[state] || "狀態更新";
+}
+
+function setBusy(isBusy) {
+  startButton.disabled = isBusy;
+  stopButton.disabled = !isBusy;
+}
+
+function appendLog(item) {
+  const li = document.createElement("li");
+  const type = document.createElement("span");
+  type.className = "log-type";
+  type.textContent = item.type;
+  const text = document.createTextNode(item.message);
+  li.append(type, text);
+  eventLog.prepend(li);
+
+  while (eventLog.children.length > 250) {
+    eventLog.lastElementChild.remove();
+  }
+}
+
+function renderReport(report) {
+  const broken = report.broken || [];
+  resultSummary.textContent = `${broken.length} 個問題連結`;
+  brokenCount.textContent = broken.length;
+  pages.textContent = `${report.summary.pagesCrawled} / ${report.options.maxPages}`;
+  checked.textContent = report.summary.urlsChecked;
+  skipped.textContent = report.summary.skippedExternal;
+  progressBar.style.width = "100%";
+  updateIssueBreakdown(report.summary.brokenByType || buildBreakdown(broken), broken.length);
+  updateFilterCounts(report.summary.brokenByType || buildBreakdown(broken), broken.length);
+  updateRedirectBreakdown(report.summary.redirectByType || emptyRedirectBreakdown(), report.summary.redirects || 0);
+  updateActiveFilter();
+
+  renderBrokenTable(broken);
+}
+
+function renderBrokenTable(broken) {
+  const visible = currentFilter === "all"
+    ? broken
+    : broken.filter((item) => (item.issueType || getIssueType(item)) === currentFilter);
+
+  if (broken.length === 0) {
+    brokenTable.innerHTML = '<tr class="empty-row"><td colspan="3">沒有發現問題連結。</td></tr>';
+    return;
+  }
+
+  if (visible.length === 0) {
+    brokenTable.innerHTML = '<tr class="empty-row"><td colspan="3">此分類沒有問題連結。</td></tr>';
+    return;
+  }
+
+  brokenTable.replaceChildren(...visible.map((item) => {
+    const row = document.createElement("tr");
+    const status = document.createElement("td");
+    const statusCode = document.createElement("span");
+    const issueType = item.issueType || getIssueType(item);
+    const statusClass = item.classification === "protected"
+      ? "protected"
+      : issueType === "access_denied"
+        ? "access-denied"
+        : "";
+    statusCode.className = `status-code ${statusClass}`;
+    statusCode.textContent = formatIssueLabel(item);
+    status.append(statusCode);
+    if (item.classification === "protected" || issueType === "access_denied") {
+      const diagnosis = document.createElement("div");
+      diagnosis.className = "diagnosis";
+      diagnosis.textContent = formatDiagnosis(item);
+      status.append(diagnosis);
+    }
+    if (item.redirected) {
+      const redirect = document.createElement("div");
+      redirect.className = "diagnosis";
+      redirect.textContent = `${item.redirectCount} 次轉址，最終 URL：${item.finalUrl}`;
+      status.append(redirect);
+    }
+
+    const url = document.createElement("td");
+    url.textContent = item.url;
+
+    const sources = document.createElement("td");
+    const list = document.createElement("ul");
+    list.className = "source-list";
+    for (const source of (item.sources || []).slice(0, 4)) {
+      const li = document.createElement("li");
+      li.textContent = `${source.page} (${source.tag}[${source.attribute}])`;
+      list.append(li);
+    }
+    if ((item.sources || []).length > 4) {
+      const li = document.createElement("li");
+      li.textContent = `另有 ${(item.sources || []).length - 4} 個位置`;
+      list.append(li);
+    }
+    sources.append(list);
+
+    row.append(status, url, sources);
+    return row;
+  }));
+}
+
+setState("idle");
+refreshQueue();
+
+function emptyBreakdown() {
+  return {
+    not_found: 0,
+    protected: 0,
+    access_denied: 0,
+    http_error: 0,
+    redirect_to_error: 0,
+    too_many_redirects: 0,
+    redirect_loop: 0,
+    timeout: 0,
+    network_error: 0,
+    unknown_error: 0,
+  };
+}
+
+function emptyRedirectBreakdown() {
+  return {
+    permanent_redirect: 0,
+    temporary_redirect: 0,
+    mixed_redirect: 0,
+    cross_host_redirect: 0,
+    long_redirect_chain: 0,
+    redirect_to_error: 0,
+    too_many_redirects: 0,
+    redirect_loop: 0,
+    redirect_without_location: 0,
+  };
+}
+
+function buildBreakdown(items) {
+  const counts = emptyBreakdown();
+  for (const item of items) {
+    const issueType = item.issueType || getIssueType(item);
+    if (Object.prototype.hasOwnProperty.call(counts, issueType)) {
+      counts[issueType] += 1;
+    } else {
+      counts.unknown_error += 1;
+    }
+  }
+  return counts;
+}
+
+function updateIssueBreakdown(counts, total) {
+  issueNotFound.textContent = counts.not_found || 0;
+  issueProtected.textContent = counts.protected || 0;
+  issueAccessDenied.textContent = counts.access_denied || 0;
+  issueHttp.textContent = counts.http_error || 0;
+  issueTimeout.textContent = counts.timeout || 0;
+  issueNetwork.textContent = counts.network_error || 0;
+  issueUnknown.textContent = counts.unknown_error || 0;
+  brokenCount.textContent = total || 0;
+}
+
+function updateFilterCounts(counts, total) {
+  for (const button of filterBar.querySelectorAll("button[data-filter]")) {
+    const filter = button.dataset.filter;
+    const count = filter === "all" ? total : counts[filter] || 0;
+    button.querySelector("span").textContent = count;
+  }
+}
+
+function updateRedirectBreakdown(counts, total) {
+  redirectTotal.textContent = total || 0;
+  redirectPermanent.textContent = counts.permanent_redirect || 0;
+  redirectTemporary.textContent = counts.temporary_redirect || 0;
+  redirectCrossHost.textContent = counts.cross_host_redirect || 0;
+  redirectLong.textContent = counts.long_redirect_chain || 0;
+  redirectUnresolved.textContent = (counts.redirect_to_error || 0)
+    + (counts.too_many_redirects || 0)
+    + (counts.redirect_loop || 0);
+}
+
+function updateActiveFilter() {
+  for (const button of filterBar.querySelectorAll("button[data-filter]")) {
+    button.classList.toggle("active", button.dataset.filter === currentFilter);
+  }
+}
+
+function getIssueType(item) {
+  if (item.classification === "redirect_error") {
+    return item.issueType || "unknown_error";
+  }
+  if (item.classification === "protected") {
+    return "protected";
+  }
+  if (item.classification === "access_denied" || item.status === 403) {
+    return "access_denied";
+  }
+  if (item.status === 404) {
+    return "not_found";
+  }
+  if (item.classification === "network_error") {
+    return item.error?.toLowerCase().includes("timeout") || item.cause?.code === "ETIMEDOUT"
+      ? "timeout"
+      : "network_error";
+  }
+  if (item.status >= 400) {
+    return "http_error";
+  }
+  return "unknown_error";
+}
+
+function formatIssueLabel(item) {
+  if (item.classification === "protected") {
+    return item.protection?.provider ? `防護阻擋: ${item.protection.provider}` : "防護阻擋";
+  }
+  if ((item.issueType || getIssueType(item)) === "access_denied") {
+    return "存取被拒";
+  }
+  if (item.classification === "redirect_error") {
+    if ((item.issueType || getIssueType(item)) === "redirect_to_error") {
+      return "轉址後無法到達";
+    }
+    if ((item.issueType || getIssueType(item)) === "too_many_redirects") {
+      return "轉址過多";
+    }
+    if ((item.issueType || getIssueType(item)) === "redirect_loop") {
+      return "轉址循環";
+    }
+    return "轉址無法到達";
+  }
+  if ((item.issueType || getIssueType(item)) === "not_found") {
+    return "404";
+  }
+  if ((item.issueType || getIssueType(item)) === "timeout") {
+    return "逾時";
+  }
+  if ((item.issueType || getIssueType(item)) === "network_error") {
+    return "網路錯誤";
+  }
+  return item.status ? `HTTP ${item.status}` : "錯誤";
+}
+
+function formatDiagnosis(item) {
+  const status = item.status ? `HTTP ${item.status}` : "未取得 HTTP 狀態";
+  if ((item.issueType || getIssueType(item)) === "access_denied") {
+    return item.diagnosis || `${status}，伺服器拒絕目前工具請求，需人工確認。`;
+  }
+  const evidence = item.protection?.evidence?.join("、");
+  return evidence ? `${status}，證據：${evidence}` : status;
+}
