@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
@@ -43,6 +43,34 @@ const TAG_ATTRIBUTES = new Map([
   ["source", ["src", "srcset"]],
   ["track", ["src"]],
   ["video", ["src", "poster"]],
+]);
+
+const COMMON_MULTI_PART_PUBLIC_SUFFIXES = new Set([
+  "co.jp", "co.kr", "co.nz", "co.uk", "com.au", "com.br", "com.cn",
+  "com.hk", "com.sg", "com.tw", "com.vn", "edu.au", "edu.cn", "edu.hk",
+  "edu.sg", "edu.tw", "gov.au", "gov.cn", "gov.hk", "gov.sg", "gov.tw",
+  "net.au", "net.cn", "net.tw", "org.au", "org.cn", "org.tw",
+  "appspot.com", "firebaseapp.com", "github.io", "netlify.app",
+  "pages.dev", "vercel.app", "web.app",
+]);
+
+const EXTERNAL_CATEGORY_RULES = [
+  { category: "social", domains: ["facebook.com", "instagram.com", "line.me", "linkedin.com", "threads.net", "tiktok.com", "x.com", "twitter.com", "youtube.com"] },
+  { category: "cdn", domains: ["akamaihd.net", "bootstrapcdn.com", "cloudflare.com", "cloudflare.net", "cdnjs.com", "fastly.net", "gstatic.com", "jsdelivr.net", "unpkg.com"] },
+  { category: "tracking_or_analytics", domains: ["clarity.ms", "doubleclick.net", "facebook.net", "googletagmanager.com", "google-analytics.com", "googleadservices.com", "hotjar.com"] },
+  { category: "shortener", domains: ["bit.ly", "goo.gl", "is.gd", "reurl.cc", "tinyurl.com", "t.co"] },
+  { category: "maps", domains: ["maps.googleapis.com", "maps.gstatic.com", "openstreetmap.org"] },
+  { category: "webmail", domains: ["gmail.com", "outlook.com", "yahoo.com"] },
+];
+
+const DOWNLOAD_EXTENSIONS = new Set([
+  ".7z", ".csv", ".doc", ".docx", ".gz", ".pdf", ".ppt", ".pptx",
+  ".rar", ".tar", ".txt", ".xls", ".xlsx", ".zip",
+]);
+
+const MEDIA_EXTENSIONS = new Set([
+  ".avi", ".bmp", ".gif", ".jpeg", ".jpg", ".mov", ".mp3", ".mp4",
+  ".png", ".svg", ".wav", ".webm", ".webp",
 ]);
 
 class Limiter {
@@ -293,6 +321,11 @@ class LinkChecker {
     this.bodyCache = new Map();
     this.results = new Map();
     this.sources = new Map();
+    this.externalLinks = new Map();
+    this.domainCategoryRules = [
+      ...EXTERNAL_CATEGORY_RULES,
+      ...normalizeDomainCategoryRules(options.domainCategoryRules || []),
+    ];
     this.skippedExternal = 0;
     this.reporter = options.reporter || null;
     this.currentPages = new Map();
@@ -379,13 +412,19 @@ class LinkChecker {
         }
 
         const fallbackUrls = getResolutionFallbackUrls(link.value, pageResult.finalUrl || url, resolved);
-        this.addSource(resolved, {
+        const source = {
           page: url,
           tag: link.tag,
           attribute: link.attribute,
           text: link.value,
           fallbackUrls,
-        });
+        };
+        this.addSource(resolved, source);
+
+        const isExternal = !this.isCrawlOrigin(resolved);
+        if (isExternal) {
+          this.addExternalLink(resolved, link, source);
+        }
 
         if (this.shouldCheck(resolved)) {
           checks.push(this.checkUrl(resolved, { requireBody: false }));
@@ -448,6 +487,28 @@ class LinkChecker {
     const key = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
     if (!list.some((item) => item.key === key)) {
       list.push({ key, ...source });
+    }
+  }
+
+  addExternalLink(url, link, source) {
+    const parsed = new URL(url);
+    if (!this.externalLinks.has(url)) {
+      const classification = classifyExternalLink(url, link, this.domainCategoryRules);
+      this.externalLinks.set(url, {
+        url,
+        hostname: parsed.hostname,
+        registrableDomain: getRegistrableDomain(parsed.hostname),
+        type: classification.type,
+        categories: classification.categories,
+        categorySources: classification.categorySources,
+        sources: [],
+      });
+    }
+
+    const item = this.externalLinks.get(url);
+    const key = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
+    if (!item.sources.some((existing) => existing.key === key)) {
+      item.sources.push({ key, ...source });
     }
   }
 
@@ -636,6 +697,7 @@ class LinkChecker {
 
   buildReport() {
     const checked = [...this.results.values()];
+    const externalLinks = this.buildExternalLinks(checked);
     const broken = checked
       .filter((result) => !result.ok)
       .map((result) => ({
@@ -660,6 +722,7 @@ class LinkChecker {
         userAgent: this.options.userAgent,
         acceptLanguage: this.options.acceptLanguage,
         checkExternal: this.options.checkExternal,
+        domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
       },
       summary: {
         pagesCrawled: this.crawledPages.size,
@@ -669,10 +732,34 @@ class LinkChecker {
         redirects: countRedirected(checked),
         redirectByType: countRedirectByType(checked),
         skippedExternal: this.skippedExternal,
+        externalLinks: externalLinks.length,
+        externalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
+        externalByType: countExternalByType(externalLinks),
+        externalByCategory: countExternalByCategory(externalLinks),
       },
       broken,
       checked,
+      externalLinks,
     };
+  }
+
+  buildExternalLinks(checked) {
+    const resultsByUrl = new Map(checked.map((result) => [result.url, result]));
+    return [...this.externalLinks.values()]
+      .map((item) => {
+        const result = resultsByUrl.get(item.url);
+        return {
+          ...item,
+          checked: Boolean(result),
+          status: result?.status ?? null,
+          ok: result?.ok ?? null,
+          method: result?.method || null,
+          finalUrl: result?.finalUrl || null,
+          sourceCount: item.sources.length,
+          sources: item.sources.map(({ key, fallbackUrls, ...source }) => source),
+        };
+      })
+      .sort((a, b) => a.url.localeCompare(b.url));
   }
 }
 
@@ -1452,6 +1539,115 @@ function looksLikePage(urlValue) {
   return !ASSET_EXTENSIONS.has(lastSegment.slice(dot).toLowerCase());
 }
 
+function classifyExternalLink(urlValue, link, domainRules = EXTERNAL_CATEGORY_RULES) {
+  const parsed = new URL(urlValue);
+  const extension = getPathExtension(parsed.pathname);
+  const categories = new Set();
+  const categorySources = [];
+  let type = classifyLinkType(link, extension);
+
+  if (type !== "unknown") {
+    categories.add(type);
+    categorySources.push({ category: type, source: "link-structure" });
+  }
+
+  for (const rule of domainRules) {
+    if (rule.domains.some((domain) => hostnameMatchesDomain(parsed.hostname, domain))) {
+      categories.add(rule.category);
+      categorySources.push({ category: rule.category, source: rule.source || "domain-rule" });
+    }
+  }
+
+  if (type === "unknown" && categories.size > 0) {
+    type = [...categories][0];
+  }
+
+  return {
+    type,
+    categories: [...categories],
+    categorySources,
+  };
+}
+
+function normalizeDomainCategoryRules(rules) {
+  if (!Array.isArray(rules)) {
+    return [];
+  }
+
+  return rules
+    .map((rule) => ({
+      category: String(rule.category || "").trim(),
+      domains: Array.isArray(rule.domains)
+        ? rule.domains.map((domain) => String(domain || "").trim().toLowerCase()).filter(Boolean)
+        : [],
+      source: String(rule.source || "custom-domain-rule").trim(),
+    }))
+    .filter((rule) => rule.category && rule.domains.length > 0);
+}
+
+function classifyLinkType(link, extension) {
+  if (link.tag === "form") {
+    return "form";
+  }
+  if (link.tag === "iframe" || link.tag === "embed" || link.tag === "object") {
+    return "embedded_content";
+  }
+  if (link.tag === "script" || link.tag === "link") {
+    return "asset";
+  }
+  if (["img", "audio", "source", "track", "video"].includes(link.tag)) {
+    return "asset";
+  }
+  if (DOWNLOAD_EXTENSIONS.has(extension)) {
+    return "download";
+  }
+  if (MEDIA_EXTENSIONS.has(extension)) {
+    return "media";
+  }
+  if (link.tag === "a" || link.tag === "area") {
+    return "anchor";
+  }
+  if (link.tag === "meta") {
+    return "redirect";
+  }
+  return "unknown";
+}
+
+function getPathExtension(pathname) {
+  const lastSegment = pathname.split("/").pop() || "";
+  const dot = lastSegment.lastIndexOf(".");
+  return dot === -1 ? "" : lastSegment.slice(dot).toLowerCase();
+}
+
+function hostnameMatchesDomain(hostname, domain) {
+  const normalizedHost = hostname.toLowerCase();
+  const normalizedDomain = domain.toLowerCase();
+  return normalizedHost === normalizedDomain || normalizedHost.endsWith(`.${normalizedDomain}`);
+}
+
+function getRegistrableDomain(hostname) {
+  const normalized = hostname.toLowerCase().replace(/\.$/, "");
+  if (!normalized || isIpAddress(normalized) || normalized === "localhost") {
+    return normalized;
+  }
+
+  const labels = normalized.split(".").filter(Boolean);
+  if (labels.length <= 2) {
+    return normalized;
+  }
+
+  const suffix2 = labels.slice(-2).join(".");
+  if (COMMON_MULTI_PART_PUBLIC_SUFFIXES.has(suffix2) && labels.length >= 3) {
+    return labels.slice(-3).join(".");
+  }
+
+  return labels.slice(-2).join(".");
+}
+
+function isIpAddress(hostname) {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":");
+}
+
 function isHtml(contentType) {
   return Boolean(contentType && /(^|;|\s)(text\/html|application\/xhtml\+xml)\b/i.test(contentType));
 }
@@ -1540,6 +1736,30 @@ function countRedirectByType(items) {
   }
 
   return counts;
+}
+
+function countExternalByType(items) {
+  const counts = {};
+  for (const item of items) {
+    const type = item.type || "unknown";
+    counts[type] = (counts[type] || 0) + 1;
+  }
+  return counts;
+}
+
+function countExternalByCategory(items) {
+  const counts = {};
+  for (const item of items) {
+    const categories = item.categories?.length ? item.categories : ["uncategorized"];
+    for (const category of categories) {
+      counts[category] = (counts[category] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function countUnique(items) {
+  return new Set(items.filter(Boolean)).size;
 }
 
 function getIssueTypeLabel(issueType) {
@@ -1633,6 +1853,7 @@ function parseArgs(argv) {
   let json = false;
   let progress = false;
   let verbose = false;
+  let domainRulesSource = null;
 
   while (args.length > 0) {
     const arg = args.shift();
@@ -1718,6 +1939,13 @@ function parseArgs(argv) {
       }
       continue;
     }
+    if (arg === "--domain-rules") {
+      domainRulesSource = args.shift();
+      if (!domainRulesSource) {
+        throw new Error("--domain-rules requires a file path or URL");
+      }
+      continue;
+    }
     if (arg === "--output" || arg === "-o") {
       output = args.shift();
       if (!output) {
@@ -1744,7 +1972,48 @@ function parseArgs(argv) {
   options.retryCount = Math.max(0, Math.min(options.retryCount, 5));
   options.maxRedirects = Math.max(0, Math.min(options.maxRedirects, 20));
   options.longRedirectThreshold = Math.max(0, Math.min(options.longRedirectThreshold, options.maxRedirects));
-  return { startUrl, options, output, json, progress, verbose };
+  return { startUrl, options, output, json, progress, verbose, domainRulesSource };
+}
+
+async function loadDomainCategoryRules(source) {
+  if (!source) {
+    return [];
+  }
+
+  const text = await readDomainRulesText(source);
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("--domain-rules must point to JSON");
+  }
+
+  const rules = Array.isArray(parsed) ? parsed : parsed.rules;
+  const normalized = normalizeDomainCategoryRules(rules);
+  if (normalized.length === 0) {
+    throw new Error("--domain-rules did not contain any valid rules");
+  }
+  return normalized.map((rule) => ({
+    ...rule,
+    source,
+  }));
+}
+
+async function readDomainRulesText(source) {
+  if (/^https?:\/\//i.test(source)) {
+    const response = await fetch(source, {
+      headers: {
+        "user-agent": DEFAULTS.userAgent,
+        "accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Unable to load --domain-rules URL: HTTP ${response.status}`);
+    }
+    return response.text();
+  }
+
+  return readFile(source, "utf8");
 }
 
 function readPositiveInteger(value, name) {
@@ -1799,7 +2068,10 @@ Options:
   --accept-language <value>
                        Accept-Language header. Default: ${DEFAULTS.acceptLanguage}
   --user-agent <value> User-Agent header.
+  --domain-rules <file-or-url>
+                       JSON domain category rules: [{ "category": "...", "domains": ["example.com"] }].
   --external          Also check links that point to other domains.
+                     External links are always inventoried in the JSON report.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -1814,6 +2086,8 @@ function printSummary(report) {
   console.log(`Pages crawled: ${summary.pagesCrawled}`);
   console.log(`URLs checked: ${summary.urlsChecked}`);
   console.log(`Broken links: ${summary.brokenLinks}`);
+  console.log(`External links found: ${summary.externalLinks || 0}`);
+  console.log(`External domains found: ${summary.externalDomains || 0}`);
   if (summary.brokenLinks > 0) {
     for (const [issueType, count] of Object.entries(summary.brokenByType || {})) {
       if (count > 0) {
@@ -1823,6 +2097,14 @@ function printSummary(report) {
   }
   if (!report.options.checkExternal) {
     console.log(`External links skipped: ${summary.skippedExternal}`);
+  }
+  if (summary.externalLinks > 0) {
+    console.log("External links by type:");
+    for (const [type, count] of Object.entries(summary.externalByType || {})) {
+      if (count > 0) {
+        console.log(`  ${type}: ${count}`);
+      }
+    }
   }
   if (summary.redirects > 0) {
     console.log(`Redirected URLs: ${summary.redirects}`);
@@ -1866,6 +2148,8 @@ async function main() {
     return;
   }
 
+  const domainCategoryRules = await loadDomainCategoryRules(parsed.domainRulesSource);
+
   const reporter = parsed.json
     ? null
     : new ProgressReporter({
@@ -1875,6 +2159,8 @@ async function main() {
       });
   const checker = new LinkChecker(parsed.startUrl, {
     ...parsed.options,
+    domainCategoryRules,
+    domainCategoryRulesSource: parsed.domainRulesSource,
     reporter,
   });
   const report = await checker.run();

@@ -416,6 +416,8 @@ async function saveJobArtifacts(job) {
       writeJsonFile(join(logDir, "summary.json"), summary),
       writeJsonFile(join(logDir, "report.json"), job.report || summary),
       writeFile(join(logDir, "broken.csv"), makeBrokenCsv(job.report?.broken || []), "utf8"),
+      writeFile(join(logDir, "external-links.csv"), makeExternalLinksCsv(job.report?.externalLinks || []), "utf8"),
+      writeJsonFile(join(logDir, "external-summary.json"), buildExternalSummary(job.report)),
       writeFile(join(logDir, "events.log"), makeEventsLog(job.events), "utf8"),
       writeFile(join(logDir, "README.txt"), makeLogReadme(job, summary), "utf8"),
     ]);
@@ -458,6 +460,8 @@ function buildLogSummary(job) {
       summary: "summary.json",
       report: "report.json",
       brokenCsv: "broken.csv",
+      externalLinksCsv: "external-links.csv",
+      externalSummary: "external-summary.json",
       events: "events.log",
     },
   };
@@ -504,6 +508,116 @@ function makeBrokenCsv(items) {
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }
 
+function makeExternalLinksCsv(items) {
+  const rows = [[
+    "url",
+    "hostname",
+    "registrableDomain",
+    "type",
+    "categories",
+    "checked",
+    "ok",
+    "status",
+    "method",
+    "finalUrl",
+    "sourcePage",
+    "tag",
+    "attribute",
+    "text",
+  ]];
+
+  for (const item of items) {
+    const sources = item.sources?.length ? item.sources : [{}];
+    for (const source of sources) {
+      rows.push([
+        item.url,
+        item.hostname || "",
+        item.registrableDomain || "",
+        item.type || "",
+        (item.categories || []).join(";"),
+        item.checked ? "yes" : "no",
+        item.ok === null || item.ok === undefined ? "" : item.ok ? "yes" : "no",
+        item.status ?? "",
+        item.method || "",
+        item.finalUrl || "",
+        source.page || "",
+        source.tag || "",
+        source.attribute || "",
+        source.text || "",
+      ]);
+    }
+  }
+
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+function buildExternalSummary(report) {
+  const externalLinks = report?.externalLinks || [];
+  return {
+    totalLinks: externalLinks.length,
+    totalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
+    byType: countByValue(externalLinks.map((item) => item.type || "unknown")),
+    byCategory: countCategories(externalLinks),
+    domains: summarizeExternalDomains(externalLinks),
+  };
+}
+
+function summarizeExternalDomains(items) {
+  const domains = new Map();
+  for (const item of items) {
+    const domain = item.registrableDomain || item.hostname || "";
+    if (!domain) {
+      continue;
+    }
+    if (!domains.has(domain)) {
+      domains.set(domain, {
+        domain,
+        linkCount: 0,
+        categories: new Set(),
+        types: new Set(),
+      });
+    }
+    const summary = domains.get(domain);
+    summary.linkCount += 1;
+    summary.types.add(item.type || "unknown");
+    for (const category of item.categories || []) {
+      summary.categories.add(category);
+    }
+  }
+
+  return [...domains.values()]
+    .map((item) => ({
+      domain: item.domain,
+      linkCount: item.linkCount,
+      types: [...item.types].sort(),
+      categories: [...item.categories].sort(),
+    }))
+    .sort((a, b) => b.linkCount - a.linkCount || a.domain.localeCompare(b.domain));
+}
+
+function countByValue(values) {
+  const counts = {};
+  for (const value of values) {
+    counts[value] = (counts[value] || 0) + 1;
+  }
+  return counts;
+}
+
+function countCategories(items) {
+  const counts = {};
+  for (const item of items) {
+    const categories = item.categories?.length ? item.categories : ["uncategorized"];
+    for (const category of categories) {
+      counts[category] = (counts[category] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function countUnique(items) {
+  return new Set(items.filter(Boolean)).size;
+}
+
 function csvCell(value) {
   const text = String(value ?? "");
   return `"${text.replace(/"/g, "\"\"")}"`;
@@ -533,6 +647,8 @@ function makeLogReadme(job, summary) {
     "- summary.json: 檢查摘要與執行參數",
     "- report.json: 完整 JSON 報告",
     "- broken.csv: 問題連結清單，可用 Excel 開啟",
+    "- external-links.csv: External link inventory, usable in Excel",
+    "- external-summary.json: External link summary by domain, type, and category",
     "- events.log: 檢查過程事件紀錄",
   ];
 
