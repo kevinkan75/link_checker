@@ -90,9 +90,17 @@ button:disabled {
 .title-block {
   display: flex;
   align-items: end;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+}
+
+.header-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 h1,
@@ -112,6 +120,7 @@ h2 {
 }
 
 .title-block p {
+  flex-basis: 100%;
   color: var(--muted);
   font-size: 14px;
 }
@@ -592,6 +601,10 @@ tr:last-child td {
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .header-nav {
+    justify-content: flex-start;
   }
 
   .form-grid,

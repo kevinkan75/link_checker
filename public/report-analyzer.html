@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Report Analyzer</title>
+    <link rel="stylesheet" href="/report-analyzer.css">
+  </head>
+  <body>
+    <main class="report-shell">
+      <header class="app-header">
+        <div>
+          <h1>Report Analyzer</h1>
+          <p>上傳單一 report.json，快速整理壞連結、錯誤類型、來源頁與網域問題排行。</p>
+        </div>
+        <nav class="header-nav" aria-label="主要導覽">
+          <a href="/">Link Checker</a>
+          <a href="/analyzer.html">External Link Analyzer</a>
+        </nav>
+      </header>
+
+      <section class="setup-panel" aria-labelledby="setup-title">
+        <div class="section-heading">
+          <h2 id="setup-title">匯入報告</h2>
+          <span id="load-state">尚未載入 report.json</span>
+        </div>
+
+        <div class="setup-grid">
+          <label class="file-field">
+            <span>report.json</span>
+            <input id="report-file" type="file" accept=".json,application/json">
+          </label>
+
+          <label>
+            <span>搜尋</span>
+            <input id="search" type="search" placeholder="URL、來源頁、診斷、網域">
+          </label>
+
+          <label>
+            <span>錯誤類型</span>
+            <select id="issue-filter">
+              <option value="all">全部</option>
+            </select>
+          </label>
+
+          <label>
+            <span>HTTP 狀態</span>
+            <select id="status-filter">
+              <option value="all">全部</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="export-csv-button" type="button" disabled>匯出目前清單 CSV</button>
+          <button id="clear-button" type="button" disabled>清除</button>
+        </div>
+      </section>
+
+      <section class="metric-grid" aria-label="報告總覽">
+        <div><span>檢查頁數</span><strong id="metric-pages">0</strong></div>
+        <div><span>檢查 URL</span><strong id="metric-checked">0</strong></div>
+        <div><span>壞連結</span><strong id="metric-broken">0</strong></div>
+        <div><span>壞連結比例</span><strong id="metric-broken-rate">0%</strong></div>
+        <div><span>Redirect</span><strong id="metric-redirects">0</strong></div>
+        <div><span>略過外連</span><strong id="metric-skipped">0</strong></div>
+      </section>
+
+      <section class="summary-layout">
+        <section class="panel">
+          <div class="section-heading">
+            <h2>錯誤分類</h2>
+            <span id="issue-summary-count">0 種</span>
+          </div>
+          <div id="issue-list" class="rank-list">
+            <p class="empty-note">載入報告後顯示錯誤分類。</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <h2>來源頁排行</h2>
+            <span id="source-summary-count">0 頁</span>
+          </div>
+          <div id="source-list" class="rank-list">
+            <p class="empty-note">載入報告後顯示來源頁。</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <h2>問題網域排行</h2>
+            <span id="domain-summary-count">0 個</span>
+          </div>
+          <div id="domain-list" class="rank-list">
+            <p class="empty-note">載入報告後顯示網域排行。</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel links-panel">
+        <div class="section-heading">
+          <h2>壞連結清單</h2>
+          <span id="links-summary">0 筆</span>
+        </div>
+        <div id="links-table" class="issue-list-wrap">
+          <p class="empty-note issue-empty">請先上傳 report.json。</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/report-analyzer.js" defer></script>
+  </body>
+</html>

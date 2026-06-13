@@ -1,4 +1,5 @@
 const linksFileInput = document.querySelector("#links-file");
+const pickLinksButton = document.querySelector("#pick-links-button");
 const rulesFileInput = document.querySelector("#rules-file");
 const searchInput = document.querySelector("#search");
 const riskFilterInput = document.querySelector("#risk-filter");
@@ -72,6 +73,19 @@ const UT1_SECURITY_CATEGORIES = new Set([
 let currentAnalysis = null;
 let ut1Categories = [];
 let appliedUt1Rules = [];
+
+pickLinksButton.addEventListener("click", () => {
+  linksFileInput.click();
+});
+
+linksFileInput.addEventListener("change", () => {
+  const file = linksFileInput.files?.[0];
+  if (!file) {
+    loadState.textContent = "尚未載入外連清單";
+    return;
+  }
+  loadState.textContent = `已選擇 ${file.name}，按「分析」開始處理`;
+});
 
 for (const input of [searchInput, riskFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
   input.addEventListener("input", () => {
@@ -174,7 +188,7 @@ analyzeButton.addEventListener("click", async () => {
     renderAnalysis(currentAnalysis);
     exportJsonButton.disabled = false;
     exportCsvButton.disabled = false;
-    loadState.textContent = `${links.length} 筆外連已分析`;
+    loadState.textContent = getAnalysisStatusText(currentAnalysis);
   } catch (error) {
     loadState.textContent = error.message;
     currentAnalysis = null;
@@ -713,6 +727,15 @@ function renderAnalysis(analysis) {
   renderLinksTable(analysis.filteredLinks);
 }
 
+function getAnalysisStatusText(analysis) {
+  const total = analysis.enriched.length;
+  const uncategorized = analysis.metrics.uncategorized;
+  if (total > 0 && uncategorized / total >= 0.5) {
+    return `${total} 筆外連已分析；目前多數外連未分類，載入分類規則可改善風險判斷`;
+  }
+  return `${total} 筆外連已分析`;
+}
+
 function renderDomainTable(domains) {
   if (domains.length === 0) {
     domainTable.innerHTML = '<tr class="empty-row"><td colspan="5">沒有符合條件的網域。</td></tr>';
@@ -752,22 +775,61 @@ function renderCategoryList(categories) {
 
 function renderLinksTable(links) {
   if (links.length === 0) {
-    linksTable.innerHTML = '<tr class="empty-row"><td colspan="6">沒有符合條件的外連。</td></tr>';
+    linksTable.innerHTML = '<p class="empty-note link-empty">沒有符合條件的外連。</p>';
     return;
   }
 
-  linksTable.replaceChildren(...links.slice(0, 500).map((item) => {
-    const row = document.createElement("tr");
-    row.append(
-      cell(riskBadge(item.risk)),
-      textCell(item.url),
-      textCell(item.registrableDomain || item.hostname),
-      textCell(item.type || "unknown"),
-      textCell(item.categories.join(", ") || "uncategorized"),
-      textCell(item.sourcePage || ""),
-    );
-    return row;
-  }));
+  const visibleLinks = links.slice(0, 500);
+  linksTable.replaceChildren(...visibleLinks.map(renderLinkItem));
+  if (links.length > visibleLinks.length) {
+    const note = document.createElement("p");
+    note.className = "list-limit-note";
+    note.textContent = `目前顯示前 ${visibleLinks.length} 筆，請用搜尋或顯示風險縮小範圍。`;
+    linksTable.append(note);
+  }
+}
+
+function renderLinkItem(item) {
+  const row = document.createElement("article");
+  row.className = "link-item";
+
+  const header = document.createElement("div");
+  header.className = "link-item-header";
+  const domain = document.createElement("strong");
+  domain.textContent = item.registrableDomain || item.hostname || "unknown domain";
+  header.append(
+    riskBadge(item.risk),
+    domain,
+    metaBadge(item.type || "unknown"),
+    metaBadge(item.categories.join(", ") || "uncategorized"),
+  );
+
+  row.append(
+    header,
+    detailLine("URL", item.url),
+    detailLine("來源頁", item.sourcePage || "無來源頁"),
+  );
+  return row;
+}
+
+function detailLine(label, value) {
+  const row = document.createElement("div");
+  row.className = "link-detail-line";
+  const labelElement = document.createElement("span");
+  labelElement.className = "detail-label";
+  labelElement.textContent = label;
+  const valueElement = document.createElement("span");
+  valueElement.className = "detail-value";
+  valueElement.textContent = value;
+  row.append(labelElement, valueElement);
+  return row;
+}
+
+function metaBadge(value) {
+  const span = document.createElement("span");
+  span.className = "meta-badge";
+  span.textContent = value;
+  return span;
 }
 
 function riskBadge(risk) {

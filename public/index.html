@@ -11,7 +11,10 @@
       <section class="control-panel" aria-labelledby="title">
         <div class="title-block">
           <h1 id="title">Link Checker</h1>
-          <a class="header-link" href="/analyzer.html">External Link Analyzer</a>
+          <nav class="header-nav" aria-label="主要導覽">
+            <a class="header-link" href="/report-analyzer.html">Report Analyzer</a>
+            <a class="header-link" href="/analyzer.html">External Link Analyzer</a>
+          </nav>
           <p>輸入網站網址，檢查站內無效連結與資源。</p>
         </div>
 
@@ -44,6 +47,16 @@
           <label>
             <span>間隔毫秒</span>
             <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="500">
+          </label>
+
+          <label>
+            <span>隨機延遲最小 ms</span>
+            <input id="request-delay-min" name="requestDelayMinMs" type="number" min="0" max="60000" step="100" placeholder="300">
+          </label>
+
+          <label>
+            <span>隨機延遲最大 ms</span>
+            <input id="request-delay-max" name="requestDelayMaxMs" type="number" min="0" max="60000" step="100" placeholder="1000">
           </label>
 
           <label>

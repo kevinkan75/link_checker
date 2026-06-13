@@ -14,6 +14,7 @@
           <p>匯入 Link Checker 產出的外連清單，套用分類規則與白名單後產生稽核報告。</p>
         </div>
         <nav>
+          <a href="/report-analyzer.html">Report Analyzer</a>
           <a href="/">Link Checker</a>
         </nav>
       </header>
@@ -28,6 +29,7 @@
           <label class="file-field">
             <span>外連清單</span>
             <input id="links-file" type="file" accept=".csv,.json,application/json,text/csv">
+            <small id="links-file-hint" class="file-hint">可載入 Link Checker 產出的 external-links.csv</small>
           </label>
 
           <label class="file-field">
@@ -41,7 +43,7 @@
           </label>
 
           <label>
-            <span>風險篩選</span>
+            <span>顯示風險</span>
             <select id="risk-filter">
               <option value="all">全部</option>
               <option value="high">高風險</option>
@@ -50,6 +52,7 @@
               <option value="trusted">白名單</option>
               <option value="uncategorized">未分類</option>
             </select>
+            <small class="file-hint">風險由分類規則、UT1、白名單與連結類型判斷</small>
           </label>
         </div>
 
@@ -71,6 +74,7 @@
         </div>
 
         <div class="actions">
+          <button id="pick-links-button" type="button">讀取外連清單</button>
           <button id="analyze-button" type="button">分析</button>
           <button id="export-json-button" type="button" disabled>匯出 JSON</button>
           <button id="export-csv-button" type="button" disabled>匯出 CSV</button>
@@ -173,22 +177,8 @@
           <h2>外連明細</h2>
           <span id="links-summary">0 筆</span>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>風險</th>
-                <th>URL</th>
-                <th>網域</th>
-                <th>類型</th>
-                <th>分類</th>
-                <th>來源頁</th>
-              </tr>
-            </thead>
-            <tbody id="links-table">
-              <tr class="empty-row"><td colspan="6">匯入資料後會顯示外連明細。</td></tr>
-            </tbody>
-          </table>
+        <div id="links-table" class="link-list-wrap">
+          <p class="empty-note link-empty">匯入資料後會顯示外連明細。</p>
         </div>
       </section>
     </main>

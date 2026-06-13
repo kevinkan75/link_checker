@@ -1,0 +1,501 @@
+const reportFileInput = document.querySelector("#report-file");
+const searchInput = document.querySelector("#search");
+const issueFilterInput = document.querySelector("#issue-filter");
+const statusFilterInput = document.querySelector("#status-filter");
+const exportCsvButton = document.querySelector("#export-csv-button");
+const clearButton = document.querySelector("#clear-button");
+const loadState = document.querySelector("#load-state");
+const metricPages = document.querySelector("#metric-pages");
+const metricChecked = document.querySelector("#metric-checked");
+const metricBroken = document.querySelector("#metric-broken");
+const metricBrokenRate = document.querySelector("#metric-broken-rate");
+const metricRedirects = document.querySelector("#metric-redirects");
+const metricSkipped = document.querySelector("#metric-skipped");
+const issueSummaryCount = document.querySelector("#issue-summary-count");
+const sourceSummaryCount = document.querySelector("#source-summary-count");
+const domainSummaryCount = document.querySelector("#domain-summary-count");
+const linksSummary = document.querySelector("#links-summary");
+const issueList = document.querySelector("#issue-list");
+const sourceList = document.querySelector("#source-list");
+const domainList = document.querySelector("#domain-list");
+const linksTable = document.querySelector("#links-table");
+
+const ISSUE_LABELS = {
+  not_found: "404 Not Found",
+  protected: "防護阻擋",
+  access_denied: "存取拒絕",
+  http_error: "HTTP 錯誤",
+  redirect_to_error: "轉址到錯誤頁",
+  too_many_redirects: "轉址過多",
+  redirect_loop: "轉址迴圈",
+  timeout: "逾時",
+  network_error: "網路錯誤",
+  unknown_error: "未知錯誤",
+};
+
+let currentAnalysis = null;
+
+reportFileInput.addEventListener("change", loadReportFile);
+
+for (const input of [searchInput, issueFilterInput, statusFilterInput]) {
+  input.addEventListener("input", () => {
+    if (currentAnalysis) {
+      renderAnalysis(applyFilters(currentAnalysis));
+    }
+  });
+}
+
+exportCsvButton.addEventListener("click", () => {
+  if (!currentAnalysis) {
+    return;
+  }
+  const filtered = applyFilters(currentAnalysis);
+  downloadText("report-broken-links.csv", makeBrokenCsv(filtered.filteredBroken), "text/csv");
+});
+
+clearButton.addEventListener("click", () => {
+  currentAnalysis = null;
+  reportFileInput.value = "";
+  searchInput.value = "";
+  resetSelect(issueFilterInput, "全部");
+  resetSelect(statusFilterInput, "全部");
+  exportCsvButton.disabled = true;
+  clearButton.disabled = true;
+  loadState.textContent = "尚未載入 report.json";
+  renderEmpty();
+});
+
+async function loadReportFile() {
+  const file = reportFileInput.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    loadState.textContent = "讀取 report.json 中";
+    const report = JSON.parse(await file.text());
+    currentAnalysis = analyzeReport(report);
+    populateFilters(currentAnalysis);
+    renderAnalysis(applyFilters(currentAnalysis));
+    exportCsvButton.disabled = false;
+    clearButton.disabled = false;
+    loadState.textContent = `${file.name} 已載入，${currentAnalysis.broken.length} 筆壞連結`;
+  } catch (error) {
+    currentAnalysis = null;
+    exportCsvButton.disabled = true;
+    clearButton.disabled = false;
+    loadState.textContent = `讀取失敗：${error.message}`;
+    renderEmpty("無法解析 report.json。");
+  }
+}
+
+function analyzeReport(report) {
+  if (!report || typeof report !== "object") {
+    throw new Error("檔案內容不是有效的 JSON 物件");
+  }
+
+  const summary = report.summary && typeof report.summary === "object" ? report.summary : {};
+  const broken = normalizeBrokenItems(report.broken || []);
+  const checked = Array.isArray(report.checked) ? report.checked : [];
+  const enrichedBroken = broken.map((item) => ({
+    ...item,
+    issueType: inferIssueType(item),
+    statusKey: normalizeStatus(item.status),
+    domain: extractHostname(item.finalUrl || item.url),
+  }));
+
+  const checkedCount = toNumber(summary.urlsChecked, checked.length || enrichedBroken.length);
+  const brokenCount = toNumber(summary.brokenLinks, enrichedBroken.length);
+  const metrics = {
+    pagesCrawled: toNumber(summary.pagesCrawled, 0),
+    urlsChecked: checkedCount,
+    brokenLinks: brokenCount,
+    brokenRate: checkedCount > 0 ? brokenCount / checkedCount : 0,
+    redirects: toNumber(summary.redirects, countRedirected(checked)),
+    skippedExternal: toNumber(summary.skippedExternal, 0),
+  };
+
+  return {
+    report,
+    metrics,
+    broken: enrichedBroken,
+    issueCounts: countBy(enrichedBroken, "issueType"),
+    statusCounts: countBy(enrichedBroken, "statusKey"),
+    sourceCounts: countSources(enrichedBroken),
+    domainCounts: countBy(enrichedBroken.filter((item) => item.domain), "domain"),
+  };
+}
+
+function normalizeBrokenItems(items) {
+  if (!Array.isArray(items)) {
+    throw new Error("report.json 缺少 broken 陣列");
+  }
+
+  return items.map((item) => {
+    const sources = Array.isArray(item.sources) ? item.sources : [];
+    return {
+      url: String(item.url || ""),
+      status: item.status ?? "",
+      issueType: item.issueType || "",
+      classification: item.classification || "",
+      method: item.method || "",
+      finalUrl: item.finalUrl || "",
+      contentType: item.contentType || "",
+      elapsedMs: item.elapsedMs ?? "",
+      error: item.error || "",
+      diagnosis: item.diagnosis || "",
+      redirectIssues: Array.isArray(item.redirectIssues) ? item.redirectIssues : [],
+      sources,
+    };
+  }).filter((item) => item.url);
+}
+
+function inferIssueType(item) {
+  if (item.issueType) {
+    return item.issueType;
+  }
+  if (item.redirectIssues.length > 0) {
+    return item.redirectIssues[0];
+  }
+  if (item.classification && item.classification !== "http_error") {
+    return item.classification;
+  }
+
+  const status = Number.parseInt(item.status, 10);
+  const text = `${item.error} ${item.diagnosis}`.toLowerCase();
+  if (status === 404 || status === 410) {
+    return "not_found";
+  }
+  if (status === 401 || status === 403) {
+    return "access_denied";
+  }
+  if ([408, 504].includes(status) || text.includes("timeout") || text.includes("timed out")) {
+    return "timeout";
+  }
+  if (status >= 300 && status < 400) {
+    return "redirect_to_error";
+  }
+  if (status >= 400) {
+    return "http_error";
+  }
+  if (text.includes("network") || text.includes("dns") || text.includes("econn") || text.includes("fetch failed")) {
+    return "network_error";
+  }
+  return "unknown_error";
+}
+
+function applyFilters(analysis) {
+  const query = searchInput.value.trim().toLowerCase();
+  const issue = issueFilterInput.value;
+  const status = statusFilterInput.value;
+  const filteredBroken = analysis.broken.filter((item) => {
+    if (issue !== "all" && item.issueType !== issue) {
+      return false;
+    }
+    if (status !== "all" && item.statusKey !== status) {
+      return false;
+    }
+    if (!query) {
+      return true;
+    }
+    return [
+      item.url,
+      item.finalUrl,
+      item.domain,
+      item.issueType,
+      ISSUE_LABELS[item.issueType],
+      item.status,
+      item.error,
+      item.diagnosis,
+      ...item.sources.flatMap((source) => [source.page, source.tag, source.attribute, source.text]),
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+
+  return {
+    ...analysis,
+    filteredBroken,
+    filteredIssueCounts: countBy(filteredBroken, "issueType"),
+    filteredSourceCounts: countSources(filteredBroken),
+    filteredDomainCounts: countBy(filteredBroken.filter((item) => item.domain), "domain"),
+  };
+}
+
+function populateFilters(analysis) {
+  populateSelect(
+    issueFilterInput,
+    Object.entries(analysis.issueCounts)
+      .sort((a, b) => b[1] - a[1] || getIssueLabel(a[0]).localeCompare(getIssueLabel(b[0]))),
+    (issue, count) => `${getIssueLabel(issue)} (${count})`,
+  );
+  populateSelect(
+    statusFilterInput,
+    Object.entries(analysis.statusCounts)
+      .sort((a, b) => sortStatus(a[0], b[0])),
+    (status, count) => `${status} (${count})`,
+  );
+}
+
+function populateSelect(select, entries, labelFactory) {
+  select.replaceChildren(new Option("全部", "all"));
+  for (const [value, count] of entries) {
+    select.append(new Option(labelFactory(value, count), value));
+  }
+}
+
+function resetSelect(select, label) {
+  select.replaceChildren(new Option(label, "all"));
+}
+
+function renderAnalysis(analysis) {
+  metricPages.textContent = formatNumber(analysis.metrics.pagesCrawled);
+  metricChecked.textContent = formatNumber(analysis.metrics.urlsChecked);
+  metricBroken.textContent = formatNumber(analysis.metrics.brokenLinks);
+  metricBrokenRate.textContent = `${(analysis.metrics.brokenRate * 100).toFixed(1)}%`;
+  metricRedirects.textContent = formatNumber(analysis.metrics.redirects);
+  metricSkipped.textContent = formatNumber(analysis.metrics.skippedExternal);
+
+  renderRankList(issueList, analysis.filteredIssueCounts, getIssueLabel, 20);
+  renderRankList(sourceList, analysis.filteredSourceCounts, (value) => value, 20);
+  renderRankList(domainList, analysis.filteredDomainCounts, (value) => value, 20);
+
+  issueSummaryCount.textContent = `${Object.keys(analysis.filteredIssueCounts).length} 種`;
+  sourceSummaryCount.textContent = `${Object.keys(analysis.filteredSourceCounts).length} 頁`;
+  domainSummaryCount.textContent = `${Object.keys(analysis.filteredDomainCounts).length} 個`;
+  linksSummary.textContent = `${formatNumber(analysis.filteredBroken.length)} / ${formatNumber(analysis.broken.length)} 筆`;
+
+  renderBrokenTable(analysis.filteredBroken);
+}
+
+function renderRankList(container, counts, labelFactory, limit) {
+  const entries = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || labelFactory(a[0]).localeCompare(labelFactory(b[0])))
+    .slice(0, limit);
+
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="empty-note">沒有符合篩選條件的資料。</p>';
+    return;
+  }
+
+  container.replaceChildren(...entries.map(([value, count]) => {
+    const row = document.createElement("div");
+    row.className = "rank-item";
+    const label = document.createElement("strong");
+    label.textContent = labelFactory(value);
+    const amount = document.createElement("span");
+    amount.textContent = `${formatNumber(count)} 筆`;
+    row.append(label, amount);
+    return row;
+  }));
+}
+
+function renderBrokenTable(items) {
+  if (items.length === 0) {
+    linksTable.innerHTML = '<p class="empty-note issue-empty">沒有符合篩選條件的壞連結。</p>';
+    return;
+  }
+
+  const visibleItems = items.slice(0, 800);
+  linksTable.replaceChildren(...visibleItems.map(renderIssueItem));
+  if (items.length > visibleItems.length) {
+    const note = document.createElement("p");
+    note.className = "list-limit-note";
+    note.textContent = `目前顯示前 ${visibleItems.length} 筆，請用搜尋、錯誤類型或 HTTP 狀態縮小範圍。`;
+    linksTable.append(note);
+  }
+}
+
+function renderEmpty(message = "請先上傳 report.json。") {
+  metricPages.textContent = "0";
+  metricChecked.textContent = "0";
+  metricBroken.textContent = "0";
+  metricBrokenRate.textContent = "0%";
+  metricRedirects.textContent = "0";
+  metricSkipped.textContent = "0";
+  issueSummaryCount.textContent = "0 種";
+  sourceSummaryCount.textContent = "0 頁";
+  domainSummaryCount.textContent = "0 個";
+  linksSummary.textContent = "0 筆";
+  issueList.innerHTML = '<p class="empty-note">載入報告後顯示錯誤分類。</p>';
+  sourceList.innerHTML = '<p class="empty-note">載入報告後顯示來源頁。</p>';
+  domainList.innerHTML = '<p class="empty-note">載入報告後顯示網域排行。</p>';
+  linksTable.innerHTML = `<p class="empty-note issue-empty">${escapeHtml(message)}</p>`;
+}
+
+function renderIssueItem(item) {
+  const source = item.sources[0] || {};
+  const row = document.createElement("article");
+  row.className = "issue-item";
+
+  const header = document.createElement("div");
+  header.className = "issue-item-header";
+  header.append(
+    issueBadge(item.issueType),
+    metaBadge(item.status ? `HTTP ${item.status}` : "無狀態"),
+    metaBadge(formatSourceElement(source) || "無元素"),
+  );
+
+  row.append(
+    header,
+    detailLine("URL", item.url),
+    detailLine("來源頁", source.page || "無來源頁"),
+    detailLine("診斷", item.diagnosis || item.error || "無診斷資訊"),
+  );
+  return row;
+}
+
+function detailLine(label, value) {
+  const row = document.createElement("div");
+  row.className = "issue-detail-line";
+  const labelElement = document.createElement("span");
+  labelElement.className = "detail-label";
+  labelElement.textContent = label;
+  const valueElement = document.createElement("span");
+  valueElement.className = "detail-value";
+  valueElement.textContent = value;
+  row.append(labelElement, valueElement);
+  return row;
+}
+
+function metaBadge(value) {
+  const span = document.createElement("span");
+  span.className = "meta-badge";
+  span.textContent = value;
+  return span;
+}
+
+function issueBadge(issueType) {
+  const span = document.createElement("span");
+  span.className = `badge ${issueType || "unknown_error"}`;
+  span.textContent = getIssueLabel(issueType);
+  return span;
+}
+
+function countBy(items, key) {
+  const counts = {};
+  for (const item of items) {
+    const value = item[key] || "unknown";
+    counts[value] = (counts[value] || 0) + 1;
+  }
+  return counts;
+}
+
+function countSources(items) {
+  const counts = {};
+  for (const item of items) {
+    const sources = item.sources.length ? item.sources : [{ page: "" }];
+    for (const source of sources) {
+      const page = source.page || "(無來源頁)";
+      counts[page] = (counts[page] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function countRedirected(items) {
+  return items.filter((item) => item.redirected || Number(item.redirectCount) > 0).length;
+}
+
+function normalizeStatus(value) {
+  if (value === null || value === undefined || value === "") {
+    return "(無狀態)";
+  }
+  return String(value);
+}
+
+function sortStatus(a, b) {
+  const numberA = Number.parseInt(a, 10);
+  const numberB = Number.parseInt(b, 10);
+  if (Number.isFinite(numberA) && Number.isFinite(numberB)) {
+    return numberA - numberB;
+  }
+  return a.localeCompare(b);
+}
+
+function extractHostname(value) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function formatSourceElement(source) {
+  return [source.tag, source.attribute].filter(Boolean).join("[") + (source.attribute ? "]" : "");
+}
+
+function getIssueLabel(issueType) {
+  return ISSUE_LABELS[issueType] || issueType || "未知錯誤";
+}
+
+function toNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat("zh-Hant").format(value);
+}
+
+function makeBrokenCsv(items) {
+  const rows = [[
+    "issueType",
+    "issueLabel",
+    "status",
+    "url",
+    "finalUrl",
+    "domain",
+    "method",
+    "sourcePage",
+    "tag",
+    "attribute",
+    "text",
+    "diagnosis",
+  ]];
+
+  for (const item of items) {
+    const sources = item.sources.length ? item.sources : [{}];
+    for (const source of sources) {
+      rows.push([
+        item.issueType,
+        getIssueLabel(item.issueType),
+        item.status,
+        item.url,
+        item.finalUrl,
+        item.domain,
+        item.method,
+        source.page || "",
+        source.tag || "",
+        source.attribute || "",
+        source.text || "",
+        item.diagnosis || item.error || "",
+      ]);
+    }
+  }
+
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, "\"\"")}"`;
+}
+
+function downloadText(filename, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+renderEmpty();
