@@ -158,7 +158,7 @@ async function startCheck() {
   manualWatchSelected = false;
   currentFilter = "all";
   downloadButton.disabled = true;
-  brokenTable.innerHTML = '<tr class="empty-row"><td colspan="3">檢查中，發現問題連結後會顯示在這裡。</td></tr>';
+  brokenTable.innerHTML = '<p class="empty-note broken-empty">檢查中，發現問題連結後會顯示在這裡。</p>';
   resultSummary.textContent = "檢查中";
   updateIssueBreakdown(emptyBreakdown(), 0);
   updateFilterCounts(emptyBreakdown(), 0);
@@ -603,62 +603,78 @@ function renderBrokenTable(broken) {
     : broken.filter((item) => (item.issueType || getIssueType(item)) === currentFilter);
 
   if (broken.length === 0) {
-    brokenTable.innerHTML = '<tr class="empty-row"><td colspan="3">沒有發現問題連結。</td></tr>';
+    brokenTable.innerHTML = '<p class="empty-note broken-empty">沒有發現問題連結。</p>';
     return;
   }
 
   if (visible.length === 0) {
-    brokenTable.innerHTML = '<tr class="empty-row"><td colspan="3">此分類沒有問題連結。</td></tr>';
+    brokenTable.innerHTML = '<p class="empty-note broken-empty">此分類沒有問題連結。</p>';
     return;
   }
 
-  brokenTable.replaceChildren(...visible.map((item) => {
-    const row = document.createElement("tr");
-    const status = document.createElement("td");
-    const statusCode = document.createElement("span");
-    const issueType = item.issueType || getIssueType(item);
-    const statusClass = item.classification === "protected"
-      ? "protected"
-      : issueType === "access_denied"
-        ? "access-denied"
-        : "";
-    statusCode.className = `status-code ${statusClass}`;
-    statusCode.textContent = formatIssueLabel(item);
-    status.append(statusCode);
-    if (item.classification === "protected" || issueType === "access_denied") {
-      const diagnosis = document.createElement("div");
-      diagnosis.className = "diagnosis";
-      diagnosis.textContent = formatDiagnosis(item);
-      status.append(diagnosis);
-    }
-    if (item.redirected) {
-      const redirect = document.createElement("div");
-      redirect.className = "diagnosis";
-      redirect.textContent = `${item.redirectCount} 次轉址，最終 URL：${item.finalUrl}`;
-      status.append(redirect);
-    }
+  brokenTable.replaceChildren(...visible.map(renderBrokenItem));
+}
 
-    const url = document.createElement("td");
-    url.textContent = item.url;
+function renderBrokenItem(item) {
+  const row = document.createElement("article");
+  row.className = "broken-item";
 
-    const sources = document.createElement("td");
-    const list = document.createElement("ul");
-    list.className = "source-list";
-    for (const source of (item.sources || []).slice(0, 4)) {
-      const li = document.createElement("li");
-      li.textContent = `${source.page} (${source.tag}[${source.attribute}])`;
-      list.append(li);
-    }
-    if ((item.sources || []).length > 4) {
-      const li = document.createElement("li");
-      li.textContent = `另有 ${(item.sources || []).length - 4} 個位置`;
-      list.append(li);
-    }
-    sources.append(list);
+  const header = document.createElement("div");
+  header.className = "broken-item-header";
+  const statusCode = document.createElement("span");
+  const issueType = item.issueType || getIssueType(item);
+  const statusClass = item.classification === "protected"
+    ? "protected"
+    : issueType === "access_denied"
+      ? "access-denied"
+      : "";
+  statusCode.className = `status-code ${statusClass}`;
+  statusCode.textContent = formatIssueLabel(item);
+  header.append(statusCode, metaBadge(item.method || "HTTP"), metaBadge(item.status ? `Status ${item.status}` : "No status"));
 
-    row.append(status, url, sources);
-    return row;
-  }));
+  row.append(header, detailLine("URL", item.url));
+
+  if (item.redirected) {
+    row.append(detailLine("轉址", `${item.redirectCount} 次轉址，最終 URL：${item.finalUrl}`));
+  }
+  if (item.classification === "protected" || issueType === "access_denied" || item.diagnosis || item.error) {
+    row.append(detailLine("診斷", formatDiagnosis(item)));
+  }
+
+  const sources = (item.sources || []).slice(0, 4);
+  if (sources.length > 0) {
+    const sourceText = sources
+      .map((source) => `${source.page} (${source.tag}[${source.attribute}])`)
+      .join("；");
+    row.append(detailLine("發現位置", sourceText));
+  } else {
+    row.append(detailLine("發現位置", "無來源資料"));
+  }
+  if ((item.sources || []).length > 4) {
+    row.append(detailLine("更多位置", `另有 ${(item.sources || []).length - 4} 個位置`));
+  }
+
+  return row;
+}
+
+function detailLine(label, value) {
+  const row = document.createElement("div");
+  row.className = "broken-detail-line";
+  const labelElement = document.createElement("span");
+  labelElement.className = "detail-label";
+  labelElement.textContent = label;
+  const valueElement = document.createElement("span");
+  valueElement.className = "detail-value";
+  valueElement.textContent = value;
+  row.append(labelElement, valueElement);
+  return row;
+}
+
+function metaBadge(value) {
+  const span = document.createElement("span");
+  span.className = "meta-badge";
+  span.textContent = value;
+  return span;
 }
 
 setState("idle");

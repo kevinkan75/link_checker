@@ -13,9 +13,10 @@
           <h1>External Link Analyzer</h1>
           <p>匯入 Link Checker 產出的外連清單，套用分類規則與白名單後產生稽核報告。</p>
         </div>
-        <nav>
-          <a href="/report-analyzer.html">Report Analyzer</a>
+        <nav class="header-nav" aria-label="主要導覽">
           <a href="/">Link Checker</a>
+          <a href="/analyzer.html" aria-current="page">External Link Analyzer</a>
+          <a href="/report-analyzer.html">Report Analyzer</a>
         </nav>
       </header>
 
@@ -32,45 +33,6 @@
             <small id="links-file-hint" class="file-hint">可載入 Link Checker 產出的 external-links.csv</small>
           </label>
 
-          <label class="file-field">
-            <span>分類規則 JSON</span>
-            <input id="rules-file" type="file" accept=".json,application/json">
-          </label>
-
-          <label>
-            <span>搜尋</span>
-            <input id="search" type="search" placeholder="URL、網域、分類或來源頁">
-          </label>
-
-          <label>
-            <span>顯示風險</span>
-            <select id="risk-filter">
-              <option value="all">全部</option>
-              <option value="high">高風險</option>
-              <option value="medium">需檢視</option>
-              <option value="low">一般</option>
-              <option value="trusted">白名單</option>
-              <option value="uncategorized">未分類</option>
-            </select>
-            <small class="file-hint">風險由分類規則、UT1、白名單與連結類型判斷</small>
-          </label>
-        </div>
-
-        <div class="rules-grid">
-          <label>
-            <span>高風險分類</span>
-            <input id="high-risk-categories" type="text" value="malware,phishing,cryptojacking,ddos,hacking,stalkerware,dialer">
-          </label>
-
-          <label>
-            <span>需檢視分類</span>
-            <input id="medium-risk-categories" type="text" value="shortener,vpn,redirector,strict_redirector,strong_redirector,filehosting,publicite,tracking_or_analytics">
-          </label>
-
-          <label class="trusted-field">
-            <span>白名單網域</span>
-            <textarea id="trusted-domains" rows="3" placeholder="example.gov.tw&#10;cdn.example.com"></textarea>
-          </label>
         </div>
 
         <div class="actions">
@@ -81,7 +43,31 @@
         </div>
       </section>
 
-      <section class="ut1-panel panel" aria-labelledby="ut1-title">
+      <details class="panel advanced-panel">
+        <summary>風險規則設定</summary>
+        <div class="advanced-panel-body">
+          <div class="rules-grid">
+            <label class="file-field">
+              <span>分類規則 JSON</span>
+              <input id="rules-file" type="file" accept=".json,application/json">
+            </label>
+
+            <label>
+              <span>高風險分類</span>
+              <input id="high-risk-categories" type="text" value="malware,phishing,cryptojacking,ddos,hacking,stalkerware,dialer">
+            </label>
+
+            <label>
+              <span>需檢視分類</span>
+              <input id="medium-risk-categories" type="text" value="shortener,vpn,redirector,strict_redirector,strong_redirector,filehosting,publicite,tracking_or_analytics">
+            </label>
+
+            <label class="trusted-field">
+              <span>白名單網域</span>
+              <textarea id="trusted-domains" rows="3" placeholder="example.gov.tw&#10;cdn.example.com"></textarea>
+            </label>
+          </div>
+
         <div class="section-heading">
           <h2 id="ut1-title">UT1 規則轉換</h2>
           <span id="ut1-state">尚未選擇 UT1 blacklists 資料夾；若上方欄位無法讀取子資料夾，請用遞迴選擇資料夾</span>
@@ -126,7 +112,8 @@
             </tbody>
           </table>
         </div>
-      </section>
+        </div>
+      </details>
 
       <section class="metric-grid" aria-label="外連分析摘要">
         <div><span>外連筆數</span><strong id="metric-links">0</strong></div>
@@ -135,6 +122,32 @@
         <div><span>需檢視</span><strong id="metric-medium">0</strong></div>
         <div><span>未分類</span><strong id="metric-uncategorized">0</strong></div>
         <div><span>外部表單/嵌入/腳本</span><strong id="metric-sensitive">0</strong></div>
+      </section>
+
+      <section class="panel result-filter-panel">
+        <div class="section-heading">
+          <h2>結果篩選</h2>
+          <span>套用於網域彙整、分類統計與外連明細</span>
+        </div>
+        <div class="result-toolbar">
+          <label>
+            <span>搜尋</span>
+            <input id="search" type="search" placeholder="URL、網域、分類或來源頁">
+          </label>
+
+          <label>
+            <span>顯示風險</span>
+            <select id="risk-filter">
+              <option value="all">全部</option>
+              <option value="high">高風險</option>
+              <option value="medium">需檢視</option>
+              <option value="low">一般</option>
+              <option value="trusted">白名單</option>
+              <option value="uncategorized">未分類</option>
+            </select>
+            <small class="file-hint">風險由分類規則、UT1、白名單與連結類型判斷</small>
+          </label>
+        </div>
       </section>
 
       <section class="analysis-layout">

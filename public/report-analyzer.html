@@ -16,6 +16,7 @@
         <nav class="header-nav" aria-label="主要導覽">
           <a href="/">Link Checker</a>
           <a href="/analyzer.html">External Link Analyzer</a>
+          <a href="/report-analyzer.html" aria-current="page">Report Analyzer</a>
         </nav>
       </header>
 
@@ -31,24 +32,6 @@
             <input id="report-file" type="file" accept=".json,application/json">
           </label>
 
-          <label>
-            <span>搜尋</span>
-            <input id="search" type="search" placeholder="URL、來源頁、診斷、網域">
-          </label>
-
-          <label>
-            <span>錯誤類型</span>
-            <select id="issue-filter">
-              <option value="all">全部</option>
-            </select>
-          </label>
-
-          <label>
-            <span>HTTP 狀態</span>
-            <select id="status-filter">
-              <option value="all">全部</option>
-            </select>
-          </label>
         </div>
 
         <div class="actions">
@@ -102,6 +85,26 @@
         <div class="section-heading">
           <h2>壞連結清單</h2>
           <span id="links-summary">0 筆</span>
+        </div>
+        <div class="result-toolbar" aria-label="壞連結篩選">
+          <label>
+            <span>搜尋</span>
+            <input id="search" type="search" placeholder="URL、來源頁、診斷、網域">
+          </label>
+
+          <label>
+            <span>錯誤類型</span>
+            <select id="issue-filter">
+              <option value="all">全部</option>
+            </select>
+          </label>
+
+          <label>
+            <span>HTTP 狀態</span>
+            <select id="status-filter">
+              <option value="all">全部</option>
+            </select>
+          </label>
         </div>
         <div id="links-table" class="issue-list-wrap">
           <p class="empty-note issue-empty">請先上傳 report.json。</p>

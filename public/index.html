@@ -12,134 +12,149 @@
         <div class="title-block">
           <h1 id="title">Link Checker</h1>
           <nav class="header-nav" aria-label="主要導覽">
-            <a class="header-link" href="/report-analyzer.html">Report Analyzer</a>
+            <a class="header-link" href="/" aria-current="page">Link Checker</a>
             <a class="header-link" href="/analyzer.html">External Link Analyzer</a>
+            <a class="header-link" href="/report-analyzer.html">Report Analyzer</a>
           </nav>
           <p>輸入網站網址，檢查站內無效連結與資源。</p>
         </div>
 
-        <form id="check-form" class="form-grid">
-          <label class="url-field">
-            <span>網站 URL</span>
-            <input id="url" name="url" type="url" placeholder="https://example.com" required>
-          </label>
+        <form id="check-form" class="check-form">
+          <div class="quick-check">
+            <label class="url-field">
+              <span>網站 URL</span>
+              <input id="url" name="url" type="url" placeholder="https://example.com" required>
+            </label>
 
-          <label>
-            <span>最多頁面</span>
-            <input id="max-pages" name="maxPages" type="number" min="1" max="5000" value="100">
-          </label>
+            <label class="toggle-field">
+              <input id="external" name="checkExternal" type="checkbox">
+              <span>檢查外部連結</span>
+            </label>
 
-          <label>
-            <span>最大深度</span>
-            <input id="max-depth" name="maxDepth" type="number" min="1" max="50" value="2">
-          </label>
-
-          <label>
-            <span>全域併發</span>
-            <input id="concurrency" name="concurrency" type="number" min="1" max="100" value="12">
-          </label>
-
-          <label>
-            <span>每 host 併發</span>
-            <input id="per-host-concurrency" name="perHostConcurrency" type="number" min="1" max="50" value="4">
-          </label>
-
-          <label>
-            <span>間隔毫秒</span>
-            <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="500">
-          </label>
-
-          <label>
-            <span>隨機延遲最小 ms</span>
-            <input id="request-delay-min" name="requestDelayMinMs" type="number" min="0" max="60000" step="100" placeholder="300">
-          </label>
-
-          <label>
-            <span>隨機延遲最大 ms</span>
-            <input id="request-delay-max" name="requestDelayMaxMs" type="number" min="0" max="60000" step="100" placeholder="1000">
-          </label>
-
-          <label>
-            <span>逾時毫秒</span>
-            <input id="timeout" name="timeoutMs" type="number" min="1000" max="120000" step="500" value="15000">
-          </label>
-
-          <label>
-            <span>重試次數</span>
-            <input id="retry-count" name="retryCount" type="number" min="0" max="5" value="2">
-          </label>
-
-          <label>
-            <span>最大轉址</span>
-            <input id="max-redirects" name="maxRedirects" type="number" min="0" max="20" value="10">
-          </label>
-
-          <label>
-            <span>轉址過長門檻</span>
-            <input id="long-redirect-threshold" name="longRedirectThreshold" type="number" min="0" max="20" value="3">
-          </label>
-
-          <label class="language-field">
-            <span>語言標頭</span>
-            <input id="accept-language" name="acceptLanguage" type="text" value="zh-TW,zh;q=0.9,en;q=0.8">
-          </label>
-
-          <label class="language-field">
-            <span>User-Agent</span>
-            <input id="user-agent" name="userAgent" type="text" value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LocalLinkChecker/1.0">
-          </label>
-
-          <label class="toggle-field">
-            <input id="external" name="checkExternal" type="checkbox">
-            <span>檢查外部連結</span>
-          </label>
-
-          <div class="actions">
-            <button id="start-button" type="submit">開始檢查</button>
-            <button id="stop-button" type="button" disabled>停止</button>
-            <button id="download-button" type="button" disabled>下載 JSON</button>
+            <div class="actions">
+              <button id="start-button" type="submit">開始檢查</button>
+              <button id="stop-button" type="button" disabled>停止</button>
+              <button id="download-button" type="button" disabled>下載 JSON</button>
+            </div>
           </div>
+
+          <details class="advanced-settings">
+            <summary>進階設定</summary>
+            <div class="form-grid">
+              <label>
+                <span>最多頁面</span>
+                <input id="max-pages" name="maxPages" type="number" min="1" max="5000" value="100">
+              </label>
+
+              <label>
+                <span>最大深度</span>
+                <input id="max-depth" name="maxDepth" type="number" min="1" max="50" value="2">
+              </label>
+
+              <label>
+                <span>全域併發</span>
+                <input id="concurrency" name="concurrency" type="number" min="1" max="100" value="12">
+              </label>
+
+              <label>
+                <span>每 host 併發</span>
+                <input id="per-host-concurrency" name="perHostConcurrency" type="number" min="1" max="50" value="4">
+              </label>
+
+              <label>
+                <span>間隔毫秒</span>
+                <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="500">
+              </label>
+
+              <label>
+                <span>隨機延遲最小 ms</span>
+                <input id="request-delay-min" name="requestDelayMinMs" type="number" min="0" max="60000" step="100" placeholder="300">
+              </label>
+
+              <label>
+                <span>隨機延遲最大 ms</span>
+                <input id="request-delay-max" name="requestDelayMaxMs" type="number" min="0" max="60000" step="100" placeholder="1000">
+              </label>
+
+              <label>
+                <span>逾時毫秒</span>
+                <input id="timeout" name="timeoutMs" type="number" min="1000" max="120000" step="500" value="15000">
+              </label>
+
+              <label>
+                <span>重試次數</span>
+                <input id="retry-count" name="retryCount" type="number" min="0" max="5" value="2">
+              </label>
+
+              <label>
+                <span>最大轉址</span>
+                <input id="max-redirects" name="maxRedirects" type="number" min="0" max="20" value="10">
+              </label>
+
+              <label>
+                <span>轉址過長門檻</span>
+                <input id="long-redirect-threshold" name="longRedirectThreshold" type="number" min="0" max="20" value="3">
+              </label>
+
+              <label class="language-field">
+                <span>語言標頭</span>
+                <input id="accept-language" name="acceptLanguage" type="text" value="zh-TW,zh;q=0.9,en;q=0.8">
+              </label>
+
+              <label class="language-field">
+                <span>User-Agent</span>
+                <input id="user-agent" name="userAgent" type="text" value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LocalLinkChecker/1.0">
+              </label>
+            </div>
+          </details>
         </form>
       </section>
 
       <section class="queue-panel">
-        <div class="section-heading">
-          <h2>待檢核網站佇列</h2>
-          <span id="queue-summary">尚未加入網站</span>
-        </div>
-        <label class="batch-field">
-          <span>批次網址</span>
-          <textarea id="batch-urls" rows="4" placeholder="https://www.example.gov.tw/&#10;https://www.example2.gov.tw/"></textarea>
-        </label>
-        <label class="site-concurrency-field">
-          <span>同時檢查網站數</span>
-          <input id="max-concurrent-sites" type="number" min="1" max="5" value="1">
-        </label>
-        <p class="queue-hint">較高併行數可能增加 403、429 或逾時；政府網站建議使用 1 或 2。</p>
-        <div class="queue-actions">
-          <button id="add-queue-button" type="button">加入佇列</button>
-          <button id="start-queue-button" type="button">開始佇列</button>
-          <button id="stop-queue-button" type="button" disabled>停止佇列</button>
-        </div>
-        <div class="table-wrap queue-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>狀態</th>
-                <th>網站</th>
-                <th>已檢查</th>
-                <th>問題</th>
-                <th>記錄</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="queue-table">
-              <tr class="empty-row">
-                <td colspan="6">尚未加入待檢核網站。</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <details class="queue-details">
+          <summary>
+            <span class="queue-summary-content">
+              <span class="queue-summary-title">待檢核網站佇列</span>
+              <span class="queue-summary-meta">
+                <span id="queue-summary">尚未加入網站</span>
+                <span class="queue-toggle-hint">點擊展開</span>
+              </span>
+            </span>
+          </summary>
+          <label class="batch-field">
+            <span>批次網址</span>
+            <textarea id="batch-urls" rows="4" placeholder="https://www.example.gov.tw/&#10;https://www.example2.gov.tw/"></textarea>
+          </label>
+          <label class="site-concurrency-field">
+            <span>同時檢查網站數</span>
+            <input id="max-concurrent-sites" type="number" min="1" max="5" value="1">
+          </label>
+          <p class="queue-hint">較高併行數可能增加 403、429 或逾時；政府網站建議使用 1 或 2。</p>
+          <div class="queue-actions">
+            <button id="add-queue-button" type="button">加入佇列</button>
+            <button id="start-queue-button" type="button">開始佇列</button>
+            <button id="stop-queue-button" type="button" disabled>停止佇列</button>
+          </div>
+          <div class="table-wrap queue-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>狀態</th>
+                  <th>網站</th>
+                  <th>已檢查</th>
+                  <th>問題</th>
+                  <th>記錄</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="queue-table">
+                <tr class="empty-row">
+                  <td colspan="6">尚未加入待檢核網站。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
       <section class="status-panel" aria-live="polite">
@@ -199,21 +214,8 @@
             <button type="button" data-filter="network_error">網路錯誤 <span>0</span></button>
             <button type="button" data-filter="unknown_error">其他 <span>0</span></button>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>狀態</th>
-                  <th>URL</th>
-                  <th>發現位置</th>
-                </tr>
-              </thead>
-              <tbody id="broken-table">
-                <tr class="empty-row">
-                  <td colspan="3">開始檢查後，問題連結會顯示在這裡。</td>
-                </tr>
-              </tbody>
-            </table>
+          <div id="broken-table" class="broken-list-wrap">
+            <p class="empty-note broken-empty">開始檢查後，問題連結會顯示在這裡。</p>
           </div>
         </div>
 

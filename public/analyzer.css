@@ -90,6 +90,19 @@ a {
   padding: 18px 20px;
 }
 
+.header-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.header-nav a[aria-current="page"] {
+  border-color: var(--primary);
+  background: #e7f3f4;
+  color: var(--primary);
+}
+
 h1,
 h2,
 p {
@@ -123,6 +136,23 @@ label,
   padding: 18px;
 }
 
+.advanced-panel {
+  display: block;
+}
+
+.advanced-panel summary {
+  min-height: 40px;
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.advanced-panel-body {
+  display: grid;
+  gap: 16px;
+  padding-top: 14px;
+}
+
 .section-heading {
   display: flex;
   align-items: center;
@@ -139,9 +169,23 @@ label,
   gap: 12px;
 }
 
+.setup-grid {
+  grid-template-columns: minmax(280px, 1fr);
+}
+
 .rules-grid {
-  grid-template-columns: 1fr 1fr 1.2fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 12px;
+}
+
+.ut1-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.result-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.45fr);
+  gap: 12px;
 }
 
 label {
@@ -423,6 +467,7 @@ tr:last-child td {
   .setup-grid,
   .rules-grid,
   .ut1-grid,
+  .result-toolbar,
   .metric-grid,
   .analysis-layout {
     grid-template-columns: 1fr 1fr;
@@ -446,9 +491,14 @@ tr:last-child td {
     flex-direction: column;
   }
 
+  .header-nav {
+    justify-content: flex-start;
+  }
+
   .setup-grid,
   .rules-grid,
   .ut1-grid,
+  .result-toolbar,
   .metric-grid,
   .analysis-layout {
     grid-template-columns: 1fr;
