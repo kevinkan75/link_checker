@@ -14,9 +14,9 @@
           <p>上傳單一 report.json，快速整理壞連結、錯誤類型、來源頁與網域問題排行。</p>
         </div>
         <nav class="header-nav" aria-label="主要導覽">
-          <a href="/">Link Checker</a>
-          <a href="/analyzer.html">External Link Analyzer</a>
-          <a href="/report-analyzer.html" aria-current="page">Report Analyzer</a>
+          <a class="header-link" href="/">Link Checker</a>
+          <a class="header-link" href="/analyzer.html">External Link Analyzer</a>
+          <a class="header-link" href="/report-analyzer.html" aria-current="page">Report Analyzer</a>
         </nav>
       </header>
 
@@ -35,7 +35,6 @@
         </div>
 
         <div class="actions">
-          <button id="export-csv-button" type="button" disabled>匯出目前清單 CSV</button>
           <button id="clear-button" type="button" disabled>清除</button>
         </div>
       </section>
@@ -43,8 +42,8 @@
       <section class="metric-grid" aria-label="報告總覽">
         <div><span>檢查頁數</span><strong id="metric-pages">0</strong></div>
         <div><span>檢查 URL</span><strong id="metric-checked">0</strong></div>
-        <div><span>壞連結</span><strong id="metric-broken">0</strong></div>
-        <div><span>壞連結比例</span><strong id="metric-broken-rate">0%</strong></div>
+        <div class="metric-card-danger"><span>壞連結</span><strong id="metric-broken">0</strong></div>
+        <div id="broken-rate-card"><span>壞連結比例</span><strong id="metric-broken-rate">0%</strong></div>
         <div><span>Redirect</span><strong id="metric-redirects">0</strong></div>
         <div><span>略過外連</span><strong id="metric-skipped">0</strong></div>
       </section>
@@ -55,6 +54,7 @@
             <h2>錯誤分類</h2>
             <span id="issue-summary-count">0 種</span>
           </div>
+          <p class="panel-note">用來判斷修復優先順序。</p>
           <div id="issue-list" class="rank-list">
             <p class="empty-note">載入報告後顯示錯誤分類。</p>
           </div>
@@ -65,6 +65,7 @@
             <h2>來源頁排行</h2>
             <span id="source-summary-count">0 頁</span>
           </div>
+          <p class="panel-note">問題最多的頁面先處理。</p>
           <div id="source-list" class="rank-list">
             <p class="empty-note">載入報告後顯示來源頁。</p>
           </div>
@@ -75,6 +76,7 @@
             <h2>問題網域排行</h2>
             <span id="domain-summary-count">0 個</span>
           </div>
+          <p class="panel-note">需要外部修正或確認的網域。</p>
           <div id="domain-list" class="rank-list">
             <p class="empty-note">載入報告後顯示網域排行。</p>
           </div>
@@ -105,6 +107,9 @@
               <option value="all">全部</option>
             </select>
           </label>
+        </div>
+        <div class="result-actions" aria-label="匯出目前篩選結果">
+          <button id="export-csv-button" type="button" disabled>匯出目前篩選 CSV</button>
         </div>
         <div id="links-table" class="issue-list-wrap">
           <p class="empty-note issue-empty">請先上傳 report.json。</p>

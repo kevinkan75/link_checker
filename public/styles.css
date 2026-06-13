@@ -105,6 +105,7 @@ button:disabled {
 
 h1,
 h2,
+h3,
 p {
   margin: 0;
 }
@@ -128,14 +129,14 @@ h2 {
 .header-link {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 40px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0 12px;
+  padding: 0 14px;
   color: var(--primary);
   text-decoration: none;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .header-link:hover {
@@ -386,6 +387,18 @@ input:focus {
   min-width: 0;
 }
 
+#status-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.elapsed-time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -429,9 +442,24 @@ input:focus {
   overflow-wrap: anywhere;
 }
 
+.progress-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.progress-summary strong {
+  color: var(--primary);
+  font-size: 14px;
+}
+
 .progress-track {
   height: 8px;
-  margin: 16px 0;
+  margin: 8px 0 10px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-muted);
@@ -470,12 +498,29 @@ input:focus {
   font-size: 20px;
 }
 
+.metric-grid .metric-card-danger {
+  border-color: #f0b4ad;
+  background: var(--danger-bg);
+}
+
+.metric-grid .metric-card-danger span,
+.metric-grid .metric-card-danger strong {
+  color: var(--danger);
+}
+
+.status-subheading {
+  margin-top: 16px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .issue-grid,
 .redirect-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .issue-grid div,
@@ -501,7 +546,11 @@ input:focus {
 }
 
 .current-url {
-  margin-top: 12px;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fbfcfc;
   color: var(--muted);
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -766,6 +815,12 @@ tr:last-child td {
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .progress-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .header-nav {

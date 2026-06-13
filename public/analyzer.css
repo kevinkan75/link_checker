@@ -37,13 +37,13 @@ textarea {
 }
 
 button,
-a {
+.header-link {
   min-height: 40px;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0 14px;
   background: var(--surface);
-  color: var(--text);
+  color: var(--primary);
 }
 
 button {
@@ -51,7 +51,7 @@ button {
 }
 
 button:hover:not(:disabled),
-a:hover {
+.header-link:hover {
   border-color: var(--primary);
 }
 
@@ -60,10 +60,12 @@ button:disabled {
   opacity: 0.55;
 }
 
-a {
+.header-link {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .analyzer-shell {
@@ -97,7 +99,7 @@ a {
   justify-content: flex-end;
 }
 
-.header-nav a[aria-current="page"] {
+.header-link[aria-current="page"] {
   border-color: var(--primary);
   background: #e7f3f4;
   color: var(--primary);
@@ -236,6 +238,13 @@ textarea:focus {
   margin-top: 14px;
 }
 
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .ut1-actions {
   display: flex;
   flex-wrap: wrap;
@@ -283,6 +292,26 @@ textarea:focus {
 
 .metric-grid strong {
   font-size: 22px;
+}
+
+.metric-grid .metric-card-danger {
+  border-color: #f0b4ad;
+  background: var(--danger-bg);
+}
+
+.metric-grid .metric-card-danger span,
+.metric-grid .metric-card-danger strong {
+  color: var(--danger);
+}
+
+.metric-grid .metric-card-warn {
+  border-color: #eed2a5;
+  background: var(--warn-bg);
+}
+
+.metric-grid .metric-card-warn span,
+.metric-grid .metric-card-warn strong {
+  color: var(--warn);
 }
 
 .analysis-layout {
@@ -368,6 +397,8 @@ tr:last-child td {
 .category-list {
   display: grid;
   gap: 8px;
+  max-height: 460px;
+  overflow: auto;
 }
 
 .category-item {
@@ -435,6 +466,35 @@ tr:last-child td {
   overflow-wrap: anywhere;
 }
 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.status-badge.ok {
+  border-color: #b9ddc5;
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.status-badge.failed {
+  border-color: #f0b4ad;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.status-badge.unchecked {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
 .link-detail-line {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
@@ -468,14 +528,19 @@ tr:last-child td {
   .rules-grid,
   .ut1-grid,
   .result-toolbar,
-  .metric-grid,
-  .analysis-layout {
+  .metric-grid {
     grid-template-columns: 1fr 1fr;
   }
 
   .trusted-field,
   .links-panel {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1100px) {
+  .analysis-layout {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -779,7 +779,8 @@ function renderLinksTable(links) {
     return;
   }
 
-  const visibleLinks = links.slice(0, 500);
+  const sortedLinks = sortLinksForDisplay(links);
+  const visibleLinks = sortedLinks.slice(0, 500);
   linksTable.replaceChildren(...visibleLinks.map(renderLinkItem));
   if (links.length > visibleLinks.length) {
     const note = document.createElement("p");
@@ -799,6 +800,7 @@ function renderLinkItem(item) {
   domain.textContent = item.registrableDomain || item.hostname || "unknown domain";
   header.append(
     riskBadge(item.risk),
+    linkStatusBadge(item),
     domain,
     metaBadge(item.type || "unknown"),
     metaBadge(item.categories.join(", ") || "uncategorized"),
@@ -810,6 +812,38 @@ function renderLinkItem(item) {
     detailLine("來源頁", item.sourcePage || "無來源頁"),
   );
   return row;
+}
+
+function sortLinksForDisplay(links) {
+  return [...links].sort((a, b) => (
+    riskRank(a.risk) - riskRank(b.risk)
+    || String(a.registrableDomain || a.hostname || "").localeCompare(String(b.registrableDomain || b.hostname || ""))
+    || String(a.sourcePage || "").localeCompare(String(b.sourcePage || ""))
+    || String(a.url || "").localeCompare(String(b.url || ""))
+  ));
+}
+
+function linkStatusBadge(item) {
+  const span = document.createElement("span");
+  const status = item.status ? `HTTP ${item.status}` : "";
+  if (!item.checked) {
+    span.className = "status-badge unchecked";
+    span.textContent = "未檢查";
+    return span;
+  }
+  if (item.ok === false) {
+    span.className = "status-badge failed";
+    span.textContent = status || "檢查失敗";
+    return span;
+  }
+  if (item.ok !== true) {
+    span.className = "status-badge unchecked";
+    span.textContent = status || "已檢查";
+    return span;
+  }
+  span.className = "status-badge ok";
+  span.textContent = status || "已檢查";
+  return span;
 }
 
 function detailLine(label, value) {

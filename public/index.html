@@ -172,26 +172,32 @@
         </details>
       </section>
 
-      <section class="status-panel" aria-live="polite">
+      <section class="status-panel" aria-labelledby="status-title">
         <div class="status-heading">
           <div>
             <span id="state-badge" class="badge idle">待命</span>
-            <strong id="status-title">尚未開始</strong>
+            <strong id="status-title" aria-live="polite">尚未開始</strong>
           </div>
-          <span id="elapsed">0s</span>
+          <span id="elapsed" class="elapsed-time">0s</span>
         </div>
         <p id="watching-site" class="watching-site" hidden></p>
-        <div class="progress-track" aria-hidden="true">
+        <div class="progress-summary">
+          <span id="progress-label">檢查進度</span>
+          <strong id="progress-percent">0%</strong>
+        </div>
+        <div class="progress-track" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div id="progress-bar"></div>
         </div>
+        <p id="current-url" class="current-url">目前沒有處理中的 URL</p>
         <div class="metric-grid">
           <div><span>已爬頁面</span><strong id="pages">0 / 100</strong></div>
           <div><span>已檢查 URL</span><strong id="checked">0</strong></div>
           <div><span>目前請求</span><strong id="active">0</strong></div>
           <div><span>待爬佇列</span><strong id="queue">0</strong></div>
-          <div><span>問題連結</span><strong id="broken-count">0</strong></div>
+          <div class="metric-card-danger"><span>問題連結</span><strong id="broken-count">0</strong></div>
           <div><span>略過外部</span><strong id="skipped">0</strong></div>
         </div>
+        <h3 class="status-subheading">問題類型</h3>
         <div class="issue-grid">
           <div><span>404</span><strong id="issue-not-found">0</strong></div>
           <div><span>防護阻擋</span><strong id="issue-protected">0</strong></div>
@@ -201,6 +207,7 @@
           <div><span>網路錯誤</span><strong id="issue-network">0</strong></div>
           <div><span>其他</span><strong id="issue-unknown">0</strong></div>
         </div>
+        <h3 class="status-subheading">Redirect 摘要</h3>
         <div class="redirect-grid">
           <div><span>轉址 URL</span><strong id="redirect-total">0</strong></div>
           <div><span>永久轉址</span><strong id="redirect-permanent">0</strong></div>
@@ -209,7 +216,6 @@
           <div><span>轉址過長</span><strong id="redirect-long">0</strong></div>
           <div><span>未完成轉址</span><strong id="redirect-unresolved">0</strong></div>
         </div>
-        <p id="current-url" class="current-url">目前沒有處理中的 URL</p>
         <p id="log-location" class="log-location" hidden></p>
       </section>
 

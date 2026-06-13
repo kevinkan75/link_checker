@@ -9,6 +9,7 @@ const metricPages = document.querySelector("#metric-pages");
 const metricChecked = document.querySelector("#metric-checked");
 const metricBroken = document.querySelector("#metric-broken");
 const metricBrokenRate = document.querySelector("#metric-broken-rate");
+const brokenRateCard = document.querySelector("#broken-rate-card");
 const metricRedirects = document.querySelector("#metric-redirects");
 const metricSkipped = document.querySelector("#metric-skipped");
 const issueSummaryCount = document.querySelector("#issue-summary-count");
@@ -251,10 +252,11 @@ function renderAnalysis(analysis) {
   metricChecked.textContent = formatNumber(analysis.metrics.urlsChecked);
   metricBroken.textContent = formatNumber(analysis.metrics.brokenLinks);
   metricBrokenRate.textContent = `${(analysis.metrics.brokenRate * 100).toFixed(1)}%`;
+  updateBrokenRateCard(analysis.metrics.brokenRate);
   metricRedirects.textContent = formatNumber(analysis.metrics.redirects);
   metricSkipped.textContent = formatNumber(analysis.metrics.skippedExternal);
 
-  renderRankList(issueList, analysis.filteredIssueCounts, getIssueLabel, 20);
+  renderIssueRankList(issueList, analysis.filteredIssueCounts, 20);
   renderRankList(sourceList, analysis.filteredSourceCounts, (value) => value, 20);
   renderRankList(domainList, analysis.filteredDomainCounts, (value) => value, 20);
 
@@ -288,13 +290,36 @@ function renderRankList(container, counts, labelFactory, limit) {
   }));
 }
 
+function renderIssueRankList(container, counts, limit) {
+  const entries = Object.entries(counts)
+    .sort((a, b) => issueRank(a[0]) - issueRank(b[0]) || b[1] - a[1] || getIssueLabel(a[0]).localeCompare(getIssueLabel(b[0])))
+    .slice(0, limit);
+
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="empty-note">沒有符合篩選條件的資料。</p>';
+    return;
+  }
+
+  container.replaceChildren(...entries.map(([value, count]) => {
+    const row = document.createElement("div");
+    row.className = "rank-item has-badge";
+    const label = document.createElement("strong");
+    label.textContent = getIssueLabel(value);
+    const amount = document.createElement("span");
+    amount.textContent = `${formatNumber(count)} 筆`;
+    row.append(issueBadge(value), label, amount);
+    return row;
+  }));
+}
+
 function renderBrokenTable(items) {
   if (items.length === 0) {
     linksTable.innerHTML = '<p class="empty-note issue-empty">沒有符合篩選條件的壞連結。</p>';
     return;
   }
 
-  const visibleItems = items.slice(0, 800);
+  const sortedItems = sortBrokenItemsForDisplay(items);
+  const visibleItems = sortedItems.slice(0, 800);
   linksTable.replaceChildren(...visibleItems.map(renderIssueItem));
   if (items.length > visibleItems.length) {
     const note = document.createElement("p");
@@ -309,6 +334,7 @@ function renderEmpty(message = "請先上傳 report.json。") {
   metricChecked.textContent = "0";
   metricBroken.textContent = "0";
   metricBrokenRate.textContent = "0%";
+  updateBrokenRateCard(0);
   metricRedirects.textContent = "0";
   metricSkipped.textContent = "0";
   issueSummaryCount.textContent = "0 種";
@@ -323,6 +349,7 @@ function renderEmpty(message = "請先上傳 report.json。") {
 
 function renderIssueItem(item) {
   const source = item.sources[0] || {};
+  const sourceCount = item.sources.length;
   const row = document.createElement("article");
   row.className = "issue-item";
 
@@ -333,14 +360,40 @@ function renderIssueItem(item) {
     metaBadge(item.status ? `HTTP ${item.status}` : "無狀態"),
     metaBadge(formatSourceElement(source) || "無元素"),
   );
+  if (sourceCount > 1) {
+    header.append(metaBadge(`${formatNumber(sourceCount)} 個來源`, "impact"));
+  }
 
   row.append(
     header,
     detailLine("URL", item.url),
-    detailLine("來源頁", source.page || "無來源頁"),
+    detailLine("來源頁", formatSources(item.sources)),
     detailLine("診斷", item.diagnosis || item.error || "無診斷資訊"),
   );
   return row;
+}
+
+function sortBrokenItemsForDisplay(items) {
+  return [...items].sort((a, b) => (
+    issueRank(a.issueType) - issueRank(b.issueType)
+    || (b.sources?.length || 0) - (a.sources?.length || 0)
+    || String(a.statusKey || "").localeCompare(String(b.statusKey || ""))
+    || String(a.domain || "").localeCompare(String(b.domain || ""))
+    || String(a.url || "").localeCompare(String(b.url || ""))
+  ));
+}
+
+function formatSources(sources) {
+  if (!sources.length) {
+    return "無來源頁";
+  }
+  const visible = sources
+    .slice(0, 3)
+    .map((source) => source.page || "無來源頁");
+  const remaining = sources.length - visible.length;
+  return remaining > 0
+    ? `${visible.join("；")}；另有 ${formatNumber(remaining)} 個來源`
+    : visible.join("；");
 }
 
 function detailLine(label, value) {
@@ -356,9 +409,9 @@ function detailLine(label, value) {
   return row;
 }
 
-function metaBadge(value) {
+function metaBadge(value, modifier = "") {
   const span = document.createElement("span");
-  span.className = "meta-badge";
+  span.className = modifier ? `meta-badge ${modifier}` : "meta-badge";
   span.textContent = value;
   return span;
 }
@@ -425,6 +478,26 @@ function formatSourceElement(source) {
 
 function getIssueLabel(issueType) {
   return ISSUE_LABELS[issueType] || issueType || "未知錯誤";
+}
+
+function issueRank(issueType) {
+  return {
+    not_found: 0,
+    access_denied: 1,
+    protected: 2,
+    timeout: 3,
+    network_error: 4,
+    redirect_to_error: 5,
+    too_many_redirects: 6,
+    redirect_loop: 7,
+    http_error: 8,
+    unknown_error: 9,
+  }[issueType] ?? 10;
+}
+
+function updateBrokenRateCard(rate) {
+  brokenRateCard.classList.toggle("metric-card-danger", rate > 0.05);
+  brokenRateCard.classList.toggle("metric-card-warn", rate > 0.01 && rate <= 0.05);
 }
 
 function toNumber(value, fallback) {

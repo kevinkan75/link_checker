@@ -32,7 +32,9 @@ const stateBadge = document.querySelector("#state-badge");
 const statusTitle = document.querySelector("#status-title");
 const watchingSite = document.querySelector("#watching-site");
 const elapsed = document.querySelector("#elapsed");
+const progressTrack = document.querySelector(".progress-track");
 const progressBar = document.querySelector("#progress-bar");
+const progressPercent = document.querySelector("#progress-percent");
 const pages = document.querySelector("#pages");
 const checked = document.querySelector("#checked");
 const active = document.querySelector("#active");
@@ -187,6 +189,7 @@ async function startCheck() {
   updateFilterCounts(emptyBreakdown(), 0);
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
   updateActiveFilter();
+  setProgressValue(0);
   showLogLocation(null);
   updateWatchingSite();
   eventLog.replaceChildren();
@@ -562,7 +565,14 @@ function updateStatus(status) {
   const maxPages = Number(status.maxPages || maxPagesInput.value || 1);
   const crawled = Number(status.pagesCrawled || 0);
   const width = Math.max(0, Math.min(100, (crawled / maxPages) * 100));
-  progressBar.style.width = `${width}%`;
+  setProgressValue(width);
+}
+
+function setProgressValue(value) {
+  const normalized = Math.round(Math.max(0, Math.min(100, Number(value) || 0)));
+  progressBar.style.width = `${normalized}%`;
+  progressPercent.textContent = `${normalized}%`;
+  progressTrack.setAttribute("aria-valuenow", String(normalized));
 }
 
 function setState(state) {
@@ -614,7 +624,7 @@ function renderReport(report) {
   pages.textContent = `${report.summary.pagesCrawled} / ${report.options.maxPages}`;
   checked.textContent = report.summary.urlsChecked;
   skipped.textContent = report.summary.skippedExternal;
-  progressBar.style.width = "100%";
+  setProgressValue(100);
   updateIssueBreakdown(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateFilterCounts(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateRedirectBreakdown(report.summary.redirectByType || emptyRedirectBreakdown(), report.summary.redirects || 0);

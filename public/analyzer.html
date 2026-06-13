@@ -14,9 +14,9 @@
           <p>匯入 Link Checker 產出的外連清單，套用分類規則與白名單後產生稽核報告。</p>
         </div>
         <nav class="header-nav" aria-label="主要導覽">
-          <a href="/">Link Checker</a>
-          <a href="/analyzer.html" aria-current="page">External Link Analyzer</a>
-          <a href="/report-analyzer.html">Report Analyzer</a>
+          <a class="header-link" href="/">Link Checker</a>
+          <a class="header-link" href="/analyzer.html" aria-current="page">External Link Analyzer</a>
+          <a class="header-link" href="/report-analyzer.html">Report Analyzer</a>
         </nav>
       </header>
 
@@ -38,13 +38,11 @@
         <div class="actions">
           <button id="pick-links-button" type="button">讀取外連清單</button>
           <button id="analyze-button" type="button">分析</button>
-          <button id="export-json-button" type="button" disabled>匯出 JSON</button>
-          <button id="export-csv-button" type="button" disabled>匯出 CSV</button>
         </div>
       </section>
 
       <details class="panel advanced-panel">
-        <summary>風險規則設定</summary>
+        <summary>風險規則與白名單</summary>
         <div class="advanced-panel-body">
           <div class="rules-grid">
             <label class="file-field">
@@ -67,61 +65,66 @@
               <textarea id="trusted-domains" rows="3" placeholder="example.gov.tw&#10;cdn.example.com"></textarea>
             </label>
           </div>
-
-        <div class="section-heading">
-          <h2 id="ut1-title">UT1 規則轉換</h2>
-          <span id="ut1-state">尚未選擇 UT1 blacklists 資料夾；若上方欄位無法讀取子資料夾，請用遞迴選擇資料夾</span>
         </div>
+      </details>
 
-        <div class="ut1-grid">
-          <label class="file-field">
-            <span>UT1 blacklists 資料夾</span>
-            <input id="ut1-folder" type="file" webkitdirectory directory mozdirectory multiple>
-          </label>
-          <label>
-            <span>最少網域數</span>
-            <input id="ut1-min-domains" type="number" min="1" value="1">
-          </label>
-          <label>
-            <span>分類搜尋</span>
-            <input id="ut1-search" type="search" placeholder="social、phishing、webmail">
-          </label>
-        </div>
+      <details class="panel advanced-panel ut1-panel">
+        <summary>UT1 分類產生器</summary>
+        <div class="advanced-panel-body">
+          <div class="section-heading">
+            <h2 id="ut1-title">UT1 規則轉換</h2>
+            <span id="ut1-state">尚未選擇 UT1 blacklists 資料夾；若上方欄位無法讀取子資料夾，請用遞迴選擇資料夾</span>
+          </div>
 
-        <div class="ut1-actions">
-          <button id="ut1-picker-button" type="button">遞迴選擇資料夾</button>
-          <button id="ut1-common-button" type="button" disabled>常用稽核分類</button>
-          <button id="ut1-security-button" type="button" disabled>安全風險分類</button>
-          <button id="ut1-select-all-button" type="button" disabled>全選</button>
-          <button id="ut1-clear-button" type="button" disabled>全不選</button>
-          <button id="ut1-apply-button" type="button" disabled>產生並套用</button>
-          <button id="ut1-download-button" type="button" disabled>下載 ut1-rules.json</button>
-        </div>
+          <div class="ut1-grid">
+            <label class="file-field">
+              <span>UT1 blacklists 資料夾</span>
+              <input id="ut1-folder" type="file" webkitdirectory directory mozdirectory multiple>
+            </label>
+            <label>
+              <span>最少網域數</span>
+              <input id="ut1-min-domains" type="number" min="1" value="1">
+            </label>
+            <label>
+              <span>分類搜尋</span>
+              <input id="ut1-search" type="search" placeholder="social、phishing、webmail">
+            </label>
+          </div>
 
-        <div class="table-wrap ut1-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>納入</th>
-                <th>分類</th>
-                <th>domains 數量</th>
-              </tr>
-            </thead>
-            <tbody id="ut1-category-table">
-              <tr class="empty-row"><td colspan="3">選擇 UT1 blacklists 資料夾後會顯示分類。</td></tr>
-            </tbody>
-          </table>
-        </div>
+          <div class="ut1-actions">
+            <button id="ut1-picker-button" type="button">遞迴選擇資料夾</button>
+            <button id="ut1-common-button" type="button" disabled>常用稽核分類</button>
+            <button id="ut1-security-button" type="button" disabled>安全風險分類</button>
+            <button id="ut1-select-all-button" type="button" disabled>全選</button>
+            <button id="ut1-clear-button" type="button" disabled>全不選</button>
+            <button id="ut1-apply-button" type="button" disabled>產生並套用</button>
+            <button id="ut1-download-button" type="button" disabled>下載 ut1-rules.json</button>
+          </div>
+
+          <div class="table-wrap ut1-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>納入</th>
+                  <th>分類</th>
+                  <th>domains 數量</th>
+                </tr>
+              </thead>
+              <tbody id="ut1-category-table">
+                <tr class="empty-row"><td colspan="3">選擇 UT1 blacklists 資料夾後會顯示分類。</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </details>
 
       <section class="metric-grid" aria-label="外連分析摘要">
         <div><span>外連筆數</span><strong id="metric-links">0</strong></div>
         <div><span>外部網域</span><strong id="metric-domains">0</strong></div>
-        <div><span>高風險</span><strong id="metric-high">0</strong></div>
-        <div><span>需檢視</span><strong id="metric-medium">0</strong></div>
+        <div class="metric-card-danger"><span>高風險</span><strong id="metric-high">0</strong></div>
+        <div class="metric-card-warn"><span>需檢視</span><strong id="metric-medium">0</strong></div>
         <div><span>未分類</span><strong id="metric-uncategorized">0</strong></div>
-        <div><span>外部表單/嵌入/腳本</span><strong id="metric-sensitive">0</strong></div>
+        <div class="metric-card-warn"><span>外部表單/嵌入/腳本</span><strong id="metric-sensitive">0</strong></div>
       </section>
 
       <section class="panel result-filter-panel">
@@ -147,6 +150,10 @@
             </select>
             <small class="file-hint">風險由分類規則、UT1、白名單與連結類型判斷</small>
           </label>
+        </div>
+        <div class="result-actions" aria-label="匯出目前篩選結果">
+          <button id="export-json-button" type="button" disabled>匯出目前篩選 JSON</button>
+          <button id="export-csv-button" type="button" disabled>匯出目前篩選 CSV</button>
         </div>
       </section>
 
