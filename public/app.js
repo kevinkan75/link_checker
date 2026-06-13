@@ -14,6 +14,9 @@ const longRedirectThresholdInput = document.querySelector("#long-redirect-thresh
 const acceptLanguageInput = document.querySelector("#accept-language");
 const userAgentInput = document.querySelector("#user-agent");
 const externalInput = document.querySelector("#external");
+const conservativeModeInput = document.querySelector("#conservative-mode");
+const preferGetInput = document.querySelector("#prefer-get");
+const externalRefererInput = document.querySelector("#external-referer");
 const startButton = document.querySelector("#start-button");
 const stopButton = document.querySelector("#stop-button");
 const downloadButton = document.querySelector("#download-button");
@@ -55,6 +58,7 @@ const redirectCrossHost = document.querySelector("#redirect-cross-host");
 const redirectLong = document.querySelector("#redirect-long");
 const redirectUnresolved = document.querySelector("#redirect-unresolved");
 const filterBar = document.querySelector("#filter-bar");
+const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 let currentJobId = null;
 let eventSource = null;
@@ -68,6 +72,12 @@ let manualWatchSelected = false;
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   await startCheck();
+});
+
+conservativeModeInput.addEventListener("change", () => {
+  if (conservativeModeInput.checked) {
+    applyConservativePreset();
+  }
 });
 
 stopButton.addEventListener("click", async () => {
@@ -149,6 +159,19 @@ filterBar.addEventListener("click", (event) => {
   }
 });
 
+function applyConservativePreset() {
+  concurrencyInput.value = "3";
+  perHostConcurrencyInput.value = "1";
+  requestDelayInput.value = "500";
+  requestDelayMinInput.value = "2000";
+  requestDelayMaxInput.value = "5000";
+  retryCountInput.value = "1";
+  userAgentInput.value = browserUserAgent;
+  externalInput.checked = false;
+  preferGetInput.checked = true;
+  externalRefererInput.checked = true;
+}
+
 async function startCheck() {
   closeEvents();
   currentReport = null;
@@ -211,6 +234,9 @@ function getCheckOptions() {
     acceptLanguage: acceptLanguageInput.value.trim(),
     userAgent: userAgentInput.value.trim(),
     checkExternal: externalInput.checked,
+    conservativeMode: conservativeModeInput.checked,
+    preferGet: preferGetInput.checked,
+    externalReferer: externalRefererInput.checked,
   };
 }
 

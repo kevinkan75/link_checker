@@ -110,6 +110,22 @@ dist\LinkChecker-portable.zip
 .\check-links.cmd https://example.com --progress --verbose
 ```
 
+## Conservative mode
+
+Use conservative mode for sites that are likely to rate-limit, challenge, or block automated checks:
+
+```powershell
+.\check-links.cmd https://example.com --conservative
+```
+
+This preset lowers global concurrency to `3`, per-host concurrency to `1`, uses a random `2-5s` request delay, lowers transient retries to `1`, uses a plain browser User-Agent, prefers lightweight `GET` checks instead of probing with `HEAD`, and sends the source page as `Referer` for external link checks.
+
+You can also enable the behavior piece by piece:
+
+```powershell
+.\check-links.cmd https://example.com --prefer-get --external-referer --concurrency 3 --per-host-concurrency 1 --request-delay-min 2 --request-delay-max 5 --retry-count 1
+```
+
 使用 `--json` 時不會顯示進度或詳細事件，以避免破壞 JSON 輸出。
 
 ## 友善檢查設定

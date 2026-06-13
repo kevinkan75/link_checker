@@ -4,6 +4,20 @@ import { readFile, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
+const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+const CONSERVATIVE_DEFAULTS = {
+  concurrency: 3,
+  perHostConcurrency: 1,
+  requestDelayMinMs: 2000,
+  requestDelayMaxMs: 5000,
+  retryCount: 1,
+  checkExternal: false,
+  preferGet: true,
+  externalReferer: true,
+  userAgent: BROWSER_USER_AGENT,
+};
+
 const DEFAULTS = {
   maxPages: 100,
   maxDepth: 2,
@@ -18,9 +32,22 @@ const DEFAULTS = {
   longRedirectThreshold: 3,
   checkExternal: false,
   progressIntervalMs: 500,
-  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LocalLinkChecker/1.0",
+  preferGet: false,
+  externalReferer: false,
+  conservativeMode: false,
+  userAgent: `${BROWSER_USER_AGENT} LocalLinkChecker/1.0`,
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
 };
+
+function applyConservativeDefaults(options, explicitOptions = new Set()) {
+  for (const [key, value] of Object.entries(CONSERVATIVE_DEFAULTS)) {
+    if (!explicitOptions.has(key)) {
+      options[key] = value;
+    }
+  }
+  options.conservativeMode = true;
+  return options;
+}
 
 const ASSET_EXTENSIONS = new Set([
   ".7z", ".avi", ".bmp", ".css", ".csv", ".doc", ".docx", ".eot", ".gif",
@@ -554,7 +581,7 @@ class LinkChecker {
   }
 
   async fetchWithCache(url, requireBody) {
-    this.reporter?.requestQueued(url, requireBody ? "GET" : "HEAD");
+    this.reporter?.requestQueued(url, requireBody || this.options.preferGet ? "GET" : "HEAD");
     const referer = this.getRequestReferer(url);
     const result = await fetchUrl(url, {
       requireBody,
@@ -565,6 +592,7 @@ class LinkChecker {
       userAgent: this.options.userAgent,
       acceptLanguage: this.options.acceptLanguage,
       referer,
+      preferGet: this.options.preferGet,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
     });
 
@@ -619,6 +647,7 @@ class LinkChecker {
         userAgent: this.options.userAgent,
         acceptLanguage: this.options.acceptLanguage,
         referer: url,
+        preferGet: this.options.preferGet,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
 
@@ -661,6 +690,7 @@ class LinkChecker {
         userAgent: this.options.userAgent,
         acceptLanguage: this.options.acceptLanguage,
         referer: source.page,
+        preferGet: this.options.preferGet,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
       result.confirmedWithReferer = source.page;
@@ -683,7 +713,7 @@ class LinkChecker {
           continue;
         }
 
-        const referer = sameOrigin(source.page, fallbackUrl) ? source.page : null;
+        const referer = sameOrigin(source.page, fallbackUrl) || this.options.externalReferer ? source.page : null;
         const fallbackResult = await fetchUrl(fallbackUrl, {
           requireBody: false,
           forceGet: true,
@@ -694,6 +724,7 @@ class LinkChecker {
           userAgent: this.options.userAgent,
           acceptLanguage: this.options.acceptLanguage,
           referer,
+          preferGet: this.options.preferGet,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         });
         fallbackResult.normalizedFrom = url;
@@ -715,7 +746,11 @@ class LinkChecker {
       return null;
     }
 
-    return sameOrigin(source, url) ? source : null;
+    if (sameOrigin(source, url)) {
+      return source;
+    }
+
+    return this.options.externalReferer ? source : null;
   }
 
   buildReport() {
@@ -747,6 +782,9 @@ class LinkChecker {
         userAgent: this.options.userAgent,
         acceptLanguage: this.options.acceptLanguage,
         checkExternal: this.options.checkExternal,
+        preferGet: this.options.preferGet,
+        externalReferer: this.options.externalReferer,
+        conservativeMode: this.options.conservativeMode,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
       },
       summary: {
@@ -798,6 +836,7 @@ async function fetchUrl(url, {
   userAgent,
   acceptLanguage,
   referer,
+  preferGet = false,
   scheduleRequest,
 }) {
   const started = performance.now();
@@ -813,6 +852,7 @@ async function fetchUrl(url, {
       userAgent,
       acceptLanguage,
       referer,
+      preferGet,
       scheduleRequest,
       started,
     });
@@ -837,11 +877,12 @@ async function fetchUrlOnce(url, {
   userAgent,
   acceptLanguage,
   referer,
+  preferGet,
   scheduleRequest,
   started,
 }) {
   try {
-    if (requireBody || forceGet) {
+    if (requireBody) {
       return await request(url, "GET", {
         timeoutMs,
         maxRedirects,
@@ -850,6 +891,20 @@ async function fetchUrlOnce(url, {
         acceptLanguage,
         referer,
         readBody: true,
+        scheduleRequest,
+        started,
+      });
+    }
+
+    if (forceGet || preferGet) {
+      return await request(url, "GET", {
+        timeoutMs,
+        maxRedirects,
+        longRedirectThreshold,
+        userAgent,
+        acceptLanguage,
+        referer,
+        readBody: false,
         scheduleRequest,
         started,
       });
@@ -887,7 +942,7 @@ async function fetchUrlOnce(url, {
       url,
       ok: false,
       status: null,
-      method: requireBody ? "GET" : "HEAD",
+      method: requireBody || forceGet || preferGet ? "GET" : "HEAD",
       finalUrl: null,
       contentType: null,
       redirected: false,
@@ -1906,6 +1961,8 @@ function parseArgs(argv) {
   let progress = false;
   let verbose = false;
   let domainRulesSource = null;
+  let conservativeMode = false;
+  const explicitOptions = new Set();
 
   while (args.length > 0) {
     const arg = args.shift();
@@ -1915,6 +1972,21 @@ function parseArgs(argv) {
     }
     if (arg === "--external") {
       options.checkExternal = true;
+      explicitOptions.add("checkExternal");
+      continue;
+    }
+    if (arg === "--conservative") {
+      conservativeMode = true;
+      continue;
+    }
+    if (arg === "--prefer-get") {
+      options.preferGet = true;
+      explicitOptions.add("preferGet");
+      continue;
+    }
+    if (arg === "--external-referer") {
+      options.externalReferer = true;
+      explicitOptions.add("externalReferer");
       continue;
     }
     if (arg === "--json") {
@@ -1939,38 +2011,51 @@ function parseArgs(argv) {
     }
     if (arg === "--concurrency") {
       options.concurrency = readPositiveInteger(args.shift(), "--concurrency");
+      explicitOptions.add("concurrency");
       continue;
     }
     if (arg === "--global-concurrency") {
       options.concurrency = readPositiveInteger(args.shift(), "--global-concurrency");
+      explicitOptions.add("concurrency");
       continue;
     }
     if (arg === "--per-host-concurrency") {
       options.perHostConcurrency = readPositiveInteger(args.shift(), "--per-host-concurrency");
+      explicitOptions.add("perHostConcurrency");
       continue;
     }
     if (arg === "--request-delay-ms") {
       options.requestDelayMs = readNonNegativeInteger(args.shift(), "--request-delay-ms");
+      explicitOptions.add("requestDelayMs");
+      explicitOptions.add("requestDelayMinMs");
+      explicitOptions.add("requestDelayMaxMs");
       continue;
     }
     if (arg === "--request-delay") {
       options.requestDelayMs = Math.round(readNonNegativeNumber(args.shift(), "--request-delay") * 1000);
+      explicitOptions.add("requestDelayMs");
+      explicitOptions.add("requestDelayMinMs");
+      explicitOptions.add("requestDelayMaxMs");
       continue;
     }
     if (arg === "--request-delay-min-ms") {
       options.requestDelayMinMs = readNonNegativeInteger(args.shift(), "--request-delay-min-ms");
+      explicitOptions.add("requestDelayMinMs");
       continue;
     }
     if (arg === "--request-delay-max-ms") {
       options.requestDelayMaxMs = readNonNegativeInteger(args.shift(), "--request-delay-max-ms");
+      explicitOptions.add("requestDelayMaxMs");
       continue;
     }
     if (arg === "--request-delay-min") {
       options.requestDelayMinMs = Math.round(readNonNegativeNumber(args.shift(), "--request-delay-min") * 1000);
+      explicitOptions.add("requestDelayMinMs");
       continue;
     }
     if (arg === "--request-delay-max") {
       options.requestDelayMaxMs = Math.round(readNonNegativeNumber(args.shift(), "--request-delay-max") * 1000);
+      explicitOptions.add("requestDelayMaxMs");
       continue;
     }
     if (arg === "--timeout") {
@@ -1983,6 +2068,7 @@ function parseArgs(argv) {
     }
     if (arg === "--retry-count") {
       options.retryCount = readNonNegativeInteger(args.shift(), "--retry-count");
+      explicitOptions.add("retryCount");
       continue;
     }
     if (arg === "--max-redirects") {
@@ -2005,6 +2091,7 @@ function parseArgs(argv) {
       if (!options.userAgent) {
         throw new Error("--user-agent requires a value");
       }
+      explicitOptions.add("userAgent");
       continue;
     }
     if (arg === "--domain-rules") {
@@ -2032,6 +2119,10 @@ function parseArgs(argv) {
 
   if (!startUrl) {
     throw new Error("Missing start URL");
+  }
+
+  if (conservativeMode) {
+    applyConservativeDefaults(options, explicitOptions);
   }
 
   options.concurrency = Math.max(1, Math.min(options.concurrency, 100));
@@ -2162,7 +2253,10 @@ Options:
   --domain-rules <file-or-url>
                        JSON domain category rules: [{ "category": "...", "domains": ["example.com"] }].
   --external          Also check links that point to other domains.
-                     External links are always inventoried in the JSON report.
+                      External links are always inventoried in the JSON report.
+  --conservative      Lower request rate and use browser-like checks to reduce blocking.
+  --prefer-get        Use lightweight GET checks instead of trying HEAD first.
+  --external-referer  Send the source page as Referer for external link checks.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -2272,7 +2366,7 @@ async function main() {
   process.exitCode = report.summary.brokenLinks > 0 ? 2 : 0;
 }
 
-export { DEFAULTS, LinkChecker };
+export { BROWSER_USER_AGENT, DEFAULTS, LinkChecker, applyConservativeDefaults };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {

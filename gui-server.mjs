@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { DEFAULTS, LinkChecker } from "./link-checker.mjs";
+import { DEFAULTS, LinkChecker, applyConservativeDefaults } from "./link-checker.mjs";
 
 const ROOT_DIR = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(ROOT_DIR, "public");
@@ -692,38 +692,44 @@ function sanitizeFolderSegment(value) {
 }
 
 function parseJobOptions(input) {
-  const randomDelay = parseRandomDelayOptions(input);
+  const baseOptions = input.conservativeMode
+    ? applyConservativeDefaults({ ...DEFAULTS })
+    : { ...DEFAULTS };
+  const randomDelay = parseRandomDelayOptions(input, baseOptions);
   return {
-    maxPages: clampInteger(input.maxPages, DEFAULTS.maxPages, 1, 5000),
-    maxDepth: clampInteger(input.maxDepth, DEFAULTS.maxDepth, 1, 50),
-    concurrency: clampInteger(input.concurrency, DEFAULTS.concurrency, 1, 100),
-    perHostConcurrency: clampInteger(input.perHostConcurrency, DEFAULTS.perHostConcurrency, 1, 50),
-    requestDelayMs: clampInteger(input.requestDelayMs, DEFAULTS.requestDelayMs, 0, 60000),
+    maxPages: clampInteger(input.maxPages, baseOptions.maxPages, 1, 5000),
+    maxDepth: clampInteger(input.maxDepth, baseOptions.maxDepth, 1, 50),
+    concurrency: clampInteger(input.concurrency, baseOptions.concurrency, 1, 100),
+    perHostConcurrency: clampInteger(input.perHostConcurrency, baseOptions.perHostConcurrency, 1, 50),
+    requestDelayMs: clampInteger(input.requestDelayMs, baseOptions.requestDelayMs, 0, 60000),
     requestDelayMinMs: randomDelay.min,
     requestDelayMaxMs: randomDelay.max,
-    timeoutMs: clampInteger(input.timeoutMs, DEFAULTS.timeoutMs, 1000, 120000),
-    retryCount: clampInteger(input.retryCount, DEFAULTS.retryCount, 0, 5),
-    maxRedirects: clampInteger(input.maxRedirects, DEFAULTS.maxRedirects, 0, 20),
+    timeoutMs: clampInteger(input.timeoutMs, baseOptions.timeoutMs, 1000, 120000),
+    retryCount: clampInteger(input.retryCount, baseOptions.retryCount, 0, 5),
+    maxRedirects: clampInteger(input.maxRedirects, baseOptions.maxRedirects, 0, 20),
     longRedirectThreshold: clampInteger(
       input.longRedirectThreshold,
-      DEFAULTS.longRedirectThreshold,
+      baseOptions.longRedirectThreshold,
       0,
       20,
     ),
     checkExternal: Boolean(input.checkExternal),
+    preferGet: Boolean(input.preferGet ?? baseOptions.preferGet),
+    externalReferer: Boolean(input.externalReferer ?? baseOptions.externalReferer),
+    conservativeMode: Boolean(input.conservativeMode),
     progressIntervalMs: DEFAULTS.progressIntervalMs,
     userAgent: typeof input.userAgent === "string" && input.userAgent.trim()
       ? input.userAgent.trim()
-      : DEFAULTS.userAgent,
+      : baseOptions.userAgent,
     acceptLanguage: typeof input.acceptLanguage === "string" && input.acceptLanguage.trim()
       ? input.acceptLanguage.trim()
-      : DEFAULTS.acceptLanguage,
+      : baseOptions.acceptLanguage,
   };
 }
 
-function parseRandomDelayOptions(input) {
-  const min = parseOptionalInteger(input.requestDelayMinMs, 0, 60000);
-  const max = parseOptionalInteger(input.requestDelayMaxMs, 0, 60000);
+function parseRandomDelayOptions(input, defaults = DEFAULTS) {
+  const min = parseOptionalInteger(input.requestDelayMinMs, 0, 60000, defaults.requestDelayMinMs);
+  const max = parseOptionalInteger(input.requestDelayMaxMs, 0, 60000, defaults.requestDelayMaxMs);
   if (Number.isFinite(min) !== Number.isFinite(max)) {
     throw httpError(400, "Random request delay requires both minimum and maximum values");
   }
@@ -741,9 +747,9 @@ function clampInteger(value, fallback, min, max) {
   return Math.max(min, Math.min(number, max));
 }
 
-function parseOptionalInteger(value, min, max) {
+function parseOptionalInteger(value, min, max, fallback = null) {
   if (value === null || value === undefined || value === "") {
-    return null;
+    return fallback;
   }
   const number = Number.parseInt(value, 10);
   if (!Number.isFinite(number)) {

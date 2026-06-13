@@ -239,6 +239,14 @@ input:focus {
   height: 18px;
 }
 
+.option-toggle {
+  align-self: center;
+}
+
+.option-toggle input {
+  flex: 0 0 auto;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
