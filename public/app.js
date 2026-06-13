@@ -5,6 +5,8 @@ const maxDepthInput = document.querySelector("#max-depth");
 const concurrencyInput = document.querySelector("#concurrency");
 const perHostConcurrencyInput = document.querySelector("#per-host-concurrency");
 const requestDelayInput = document.querySelector("#request-delay");
+const requestDelayMinInput = document.querySelector("#request-delay-min");
+const requestDelayMaxInput = document.querySelector("#request-delay-max");
 const timeoutInput = document.querySelector("#timeout");
 const retryCountInput = document.querySelector("#retry-count");
 const maxRedirectsInput = document.querySelector("#max-redirects");
@@ -200,6 +202,8 @@ function getCheckOptions() {
     concurrency: concurrencyInput.value,
     perHostConcurrency: perHostConcurrencyInput.value,
     requestDelayMs: requestDelayInput.value,
+    requestDelayMinMs: requestDelayMinInput.value,
+    requestDelayMaxMs: requestDelayMaxInput.value,
     timeoutMs: timeoutInput.value,
     retryCount: retryCountInput.value,
     maxRedirects: maxRedirectsInput.value,

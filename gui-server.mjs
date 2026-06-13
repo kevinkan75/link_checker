@@ -692,12 +692,15 @@ function sanitizeFolderSegment(value) {
 }
 
 function parseJobOptions(input) {
+  const randomDelay = parseRandomDelayOptions(input);
   return {
     maxPages: clampInteger(input.maxPages, DEFAULTS.maxPages, 1, 5000),
     maxDepth: clampInteger(input.maxDepth, DEFAULTS.maxDepth, 1, 50),
     concurrency: clampInteger(input.concurrency, DEFAULTS.concurrency, 1, 100),
     perHostConcurrency: clampInteger(input.perHostConcurrency, DEFAULTS.perHostConcurrency, 1, 50),
     requestDelayMs: clampInteger(input.requestDelayMs, DEFAULTS.requestDelayMs, 0, 60000),
+    requestDelayMinMs: randomDelay.min,
+    requestDelayMaxMs: randomDelay.max,
     timeoutMs: clampInteger(input.timeoutMs, DEFAULTS.timeoutMs, 1000, 120000),
     retryCount: clampInteger(input.retryCount, DEFAULTS.retryCount, 0, 5),
     maxRedirects: clampInteger(input.maxRedirects, DEFAULTS.maxRedirects, 0, 20),
@@ -718,10 +721,33 @@ function parseJobOptions(input) {
   };
 }
 
+function parseRandomDelayOptions(input) {
+  const min = parseOptionalInteger(input.requestDelayMinMs, 0, 60000);
+  const max = parseOptionalInteger(input.requestDelayMaxMs, 0, 60000);
+  if (Number.isFinite(min) !== Number.isFinite(max)) {
+    throw httpError(400, "Random request delay requires both minimum and maximum values");
+  }
+  if (Number.isFinite(min) && min > max) {
+    throw httpError(400, "Random request delay minimum cannot be greater than maximum");
+  }
+  return { min, max };
+}
+
 function clampInteger(value, fallback, min, max) {
   const number = Number.parseInt(value, 10);
   if (!Number.isFinite(number)) {
     return fallback;
+  }
+  return Math.max(min, Math.min(number, max));
+}
+
+function parseOptionalInteger(value, min, max) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const number = Number.parseInt(value, 10);
+  if (!Number.isFinite(number)) {
+    return null;
   }
   return Math.max(min, Math.min(number, max));
 }

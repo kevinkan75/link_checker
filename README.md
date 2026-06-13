@@ -58,6 +58,7 @@ dist\LinkChecker-portable.zip
 .\check-links.cmd https://example.com --max-pages 200 --max-depth 8
 .\check-links.cmd https://example.com --global-concurrency 20 --per-host-concurrency 4
 .\check-links.cmd https://example.com --request-delay 1.5 --retry-count 2
+.\check-links.cmd https://example.com --per-host-concurrency 3 --request-delay-min 0.3 --request-delay-max 1
 .\check-links.cmd https://example.com --max-redirects 10 --long-redirect-threshold 3
 .\check-links.cmd https://example.com --external
 .\check-links.cmd https://example.com --progress
@@ -72,6 +73,8 @@ dist\LinkChecker-portable.zip
 - `--per-host-concurrency <n>`：每個 host 的同時請求數，預設 `4`。
 - `--request-delay-ms <n>`：同一 host 兩次請求的最小間隔毫秒數，預設 `500`。
 - `--request-delay <s>`：同一 host 兩次請求的最小間隔秒數，例如 `1.5`。
+- `--request-delay-min-ms <n>` / `--request-delay-max-ms <n>`：啟用隨機請求前延遲，例如 `300` 到 `1000` 毫秒。
+- `--request-delay-min <s>` / `--request-delay-max <s>`：以秒設定隨機請求前延遲，例如 `0.3` 到 `1` 秒。
 - `--timeout <ms>`：單一請求逾時毫秒數，預設 `15000`。
 - `--timeout-seconds <n>`：單一請求逾時秒數。
 - `--retry-count <n>`：暫時性錯誤的重試次數，預設 `2`。

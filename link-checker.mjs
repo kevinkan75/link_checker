@@ -10,6 +10,8 @@ const DEFAULTS = {
   concurrency: 12,
   perHostConcurrency: 4,
   requestDelayMs: 500,
+  requestDelayMinMs: null,
+  requestDelayMaxMs: null,
   timeoutMs: 15000,
   retryCount: 2,
   maxRedirects: 10,
@@ -105,9 +107,11 @@ class Limiter {
 }
 
 class HostScheduler {
-  constructor({ perHostConcurrency, requestDelayMs, globalLimiter }) {
+  constructor({ perHostConcurrency, requestDelayMs, requestDelayMinMs, requestDelayMaxMs, globalLimiter }) {
     this.perHostConcurrency = perHostConcurrency;
     this.requestDelayMs = requestDelayMs;
+    this.requestDelayMinMs = requestDelayMinMs;
+    this.requestDelayMaxMs = requestDelayMaxMs;
     this.globalLimiter = globalLimiter;
     this.hosts = new Map();
   }
@@ -157,20 +161,24 @@ class HostScheduler {
       return;
     }
 
-    const delay = Math.max(0, state.nextAllowedAt - Date.now());
-    if (delay > 0) {
-      state.timer = setTimeout(() => {
-        state.timer = null;
-        this.pump(host);
-      }, delay);
-      return;
+    if (!this.hasRandomDelay()) {
+      const delay = Math.max(0, state.nextAllowedAt - Date.now());
+      if (delay > 0) {
+        state.timer = setTimeout(() => {
+          state.timer = null;
+          this.pump(host);
+        }, delay);
+        return;
+      }
     }
 
     const item = state.queue.shift();
     state.active += 1;
-    state.nextAllowedAt = Date.now() + this.requestDelayMs;
+    if (!this.hasRandomDelay()) {
+      state.nextAllowedAt = Date.now() + this.requestDelayMs;
+    }
 
-    this.globalLimiter.run(item.task)
+    this.runScheduledTask(item.task)
       .then(item.resolve, item.reject)
       .finally(() => {
         state.active -= 1;
@@ -178,6 +186,19 @@ class HostScheduler {
       });
 
     this.pump(host);
+  }
+
+  hasRandomDelay() {
+    return Number.isFinite(this.requestDelayMinMs)
+      && Number.isFinite(this.requestDelayMaxMs)
+      && this.requestDelayMaxMs >= this.requestDelayMinMs;
+  }
+
+  async runScheduledTask(task) {
+    if (this.hasRandomDelay()) {
+      await sleep(randomInteger(this.requestDelayMinMs, this.requestDelayMaxMs));
+    }
+    return this.globalLimiter.run(task);
   }
 }
 
@@ -312,6 +333,8 @@ class LinkChecker {
     this.hostScheduler = new HostScheduler({
       perHostConcurrency: options.perHostConcurrency,
       requestDelayMs: options.requestDelayMs,
+      requestDelayMinMs: options.requestDelayMinMs,
+      requestDelayMaxMs: options.requestDelayMaxMs,
       globalLimiter: this.fetchLimiter,
     });
     this.pageQueue = [{ url: this.startUrl, depth: 0 }];
@@ -715,6 +738,8 @@ class LinkChecker {
         concurrency: this.options.concurrency,
         perHostConcurrency: this.options.perHostConcurrency,
         requestDelayMs: this.options.requestDelayMs,
+        requestDelayMinMs: this.options.requestDelayMinMs,
+        requestDelayMaxMs: this.options.requestDelayMaxMs,
         timeoutMs: this.options.timeoutMs,
         retryCount: this.options.retryCount,
         maxRedirects: this.options.maxRedirects,
@@ -1861,6 +1886,10 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function randomInteger(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 function shortenUrl(url, maxLength) {
   if (url.length <= maxLength) {
     return url;
@@ -1928,6 +1957,22 @@ function parseArgs(argv) {
       options.requestDelayMs = Math.round(readNonNegativeNumber(args.shift(), "--request-delay") * 1000);
       continue;
     }
+    if (arg === "--request-delay-min-ms") {
+      options.requestDelayMinMs = readNonNegativeInteger(args.shift(), "--request-delay-min-ms");
+      continue;
+    }
+    if (arg === "--request-delay-max-ms") {
+      options.requestDelayMaxMs = readNonNegativeInteger(args.shift(), "--request-delay-max-ms");
+      continue;
+    }
+    if (arg === "--request-delay-min") {
+      options.requestDelayMinMs = Math.round(readNonNegativeNumber(args.shift(), "--request-delay-min") * 1000);
+      continue;
+    }
+    if (arg === "--request-delay-max") {
+      options.requestDelayMaxMs = Math.round(readNonNegativeNumber(args.shift(), "--request-delay-max") * 1000);
+      continue;
+    }
     if (arg === "--timeout") {
       options.timeoutMs = readPositiveInteger(args.shift(), "--timeout");
       continue;
@@ -1992,6 +2037,14 @@ function parseArgs(argv) {
   options.concurrency = Math.max(1, Math.min(options.concurrency, 100));
   options.perHostConcurrency = Math.max(1, Math.min(options.perHostConcurrency, 50));
   options.requestDelayMs = Math.max(0, Math.min(options.requestDelayMs, 60000));
+  options.requestDelayMinMs = normalizeOptionalDelay(options.requestDelayMinMs);
+  options.requestDelayMaxMs = normalizeOptionalDelay(options.requestDelayMaxMs);
+  if (Number.isFinite(options.requestDelayMinMs) !== Number.isFinite(options.requestDelayMaxMs)) {
+    throw new Error("Random request delay requires both --request-delay-min-ms and --request-delay-max-ms");
+  }
+  if (Number.isFinite(options.requestDelayMinMs) && options.requestDelayMinMs > options.requestDelayMaxMs) {
+    throw new Error("--request-delay-min-ms must be less than or equal to --request-delay-max-ms");
+  }
   options.retryCount = Math.max(0, Math.min(options.retryCount, 5));
   options.maxRedirects = Math.max(0, Math.min(options.maxRedirects, 20));
   options.longRedirectThreshold = Math.max(0, Math.min(options.longRedirectThreshold, options.maxRedirects));
@@ -2063,6 +2116,13 @@ function readNonNegativeNumber(value, name) {
   return number;
 }
 
+function normalizeOptionalDelay(value) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return Math.max(0, Math.min(value, 60000));
+}
+
 function printHelp() {
   console.log(`Local Link Checker
 
@@ -2081,6 +2141,14 @@ Options:
   --request-delay-ms <n>
                        Minimum delay between requests per host. Default: ${DEFAULTS.requestDelayMs}
   --request-delay <s>  Same delay in seconds, for example 1.5.
+  --request-delay-min-ms <n>
+                       Enable random pre-request delay with this minimum in milliseconds.
+  --request-delay-max-ms <n>
+                       Enable random pre-request delay with this maximum in milliseconds.
+  --request-delay-min <s>
+                       Random pre-request delay minimum in seconds, for example 0.3.
+  --request-delay-max <s>
+                       Random pre-request delay maximum in seconds, for example 1.
   --timeout <ms>      Request timeout in milliseconds. Default: ${DEFAULTS.timeoutMs}
   --timeout-seconds <n>
                        Request timeout in seconds.
