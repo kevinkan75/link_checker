@@ -14,9 +14,11 @@ const longRedirectThresholdInput = document.querySelector("#long-redirect-thresh
 const acceptLanguageInput = document.querySelector("#accept-language");
 const userAgentInput = document.querySelector("#user-agent");
 const externalInput = document.querySelector("#external");
-const conservativeModeInput = document.querySelector("#conservative-mode");
 const preferGetInput = document.querySelector("#prefer-get");
 const externalRefererInput = document.querySelector("#external-referer");
+const presetButtons = document.querySelectorAll("[data-preset]");
+const advancedSummary = document.querySelector("#advanced-summary");
+const advancedValidation = document.querySelector("#advanced-validation");
 const startButton = document.querySelector("#start-button");
 const stopButton = document.querySelector("#stop-button");
 const downloadButton = document.querySelector("#download-button");
@@ -61,6 +63,47 @@ const redirectLong = document.querySelector("#redirect-long");
 const redirectUnresolved = document.querySelector("#redirect-unresolved");
 const filterBar = document.querySelector("#filter-bar");
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const defaultUserAgent = `${browserUserAgent} LocalLinkChecker/1.0`;
+const defaultSettings = {
+  maxPages: "100",
+  maxDepth: "2",
+  concurrency: "12",
+  perHostConcurrency: "4",
+  requestDelayMs: "500",
+  requestDelayMinMs: "",
+  requestDelayMaxMs: "",
+  timeoutMs: "15000",
+  retryCount: "2",
+  maxRedirects: "10",
+  longRedirectThreshold: "3",
+  acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
+  userAgent: defaultUserAgent,
+  checkExternal: false,
+  preferGet: false,
+  externalReferer: false,
+};
+const presets = {
+  fast: { ...defaultSettings },
+  balanced: {
+    ...defaultSettings,
+    concurrency: "6",
+    perHostConcurrency: "2",
+    requestDelayMs: "1000",
+  },
+  conservative: {
+    ...defaultSettings,
+    concurrency: "3",
+    perHostConcurrency: "1",
+    requestDelayMs: "500",
+    requestDelayMinMs: "2000",
+    requestDelayMaxMs: "5000",
+    retryCount: "1",
+    userAgent: browserUserAgent,
+    preferGet: true,
+    externalReferer: true,
+  },
+  defaults: { ...defaultSettings },
+};
 
 let currentJobId = null;
 let eventSource = null;
@@ -70,16 +113,47 @@ let queuePollTimer = null;
 let watchedQueueItemId = null;
 let watchedQueueUrl = null;
 let manualWatchSelected = false;
+let activePreset = null;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   await startCheck();
 });
 
-conservativeModeInput.addEventListener("change", () => {
-  if (conservativeModeInput.checked) {
-    applyConservativePreset();
-  }
+presetButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    applyPreset(button.dataset.preset);
+  });
+});
+
+[
+  maxPagesInput,
+  maxDepthInput,
+  concurrencyInput,
+  perHostConcurrencyInput,
+  requestDelayInput,
+  requestDelayMinInput,
+  requestDelayMaxInput,
+  timeoutInput,
+  retryCountInput,
+  maxRedirectsInput,
+  longRedirectThresholdInput,
+  acceptLanguageInput,
+  userAgentInput,
+  externalInput,
+  preferGetInput,
+  externalRefererInput,
+].forEach((input) => {
+  input.addEventListener("input", () => {
+    setActivePreset(null);
+    updateAdvancedSummary();
+    validateAdvancedSettings({ showValid: false });
+  });
+  input.addEventListener("change", () => {
+    setActivePreset(null);
+    updateAdvancedSummary();
+    validateAdvancedSettings({ showValid: false });
+  });
 });
 
 stopButton.addEventListener("click", async () => {
@@ -161,20 +235,86 @@ filterBar.addEventListener("click", (event) => {
   }
 });
 
-function applyConservativePreset() {
-  concurrencyInput.value = "3";
-  perHostConcurrencyInput.value = "1";
-  requestDelayInput.value = "500";
-  requestDelayMinInput.value = "2000";
-  requestDelayMaxInput.value = "5000";
-  retryCountInput.value = "1";
-  userAgentInput.value = browserUserAgent;
-  externalInput.checked = false;
-  preferGetInput.checked = true;
-  externalRefererInput.checked = true;
+function applyPreset(name) {
+  const preset = presets[name] || defaultSettings;
+  applySettings(preset);
+  setActivePreset(name === "defaults" ? null : name);
+  updateAdvancedSummary();
+  validateAdvancedSettings({ showValid: false });
+}
+
+function applySettings(settings) {
+  maxPagesInput.value = settings.maxPages;
+  maxDepthInput.value = settings.maxDepth;
+  concurrencyInput.value = settings.concurrency;
+  perHostConcurrencyInput.value = settings.perHostConcurrency;
+  requestDelayInput.value = settings.requestDelayMs;
+  requestDelayMinInput.value = settings.requestDelayMinMs;
+  requestDelayMaxInput.value = settings.requestDelayMaxMs;
+  timeoutInput.value = settings.timeoutMs;
+  retryCountInput.value = settings.retryCount;
+  maxRedirectsInput.value = settings.maxRedirects;
+  longRedirectThresholdInput.value = settings.longRedirectThreshold;
+  acceptLanguageInput.value = settings.acceptLanguage;
+  userAgentInput.value = settings.userAgent;
+  externalInput.checked = settings.checkExternal;
+  preferGetInput.checked = settings.preferGet;
+  externalRefererInput.checked = settings.externalReferer;
+}
+
+function setActivePreset(name) {
+  activePreset = name;
+  for (const button of presetButtons) {
+    button.classList.toggle("active", button.dataset.preset === name);
+  }
+}
+
+function updateAdvancedSummary() {
+  const randomMin = requestDelayMinInput.value.trim();
+  const randomMax = requestDelayMaxInput.value.trim();
+  const delayText = randomMin && randomMax
+    ? `隨機 ${randomMin}-${randomMax}ms`
+    : `固定 ${requestDelayInput.value || 0}ms`;
+  advancedSummary.textContent = `${maxPagesInput.value || 0} 頁 / 深度 ${maxDepthInput.value || 0} / 併發 ${concurrencyInput.value || 0} / 每 host ${perHostConcurrencyInput.value || 0} / ${delayText}`;
+  longRedirectThresholdInput.max = maxRedirectsInput.value || "20";
+}
+
+function validateAdvancedSettings({ showValid } = { showValid: true }) {
+  const randomMin = requestDelayMinInput.value.trim();
+  const randomMax = requestDelayMaxInput.value.trim();
+  const concurrency = Number(concurrencyInput.value);
+  const perHostConcurrency = Number(perHostConcurrencyInput.value);
+  const maxRedirects = Number(maxRedirectsInput.value);
+  const longRedirectThreshold = Number(longRedirectThresholdInput.value);
+
+  let message = "";
+  if ((randomMin && !randomMax) || (!randomMin && randomMax)) {
+    message = "隨機延遲最小值與最大值必須同時填寫。";
+  } else if (randomMin && randomMax && Number(randomMin) > Number(randomMax)) {
+    message = "隨機延遲最小值不得大於最大值。";
+  } else if (Number.isFinite(concurrency) && Number.isFinite(perHostConcurrency) && perHostConcurrency > concurrency) {
+    message = "單一 host 併發不應大於全站總併發。";
+  } else if (Number.isFinite(maxRedirects) && Number.isFinite(longRedirectThreshold) && longRedirectThreshold > maxRedirects) {
+    message = "轉址過長門檻不得大於最大轉址。";
+  }
+
+  advancedValidation.hidden = !message;
+  advancedValidation.textContent = message;
+  if (message) {
+    return false;
+  }
+  if (showValid) {
+    advancedValidation.hidden = true;
+    advancedValidation.textContent = "";
+  }
+  return true;
 }
 
 async function startCheck() {
+  if (!validateAdvancedSettings()) {
+    statusTitle.textContent = advancedValidation.textContent;
+    return;
+  }
   closeEvents();
   currentReport = null;
   currentJobId = null;
@@ -237,13 +377,17 @@ function getCheckOptions() {
     acceptLanguage: acceptLanguageInput.value.trim(),
     userAgent: userAgentInput.value.trim(),
     checkExternal: externalInput.checked,
-    conservativeMode: conservativeModeInput.checked,
+    conservativeMode: activePreset === "conservative",
     preferGet: preferGetInput.checked,
     externalReferer: externalRefererInput.checked,
   };
 }
 
 async function addQueueItems() {
+  if (!validateAdvancedSettings()) {
+    statusTitle.textContent = advancedValidation.textContent;
+    return;
+  }
   const urls = batchUrlsInput.value.trim();
   if (!urls) {
     statusTitle.textContent = "請先輸入批次網址";
@@ -713,6 +857,7 @@ function metaBadge(value) {
   return span;
 }
 
+updateAdvancedSummary();
 setState("idle");
 refreshQueue();
 

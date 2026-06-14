@@ -698,7 +698,7 @@ function parseJobOptions(input) {
   const randomDelay = parseRandomDelayOptions(input, baseOptions);
   return {
     maxPages: clampInteger(input.maxPages, baseOptions.maxPages, 1, 5000),
-    maxDepth: clampInteger(input.maxDepth, baseOptions.maxDepth, 1, 50),
+    maxDepth: clampInteger(input.maxDepth, baseOptions.maxDepth, 0, 50),
     concurrency: clampInteger(input.concurrency, baseOptions.concurrency, 1, 100),
     perHostConcurrency: clampInteger(input.perHostConcurrency, baseOptions.perHostConcurrency, 1, 50),
     requestDelayMs: clampInteger(input.requestDelayMs, baseOptions.requestDelayMs, 0, 60000),

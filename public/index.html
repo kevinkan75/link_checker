@@ -39,87 +39,125 @@
           </div>
 
           <details class="advanced-settings">
-            <summary>進階設定</summary>
-            <div class="form-grid">
-              <label>
-                <span>最多頁面</span>
-                <input id="max-pages" name="maxPages" type="number" min="1" max="5000" value="100">
-              </label>
+            <summary>
+              <span>進階設定</span>
+              <span id="advanced-summary" class="advanced-summary">100 頁 / 深度 2 / 併發 12 / 每 host 4 / 固定 500ms</span>
+            </summary>
+            <div class="advanced-settings-body">
+              <div class="preset-row" aria-label="設定預設">
+                <button type="button" data-preset="fast">快速掃描</button>
+                <button type="button" data-preset="balanced">平衡</button>
+                <button type="button" data-preset="conservative">保守</button>
+                <button type="button" data-preset="defaults">還原預設</button>
+              </div>
 
-              <label>
-                <span>最大深度</span>
-                <input id="max-depth" name="maxDepth" type="number" min="1" max="50" value="2">
-              </label>
+              <p id="advanced-validation" class="validation-message" role="alert" hidden></p>
 
-              <label>
-                <span>全域併發</span>
-                <input id="concurrency" name="concurrency" type="number" min="1" max="100" value="12">
-              </label>
+              <section class="settings-section" aria-labelledby="crawl-settings-title">
+                <h3 id="crawl-settings-title">爬取範圍</h3>
+                <p>限制站內頁面爬取範圍；最多頁面不等於總 URL 檢查數。</p>
+                <div class="settings-grid two-column">
+                  <label>
+                    <span>最多頁面</span>
+                    <input id="max-pages" name="maxPages" type="number" min="1" max="5000" value="100">
+                  </label>
 
-              <label>
-                <span>每 host 併發</span>
-                <input id="per-host-concurrency" name="perHostConcurrency" type="number" min="1" max="50" value="4">
-              </label>
+                  <label>
+                    <span>最大深度</span>
+                    <input id="max-depth" name="maxDepth" type="number" min="0" max="50" value="2">
+                  </label>
+                </div>
+              </section>
 
-              <label>
-                <span>間隔毫秒</span>
-                <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="500">
-              </label>
+              <section class="settings-section" aria-labelledby="rate-settings-title">
+                <h3 id="rate-settings-title">併發與節流</h3>
+                <p>併發越高越快，但較容易遇到 403、429 或逾時；填寫隨機延遲後會取代固定間隔。</p>
+                <div class="settings-grid">
+                  <label>
+                    <span>全站總併發</span>
+                    <input id="concurrency" name="concurrency" type="number" min="1" max="100" value="12">
+                  </label>
 
-              <label>
-                <span>隨機延遲最小 ms</span>
-                <input id="request-delay-min" name="requestDelayMinMs" type="number" min="0" max="60000" step="100" placeholder="300">
-              </label>
+                  <label>
+                    <span>單一 host 併發</span>
+                    <input id="per-host-concurrency" name="perHostConcurrency" type="number" min="1" max="50" value="4">
+                  </label>
 
-              <label>
-                <span>隨機延遲最大 ms</span>
-                <input id="request-delay-max" name="requestDelayMaxMs" type="number" min="0" max="60000" step="100" placeholder="1000">
-              </label>
+                  <label>
+                    <span>每 host 固定間隔 ms</span>
+                    <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="500">
+                  </label>
 
-              <label>
-                <span>逾時毫秒</span>
-                <input id="timeout" name="timeoutMs" type="number" min="1000" max="120000" step="500" value="15000">
-              </label>
+                  <label>
+                    <span>每請求隨機延遲最小 ms</span>
+                    <input id="request-delay-min" name="requestDelayMinMs" type="number" min="0" max="60000" step="100" placeholder="300">
+                  </label>
 
-              <label>
-                <span>重試次數</span>
-                <input id="retry-count" name="retryCount" type="number" min="0" max="5" value="2">
-              </label>
+                  <label>
+                    <span>每請求隨機延遲最大 ms</span>
+                    <input id="request-delay-max" name="requestDelayMaxMs" type="number" min="0" max="60000" step="100" placeholder="1000">
+                  </label>
+                </div>
+                <p class="settings-note">隨機延遲最小值等於最大值時，只代表每個任務先等固定時間；若單一 host 併發大於 1，仍可能同時送出多個請求。</p>
+              </section>
 
-              <label>
-                <span>最大轉址</span>
-                <input id="max-redirects" name="maxRedirects" type="number" min="0" max="20" value="10">
-              </label>
+              <section class="settings-section" aria-labelledby="reliability-settings-title">
+                <h3 id="reliability-settings-title">請求可靠性</h3>
+                <p>慢站可提高逾時；重試只適合暫時性錯誤，不會修正一般 404 或 403。</p>
+                <div class="settings-grid two-column">
+                  <label>
+                    <span>逾時毫秒</span>
+                    <input id="timeout" name="timeoutMs" type="number" min="1000" max="120000" step="500" value="15000">
+                  </label>
 
-              <label>
-                <span>轉址過長門檻</span>
-                <input id="long-redirect-threshold" name="longRedirectThreshold" type="number" min="0" max="20" value="3">
-              </label>
+                  <label>
+                    <span>重試次數</span>
+                    <input id="retry-count" name="retryCount" type="number" min="0" max="5" value="2">
+                  </label>
+                </div>
+              </section>
 
-              <label class="toggle-field option-toggle">
-                <input id="conservative-mode" name="conservativeMode" type="checkbox">
-                <span>保守模式</span>
-              </label>
+              <section class="settings-section" aria-labelledby="redirect-settings-title">
+                <h3 id="redirect-settings-title">Redirect</h3>
+                <p>最大轉址控制追蹤上限；轉址過長門檻用來標記需要檢視的 redirect chain。</p>
+                <div class="settings-grid two-column">
+                  <label>
+                    <span>最大轉址</span>
+                    <input id="max-redirects" name="maxRedirects" type="number" min="0" max="20" value="10">
+                  </label>
 
-              <label class="toggle-field option-toggle">
-                <input id="prefer-get" name="preferGet" type="checkbox">
-                <span>優先使用 GET</span>
-              </label>
+                  <label>
+                    <span>轉址過長門檻</span>
+                    <input id="long-redirect-threshold" name="longRedirectThreshold" type="number" min="0" max="20" value="3">
+                  </label>
+                </div>
+              </section>
 
-              <label class="toggle-field option-toggle">
-                <input id="external-referer" name="externalReferer" type="checkbox">
-                <span>外部連結帶 Referer</span>
-              </label>
+              <section class="settings-section" aria-labelledby="http-settings-title">
+                <h3 id="http-settings-title">HTTP 行為與標頭</h3>
+                <p>GET 較接近瀏覽器但較慢；外部 Referer 可降低部分誤判，但會把來源頁送給外部站。</p>
+                <div class="settings-grid headers-grid">
+                  <label class="toggle-field option-toggle">
+                    <input id="prefer-get" name="preferGet" type="checkbox">
+                    <span>優先使用 GET</span>
+                  </label>
 
-              <label class="language-field">
-                <span>語言標頭</span>
-                <input id="accept-language" name="acceptLanguage" type="text" value="zh-TW,zh;q=0.9,en;q=0.8">
-              </label>
+                  <label class="toggle-field option-toggle">
+                    <input id="external-referer" name="externalReferer" type="checkbox">
+                    <span>外部連結帶 Referer</span>
+                  </label>
 
-              <label class="language-field">
-                <span>User-Agent</span>
-                <input id="user-agent" name="userAgent" type="text" value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LocalLinkChecker/1.0">
-              </label>
+                  <label class="language-field">
+                    <span>語言標頭</span>
+                    <input id="accept-language" name="acceptLanguage" type="text" value="zh-TW,zh;q=0.9,en;q=0.8">
+                  </label>
+
+                  <label class="language-field user-agent-field">
+                    <span>User-Agent</span>
+                    <input id="user-agent" name="userAgent" type="text" value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LocalLinkChecker/1.0">
+                  </label>
+                </div>
+              </section>
             </div>
           </details>
         </form>
