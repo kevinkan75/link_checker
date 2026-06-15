@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import { readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import http from "node:http";
+import https from "node:https";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
@@ -35,9 +38,13 @@ const DEFAULTS = {
   preferGet: false,
   externalReferer: false,
   conservativeMode: false,
+  legacyTls: false,
+  systemCa: false,
   userAgent: `${BROWSER_USER_AGENT} LocalLinkChecker/1.0`,
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
 };
+
+const PAGE_NAVIGATION_TAGS = new Set(["a", "area", "form", "meta", "script"]);
 
 function applyConservativeDefaults(options, explicitOptions = new Set()) {
   for (const [key, value] of Object.entries(CONSERVATIVE_DEFAULTS)) {
@@ -351,17 +358,17 @@ class ProgressReporter {
 }
 
 class LinkChecker {
-  constructor(startUrl, options) {
+  constructor(startUrl, options = {}) {
     this.startUrl = normalizeUrl(startUrl);
-    this.options = options;
+    this.options = { ...DEFAULTS, ...options };
     this.startOrigin = new URL(this.startUrl).origin;
     this.startFinalOrigin = null;
-    this.fetchLimiter = new Limiter(options.concurrency);
+    this.fetchLimiter = new Limiter(this.options.concurrency);
     this.hostScheduler = new HostScheduler({
-      perHostConcurrency: options.perHostConcurrency,
-      requestDelayMs: options.requestDelayMs,
-      requestDelayMinMs: options.requestDelayMinMs,
-      requestDelayMaxMs: options.requestDelayMaxMs,
+      perHostConcurrency: this.options.perHostConcurrency,
+      requestDelayMs: this.options.requestDelayMs,
+      requestDelayMinMs: this.options.requestDelayMinMs,
+      requestDelayMaxMs: this.options.requestDelayMaxMs,
       globalLimiter: this.fetchLimiter,
     });
     this.pageQueue = [{ url: this.startUrl, depth: 0 }];
@@ -505,7 +512,7 @@ class LinkChecker {
     if (!this.isCrawlOrigin(url)) {
       return false;
     }
-    if (!["a", "area", "form"].includes(link.tag)) {
+    if (!PAGE_NAVIGATION_TAGS.has(link.tag)) {
       return false;
     }
     if (this.queuedPages.has(url) || this.crawledPages.has(url)) {
@@ -593,6 +600,7 @@ class LinkChecker {
       acceptLanguage: this.options.acceptLanguage,
       referer,
       preferGet: this.options.preferGet,
+      legacyTls: this.options.legacyTls,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
     });
 
@@ -648,6 +656,7 @@ class LinkChecker {
         acceptLanguage: this.options.acceptLanguage,
         referer: url,
         preferGet: this.options.preferGet,
+        legacyTls: this.options.legacyTls,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
 
@@ -691,6 +700,7 @@ class LinkChecker {
         acceptLanguage: this.options.acceptLanguage,
         referer: source.page,
         preferGet: this.options.preferGet,
+        legacyTls: this.options.legacyTls,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
       result.confirmedWithReferer = source.page;
@@ -725,6 +735,7 @@ class LinkChecker {
           acceptLanguage: this.options.acceptLanguage,
           referer,
           preferGet: this.options.preferGet,
+          legacyTls: this.options.legacyTls,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         });
         fallbackResult.normalizedFrom = url;
@@ -785,6 +796,8 @@ class LinkChecker {
         preferGet: this.options.preferGet,
         externalReferer: this.options.externalReferer,
         conservativeMode: this.options.conservativeMode,
+        legacyTls: this.options.legacyTls,
+        systemCa: this.options.systemCa,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
       },
       summary: {
@@ -837,6 +850,7 @@ async function fetchUrl(url, {
   acceptLanguage,
   referer,
   preferGet = false,
+  legacyTls = false,
   scheduleRequest,
 }) {
   const started = performance.now();
@@ -853,6 +867,7 @@ async function fetchUrl(url, {
       acceptLanguage,
       referer,
       preferGet,
+      legacyTls,
       scheduleRequest,
       started,
     });
@@ -878,6 +893,7 @@ async function fetchUrlOnce(url, {
   acceptLanguage,
   referer,
   preferGet,
+  legacyTls,
   scheduleRequest,
   started,
 }) {
@@ -890,6 +906,7 @@ async function fetchUrlOnce(url, {
         userAgent,
         acceptLanguage,
         referer,
+        legacyTls,
         readBody: true,
         scheduleRequest,
         started,
@@ -904,6 +921,7 @@ async function fetchUrlOnce(url, {
         userAgent,
         acceptLanguage,
         referer,
+        legacyTls,
         readBody: false,
         scheduleRequest,
         started,
@@ -917,6 +935,7 @@ async function fetchUrlOnce(url, {
       userAgent,
       acceptLanguage,
       referer,
+      legacyTls,
       readBody: false,
       scheduleRequest,
       started,
@@ -932,6 +951,7 @@ async function fetchUrlOnce(url, {
       userAgent,
       acceptLanguage,
       referer,
+      legacyTls,
       readBody: false,
       scheduleRequest,
       started,
@@ -979,6 +999,12 @@ function getErrorCause(error) {
 }
 
 function getNetworkDiagnosis(cause) {
+  if (isWeakDiffieHellmanError(cause)) {
+    return "TLS handshake failed because the server uses a weak Diffie-Hellman key. Enable legacy TLS compatibility only when this site must be checked.";
+  }
+  if (isCertificateChainError(cause)) {
+    return "TLS certificate verification failed because Node could not build a trusted certificate chain. Retry with system CA enabled when the site works in the operating-system browser or curl.";
+  }
   if (cause?.code === "EACCES") {
     return "Network request was blocked before an HTTP response was received.";
   }
@@ -994,6 +1020,27 @@ function getNetworkDiagnosis(cause) {
   return "Network request failed before an HTTP response was received.";
 }
 
+function isWeakDiffieHellmanError(cause) {
+  return cause?.code === "ERR_SSL_DH_KEY_TOO_SMALL"
+    || /dh key too small/i.test(cause?.message || "");
+}
+
+function isCertificateChainError(cause) {
+  return [
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "UNABLE_TO_GET_ISSUER_CERT",
+    "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+    "SELF_SIGNED_CERT_IN_CHAIN",
+    "DEPTH_ZERO_SELF_SIGNED_CERT",
+  ].includes(cause?.code)
+    || /unable to verify|certificate|issuer cert|self[- ]signed/i.test(cause?.message || "");
+}
+
+function isSystemCaEnabled() {
+  return process.execArgv.includes("--use-system-ca")
+    || /\b--use-system-ca\b/.test(process.env.NODE_OPTIONS || "");
+}
+
 async function request(url, method, {
   timeoutMs,
   maxRedirects,
@@ -1001,6 +1048,7 @@ async function request(url, method, {
   userAgent,
   acceptLanguage,
   referer,
+  legacyTls,
   readBody,
   scheduleRequest,
   started,
@@ -1016,6 +1064,7 @@ async function request(url, method, {
       userAgent,
       acceptLanguage,
       referer,
+      legacyTls,
     }));
 
     if (isRedirectStatus(response.status)) {
@@ -1100,7 +1149,7 @@ async function request(url, method, {
   }
 }
 
-async function rawRequest(url, method, { timeoutMs, userAgent, acceptLanguage, referer }) {
+async function rawRequest(url, method, { timeoutMs, userAgent, acceptLanguage, referer, legacyTls }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const headers = {
@@ -1113,6 +1162,10 @@ async function rawRequest(url, method, { timeoutMs, userAgent, acceptLanguage, r
   }
 
   try {
+    if (legacyTls) {
+      return await legacyTlsRequest(url, method, { timeoutMs, headers });
+    }
+
     return await fetch(url, {
       method,
       redirect: "manual",
@@ -1122,6 +1175,79 @@ async function rawRequest(url, method, { timeoutMs, userAgent, acceptLanguage, r
   } finally {
     clearTimeout(timer);
   }
+}
+
+function legacyTlsRequest(url, method, { timeoutMs, headers }) {
+  const parsed = new URL(url);
+  const client = parsed.protocol === "http:" ? http : https;
+
+  return new Promise((resolve, reject) => {
+    const requestOptions = {
+      method,
+      headers,
+      timeout: timeoutMs,
+    };
+
+    if (parsed.protocol === "https:") {
+      requestOptions.ciphers = "DEFAULT@SECLEVEL=0";
+    }
+
+    const request = client.request(url, requestOptions, (response) => {
+      resolve(new LegacyResponse(url, response));
+    });
+
+    request.on("timeout", () => {
+      request.destroy(createAbortError());
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+class LegacyResponse {
+  constructor(url, response) {
+    this.url = url;
+    this.status = response.statusCode || 0;
+    this.response = response;
+    this.body = {
+      cancel: async () => {
+        response.destroy();
+      },
+    };
+    this.headers = {
+      get: (name) => {
+        const value = response.headers[String(name).toLowerCase()];
+        return Array.isArray(value) ? value.join(", ") : value ?? null;
+      },
+    };
+  }
+
+  async text() {
+    return (await this.buffer()).toString("utf8");
+  }
+
+  async arrayBuffer() {
+    const buffer = await this.buffer();
+    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  }
+
+  buffer() {
+    if (!this.bufferPromise) {
+      this.bufferPromise = new Promise((resolve, reject) => {
+        const chunks = [];
+        this.response.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        this.response.on("end", () => resolve(Buffer.concat(chunks)));
+        this.response.on("error", reject);
+      });
+    }
+    return this.bufferPromise;
+  }
+}
+
+function createAbortError() {
+  const error = new Error("The operation was aborted");
+  error.name = "AbortError";
+  return error;
 }
 
 async function buildResponseResult(response, {
@@ -1479,6 +1605,10 @@ function extractLinks(html, baseUrl) {
     links.push({ tag: "meta", attribute: "http-equiv=refresh", value: metaRefresh });
   }
 
+  for (const redirect of extractJavaScriptRedirects(html)) {
+    links.push({ tag: "script", attribute: redirect.attribute, value: redirect.value });
+  }
+
   return links;
 }
 
@@ -1551,6 +1681,43 @@ function extractMetaRefresh(html) {
   }
 
   return null;
+}
+
+function extractJavaScriptRedirects(html) {
+  const redirects = [];
+  const patterns = [
+    {
+      attribute: "window.location.href",
+      regex: /\b(?:window\s*\.\s*)?location\s*\.\s*href\s*=\s*(["'])([^"']+)\1/gi,
+    },
+    {
+      attribute: "window.location",
+      regex: /\b(?:window\s*\.\s*)?location\s*=\s*(["'])([^"']+)\1/gi,
+    },
+    {
+      attribute: "location.assign",
+      regex: /\b(?:window\s*\.\s*)?location\s*\.\s*assign\s*\(\s*(["'])([^"']+)\1\s*\)/gi,
+    },
+    {
+      attribute: "location.replace",
+      regex: /\b(?:window\s*\.\s*)?location\s*\.\s*replace\s*\(\s*(["'])([^"']+)\1\s*\)/gi,
+    },
+  ];
+
+  const seen = new Set();
+  for (const { attribute, regex } of patterns) {
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      const value = decodeHtmlEntities(match[2] || "").trim();
+      if (!value || seen.has(value)) {
+        continue;
+      }
+      seen.add(value);
+      redirects.push({ attribute, value });
+    }
+  }
+
+  return redirects;
 }
 
 function resolveHttpUrl(rawValue, baseUrl) {
@@ -1920,6 +2087,12 @@ function formatIssueReason(result) {
   if (result.classification === "access_denied" || result.issueType === "access_denied") {
     return "Access denied / needs review (HTTP 403)";
   }
+  if (isCertificateChainError(result.cause)) {
+    return "TLS certificate chain verification failed";
+  }
+  if (isWeakDiffieHellmanError(result.cause)) {
+    return "TLS weak Diffie-Hellman handshake failed";
+  }
   if (result.status) {
     return `HTTP ${result.status}`;
   }
@@ -1987,6 +2160,16 @@ function parseArgs(argv) {
     if (arg === "--external-referer") {
       options.externalReferer = true;
       explicitOptions.add("externalReferer");
+      continue;
+    }
+    if (arg === "--legacy-tls") {
+      options.legacyTls = true;
+      explicitOptions.add("legacyTls");
+      continue;
+    }
+    if (arg === "--system-ca") {
+      options.systemCa = true;
+      explicitOptions.add("systemCa");
       continue;
     }
     if (arg === "--json") {
@@ -2257,6 +2440,8 @@ Options:
   --conservative      Lower request rate and use browser-like checks to reduce blocking.
   --prefer-get        Use lightweight GET checks instead of trying HEAD first.
   --external-referer  Send the source page as Referer for external link checks.
+  --legacy-tls        Allow legacy TLS ciphers for sites with weak DH parameters.
+  --system-ca         Restart Node with --use-system-ca for OS/browser-trusted roots.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -2313,6 +2498,8 @@ function printSummary(report) {
     if (item.classification === "protected") {
       const evidence = item.protection?.evidence?.join(", ");
       console.log(`  diagnosis: ${item.diagnosis}${evidence ? ` Evidence: ${evidence}.` : ""}`);
+    } else if (item.diagnosis) {
+      console.log(`  diagnosis: ${item.diagnosis}`);
     }
     if (item.redirected) {
       console.log(`  redirect: ${item.redirectCount} step(s), final URL: ${item.finalUrl}`);
@@ -2330,6 +2517,11 @@ async function main() {
   const parsed = parseArgs(process.argv.slice(2));
   if (parsed.help) {
     printHelp();
+    return;
+  }
+
+  if (parsed.options.systemCa && !isSystemCaEnabled()) {
+    process.exitCode = await restartWithSystemCa(process.argv.slice(2));
     return;
   }
 
@@ -2366,7 +2558,29 @@ async function main() {
   process.exitCode = report.summary.brokenLinks > 0 ? 2 : 0;
 }
 
-export { BROWSER_USER_AGENT, DEFAULTS, LinkChecker, applyConservativeDefaults };
+function restartWithSystemCa(args) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--use-system-ca", process.argv[1], ...args], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: "inherit",
+    });
+    child.on("error", (error) => {
+      console.error(`Error: unable to restart with system CA: ${error.message}`);
+      resolve(1);
+    });
+    child.on("exit", (code, signal) => {
+      if (signal) {
+        console.error(`Error: system CA child process exited with signal ${signal}`);
+        resolve(1);
+        return;
+      }
+      resolve(code ?? 1);
+    });
+  });
+}
+
+export { BROWSER_USER_AGENT, DEFAULTS, LinkChecker, applyConservativeDefaults, isSystemCaEnabled };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {

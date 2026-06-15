@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { DEFAULTS, LinkChecker, applyConservativeDefaults } from "./link-checker.mjs";
+import { DEFAULTS, LinkChecker, applyConservativeDefaults, isSystemCaEnabled } from "./link-checker.mjs";
 
 const ROOT_DIR = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(ROOT_DIR, "public");
@@ -135,6 +135,9 @@ function sendJobEvent(job, event, data) {
 
 function createJob(input) {
   const options = parseJobOptions(input);
+  if (options.systemCa && !isSystemCaEnabled()) {
+    throw httpError(400, "System CA mode requires starting the GUI with: gui.cmd --system-ca");
+  }
   const job = {
     id: randomUUID(),
     state: "running",
@@ -716,6 +719,8 @@ function parseJobOptions(input) {
     checkExternal: Boolean(input.checkExternal),
     preferGet: Boolean(input.preferGet ?? baseOptions.preferGet),
     externalReferer: Boolean(input.externalReferer ?? baseOptions.externalReferer),
+    legacyTls: Boolean(input.legacyTls ?? baseOptions.legacyTls),
+    systemCa: Boolean(input.systemCa ?? baseOptions.systemCa),
     conservativeMode: Boolean(input.conservativeMode),
     progressIntervalMs: DEFAULTS.progressIntervalMs,
     userAgent: typeof input.userAgent === "string" && input.userAgent.trim()
@@ -1092,4 +1097,5 @@ const server = createAppServer();
 server.listen(port, "127.0.0.1", () => {
   console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);
   console.log(`External Link Analyzer is running at http://127.0.0.1:${port}/analyzer.html`);
+  console.log(`System CA mode: ${isSystemCaEnabled() ? "enabled" : "disabled"}`);
 });

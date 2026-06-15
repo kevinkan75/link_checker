@@ -16,6 +16,8 @@ const userAgentInput = document.querySelector("#user-agent");
 const externalInput = document.querySelector("#external");
 const preferGetInput = document.querySelector("#prefer-get");
 const externalRefererInput = document.querySelector("#external-referer");
+const legacyTlsInput = document.querySelector("#legacy-tls");
+const systemCaInput = document.querySelector("#system-ca");
 const presetButtons = document.querySelectorAll("[data-preset]");
 const advancedSummary = document.querySelector("#advanced-summary");
 const advancedValidation = document.querySelector("#advanced-validation");
@@ -81,6 +83,8 @@ const defaultSettings = {
   checkExternal: false,
   preferGet: false,
   externalReferer: false,
+  legacyTls: false,
+  systemCa: false,
 };
 const presets = {
   fast: { ...defaultSettings },
@@ -143,6 +147,8 @@ presetButtons.forEach((button) => {
   externalInput,
   preferGetInput,
   externalRefererInput,
+  legacyTlsInput,
+  systemCaInput,
 ].forEach((input) => {
   input.addEventListener("input", () => {
     setActivePreset(null);
@@ -260,6 +266,8 @@ function applySettings(settings) {
   externalInput.checked = settings.checkExternal;
   preferGetInput.checked = settings.preferGet;
   externalRefererInput.checked = settings.externalReferer;
+  legacyTlsInput.checked = settings.legacyTls;
+  systemCaInput.checked = settings.systemCa;
 }
 
 function setActivePreset(name) {
@@ -380,6 +388,8 @@ function getCheckOptions() {
     conservativeMode: activePreset === "conservative",
     preferGet: preferGetInput.checked,
     externalReferer: externalRefererInput.checked,
+    legacyTls: legacyTlsInput.checked,
+    systemCa: systemCaInput.checked,
   };
 }
 

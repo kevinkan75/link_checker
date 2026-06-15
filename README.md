@@ -126,6 +126,32 @@ You can also enable the behavior piece by piece:
 .\check-links.cmd https://example.com --prefer-get --external-referer --concurrency 3 --per-host-concurrency 1 --request-delay-min 2 --request-delay-max 5 --retry-count 1
 ```
 
+## Legacy TLS compatibility
+
+Some older servers fail in Node/OpenSSL with `ERR_SSL_DH_KEY_TOO_SMALL` even though browsers or `curl` can still load the page. For those sites, enable legacy TLS compatibility explicitly:
+
+```powershell
+.\check-links.cmd https://example.com --legacy-tls
+```
+
+This lowers the TLS cipher security level for the checker process, so use it only for sites that otherwise fail during the TLS handshake.
+
+## System CA compatibility
+
+Some Windows-trusted government sites fail in Node with `UNABLE_TO_VERIFY_LEAF_SIGNATURE` because Node cannot build the same certificate chain that the operating system or browser accepts. Use system CA mode for those sites:
+
+```powershell
+.\check-links.cmd https://example.com --system-ca
+```
+
+For the GUI, start the server in system CA mode first:
+
+```powershell
+.\gui.cmd --system-ca
+```
+
+Then enable the `System CA` checkbox for checks that need it.
+
 使用 `--json` 時不會顯示進度或詳細事件，以避免破壞 JSON 輸出。
 
 ## 友善檢查設定
