@@ -144,13 +144,7 @@ Some Windows-trusted government sites fail in Node with `UNABLE_TO_VERIFY_LEAF_S
 .\check-links.cmd https://example.com --system-ca
 ```
 
-For the GUI, start the server in system CA mode first:
-
-```powershell
-.\gui.cmd --system-ca
-```
-
-Then enable the `System CA` checkbox for checks that need it.
+For the GUI, enable the `System CA` checkbox for checks that need it. You can also start the GUI with `.\gui.cmd --system-ca` to load system roots at startup.
 
 使用 `--json` 時不會顯示進度或詳細事件，以避免破壞 JSON 輸出。
 

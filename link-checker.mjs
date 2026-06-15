@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
+import tls from "node:tls";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
@@ -45,6 +46,7 @@ const DEFAULTS = {
 };
 
 const PAGE_NAVIGATION_TAGS = new Set(["a", "area", "form", "meta", "script"]);
+let runtimeSystemCaEnabled = false;
 
 function applyConservativeDefaults(options, explicitOptions = new Set()) {
   for (const [key, value] of Object.entries(CONSERVATIVE_DEFAULTS)) {
@@ -361,6 +363,9 @@ class LinkChecker {
   constructor(startUrl, options = {}) {
     this.startUrl = normalizeUrl(startUrl);
     this.options = { ...DEFAULTS, ...options };
+    if (this.options.systemCa) {
+      enableSystemCa();
+    }
     this.startOrigin = new URL(this.startUrl).origin;
     this.startFinalOrigin = null;
     this.fetchLimiter = new Limiter(this.options.concurrency);
@@ -1037,8 +1042,31 @@ function isCertificateChainError(cause) {
 }
 
 function isSystemCaEnabled() {
-  return process.execArgv.includes("--use-system-ca")
+  return runtimeSystemCaEnabled
+    || process.execArgv.includes("--use-system-ca")
     || /\b--use-system-ca\b/.test(process.env.NODE_OPTIONS || "");
+}
+
+function canEnableSystemCaAtRuntime() {
+  return typeof tls.getCACertificates === "function"
+    && typeof tls.setDefaultCACertificates === "function";
+}
+
+function enableSystemCa() {
+  if (isSystemCaEnabled()) {
+    return true;
+  }
+  if (!canEnableSystemCaAtRuntime()) {
+    throw new Error("System CA mode requires Node.js --use-system-ca support. Start with: gui.cmd --system-ca");
+  }
+
+  const certificates = [
+    ...tls.getCACertificates("default"),
+    ...tls.getCACertificates("system"),
+  ];
+  tls.setDefaultCACertificates([...new Set(certificates)]);
+  runtimeSystemCaEnabled = true;
+  return true;
 }
 
 async function request(url, method, {
@@ -2520,7 +2548,7 @@ async function main() {
     return;
   }
 
-  if (parsed.options.systemCa && !isSystemCaEnabled()) {
+  if (parsed.options.systemCa && !isSystemCaEnabled() && !canEnableSystemCaAtRuntime()) {
     process.exitCode = await restartWithSystemCa(process.argv.slice(2));
     return;
   }

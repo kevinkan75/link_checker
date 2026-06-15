@@ -135,9 +135,6 @@ function sendJobEvent(job, event, data) {
 
 function createJob(input) {
   const options = parseJobOptions(input);
-  if (options.systemCa && !isSystemCaEnabled()) {
-    throw httpError(400, "System CA mode requires starting the GUI with: gui.cmd --system-ca");
-  }
   const job = {
     id: randomUUID(),
     state: "running",
@@ -1097,5 +1094,5 @@ const server = createAppServer();
 server.listen(port, "127.0.0.1", () => {
   console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);
   console.log(`External Link Analyzer is running at http://127.0.0.1:${port}/analyzer.html`);
-  console.log(`System CA mode: ${isSystemCaEnabled() ? "enabled" : "disabled"}`);
+  console.log(`System CA startup mode: ${isSystemCaEnabled() ? "enabled" : "disabled"}; GUI checkbox can enable it per job.`);
 });
