@@ -2,6 +2,19 @@
 
 這是一個可在本機執行的網站無效連結檢查工具。它會從指定網址開始讀取 HTML，解析頁面中的連結與資源，繼續爬行同網域頁面，並回報 HTTP 400 以上或連線失敗的連結。
 
+## 目錄
+
+- [使用方式](#使用方式)
+- [快速選擇](#快速選擇)
+- [圖形介面](#圖形介面)
+- [建立可攜版](#建立可攜版)
+- [常用參數](#常用參數)
+- [相容性模式](#相容性模式)
+- [友善檢查設定](#友善檢查設定)
+- [Redirect 判讀](#redirect-判讀)
+- [結果判讀](#結果判讀)
+- [注意事項](#注意事項)
+
 ## 使用方式
 
 ```powershell
@@ -13,6 +26,34 @@
 ```powershell
 node .\link-checker.mjs https://example.com
 ```
+
+## 快速選擇
+
+一般網站先用基本指令即可：
+
+```powershell
+.\check-links.cmd https://example.com
+```
+
+政府機關、公司內部或 Windows 瀏覽器可開啟但 Node 憑證失敗的網站，使用系統憑證：
+
+```powershell
+.\check-links.cmd https://example.com --system-ca
+```
+
+容易被限流、挑戰或阻擋的網站，使用保守模式降低請求強度：
+
+```powershell
+.\check-links.cmd https://example.com --conservative
+```
+
+舊式 TLS 伺服器出現 `ERR_SSL_DH_KEY_TOO_SMALL` 時，才啟用舊 TLS 相容模式：
+
+```powershell
+.\check-links.cmd https://example.com --legacy-tls
+```
+
+需要一次檢查多個網站時，建議使用 GUI 的「待檢核網站佇列」。
 
 ## 圖形介面
 
@@ -64,6 +105,7 @@ dist\LinkChecker-portable.zip
 .\check-links.cmd https://example.com --progress
 .\check-links.cmd https://example.com --verbose
 .\check-links.cmd https://example.com --output report.json
+.\check-links.cmd https://example.com --domain-rules rules.json
 ```
 
 - `--max-pages <n>`：最多爬行幾個同網域頁面，預設 `100`。
@@ -82,11 +124,32 @@ dist\LinkChecker-portable.zip
 - `--long-redirect-threshold <n>`：redirect 次數超過此值時標示為轉址鏈過長，預設 `3`。
 - `--accept-language <value>`：送出的語言標頭，預設 `zh-TW,zh;q=0.9,en;q=0.8`。
 - `--user-agent <value>`：送出的 User-Agent。預設使用瀏覽器相容字串並包含 `LocalLinkChecker/1.0` 識別。
+- `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
+- `--conservative`：套用低併發、隨機延遲、偏好 `GET` 與外部連結 `Referer` 的保守檢查設定。
+- `--prefer-get`：使用輕量 `GET` 檢查，不先嘗試 `HEAD`。
+- `--external-referer`：檢查外部連結時也送出來源頁作為 `Referer`。
+- `--legacy-tls`：允許舊 TLS cipher，用於弱 DH 參數造成握手失敗的舊站。
+- `--system-ca`：使用作業系統或瀏覽器信任的系統根憑證。
 - `--progress`：執行時顯示單行即時狀態。
 - `--verbose`：逐行顯示爬行、請求、略過與檢查結果事件。
 - `--output <file>`：把完整結果輸出成 JSON。
 - `--json`：在畫面上輸出完整 JSON。
+
+`--domain-rules` 的 JSON 格式如下：
+
+```json
+[
+  {
+    "category": "政府機關",
+    "domains": ["gov.tw", "example.gov.tw"]
+  },
+  {
+    "category": "合作單位",
+    "domains": ["partner.example.com"]
+  }
+]
+```
 
 ## 執行狀態
 
@@ -110,53 +173,57 @@ dist\LinkChecker-portable.zip
 .\check-links.cmd https://example.com --progress --verbose
 ```
 
-## Conservative mode
+## 相容性模式
 
-Use conservative mode for sites that are likely to rate-limit, challenge, or block automated checks:
+### 保守模式
+
+容易限流、挑戰或阻擋自動化檢查的網站，可以使用保守模式：
 
 ```powershell
 .\check-links.cmd https://example.com --conservative
 ```
 
-This preset lowers global concurrency to `3`, per-host concurrency to `1`, uses a random `2-5s` request delay, lowers transient retries to `1`, uses a plain browser User-Agent, prefers lightweight `GET` checks instead of probing with `HEAD`, and sends the source page as `Referer` for external link checks.
+此模式會把全域併發降到 `3`、每 host 併發降到 `1`、加入 `2-5s` 隨機請求延遲、把暫時性錯誤重試降到 `1`，並使用瀏覽器相容 User-Agent、偏好輕量 `GET` 檢查、對外部連結送出來源頁 `Referer`。
 
-You can also enable the behavior piece by piece:
+也可以逐項開啟相同行為：
 
 ```powershell
 .\check-links.cmd https://example.com --prefer-get --external-referer --concurrency 3 --per-host-concurrency 1 --request-delay-min 2 --request-delay-max 5 --retry-count 1
 ```
 
-## Legacy TLS compatibility
+### 舊 TLS 相容模式
 
-Some older servers fail in Node/OpenSSL with `ERR_SSL_DH_KEY_TOO_SMALL` even though browsers or `curl` can still load the page. For those sites, enable legacy TLS compatibility explicitly:
+部分舊伺服器在瀏覽器或 `curl` 可以開啟，但 Node/OpenSSL 會因 `ERR_SSL_DH_KEY_TOO_SMALL` 失敗。只有遇到這類 TLS 握手錯誤時才啟用：
 
 ```powershell
 .\check-links.cmd https://example.com --legacy-tls
 ```
 
-This lowers the TLS cipher security level for the checker process, so use it only for sites that otherwise fail during the TLS handshake.
+此模式會降低檢查程序的 TLS cipher 安全等級，只建議用在原本無法完成 TLS 握手的舊站。
 
-## System CA compatibility
+### 系統憑證相容模式
 
-Some Windows-trusted government sites fail in Node with `UNABLE_TO_VERIFY_LEAF_SIGNATURE` because Node cannot build the same certificate chain that the operating system or browser accepts. Use system CA mode for those sites:
+部分 Windows 信任的政府或內部網站，在 Node 中可能因 `UNABLE_TO_VERIFY_LEAF_SIGNATURE` 失敗，原因是 Node 無法建立與作業系統或瀏覽器相同的憑證鏈。這類網站可使用系統憑證模式：
 
 ```powershell
 .\check-links.cmd https://example.com --system-ca
 ```
 
-For the GUI, enable the `System CA` checkbox for checks that need it. You can also start the GUI with `.\gui.cmd --system-ca` to load system roots at startup.
+支援動態設定憑證的 Node 版本可在執行時啟用系統憑證；不支援時，CLI 會改用 `--use-system-ca` 重新啟動。GUI 可針對需要的檢查勾選 `System CA`，也可以用 `.\gui.cmd --system-ca` 啟動，讓 GUI 一開始就載入系統根憑證。
 
 使用 `--json` 時不會顯示進度或詳細事件，以避免破壞 JSON 輸出。
 
 ## 友善檢查設定
 
-工具預設採用較保守的檢查方式：
+工具預設採用適合一般網站的檢查方式：
 
 - 全域最多 `12` 個請求。
 - 每個 host 最多 `4` 個請求。
 - 同一 host 兩次請求至少間隔 `500ms`。
 - 暫時性錯誤最多重試 `2` 次。
 - 預設送出 `Accept-Language: zh-TW,zh;q=0.9,en;q=0.8`。
+
+若網站容易限流或阻擋自動化檢查，建議直接使用 [保守模式](#保守模式)，再視需要個別調整併發、延遲、User-Agent、`GET` 檢查與 `Referer` 設定。
 
 重試只會用在逾時、部分網路錯誤、`429`、`500`、`502`、`503`、`504`。`404` 與已判定為防護阻擋的結果不會重試。
 
