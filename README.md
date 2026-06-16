@@ -1,4 +1,4 @@
-# Local Link Checker
+﻿# Local Link Checker
 
 這是一個可在本機執行的網站無效連結檢查工具。它會從指定網址開始讀取 HTML，解析頁面中的連結與資源，繼續爬行同網域頁面，並回報 HTTP 400 以上或連線失敗的連結。
 

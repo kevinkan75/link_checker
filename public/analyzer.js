@@ -1,4 +1,4 @@
-const linksFileInput = document.querySelector("#links-file");
+﻿const linksFileInput = document.querySelector("#links-file");
 const pickLinksButton = document.querySelector("#pick-links-button");
 const rulesFileInput = document.querySelector("#rules-file");
 const searchInput = document.querySelector("#search");

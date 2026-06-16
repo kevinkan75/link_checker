@@ -1,4 +1,4 @@
-const reportFileInput = document.querySelector("#report-file");
+﻿const reportFileInput = document.querySelector("#report-file");
 const searchInput = document.querySelector("#search");
 const issueFilterInput = document.querySelector("#issue-filter");
 const statusFilterInput = document.querySelector("#status-filter");

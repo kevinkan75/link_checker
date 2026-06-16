@@ -6,6 +6,8 @@ $packageName = "LinkChecker-portable"
 $packageDir = Join-Path $dist $packageName
 $zipPath = Join-Path $dist "$packageName.zip"
 $runtimeDir = Join-Path $packageDir "runtime"
+$launcherSource = Join-Path $root "launcher\StartLinkChecker.cs"
+$launcherExe = Join-Path $packageDir "Start Link Checker.exe"
 
 function Assert-ChildPath {
   param(
@@ -20,6 +22,33 @@ function Assert-ChildPath {
   }
 }
 
+function Resolve-CSharpCompiler {
+  $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+  if (Test-Path -LiteralPath $vswhere) {
+    $installPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+    if ($installPath) {
+      $roslynCsc = Join-Path $installPath "MSBuild\Current\Bin\Roslyn\csc.exe"
+      if (Test-Path -LiteralPath $roslynCsc) {
+        return $roslynCsc
+      }
+    }
+  }
+
+  $fallbacks = @(
+    "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\Roslyn\csc.exe",
+    "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
+    "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+  )
+
+  foreach ($candidate in $fallbacks) {
+    if (Test-Path -LiteralPath $candidate) {
+      return $candidate
+    }
+  }
+
+  throw "C# compiler was not found. Install Visual Studio Build Tools or .NET Framework build tools."
+}
+
 $nodeCommand = Get-Command node -ErrorAction Stop
 $nodeExe = $nodeCommand.Source
 if (-not (Test-Path -LiteralPath $nodeExe)) {
@@ -29,6 +58,11 @@ if (-not (Test-Path -LiteralPath $nodeExe)) {
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 Assert-ChildPath -Parent $root -Child $packageDir
 Assert-ChildPath -Parent $root -Child $zipPath
+Assert-ChildPath -Parent $root -Child $launcherExe
+
+if (-not (Test-Path -LiteralPath $launcherSource)) {
+  throw "Launcher source was not found: $launcherSource"
+}
 
 if (Test-Path -LiteralPath $packageDir) {
   Remove-Item -LiteralPath $packageDir -Recurse -Force
@@ -50,14 +84,30 @@ Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "public") -Destination $packageDir -Recurse
 Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $runtimeDir "node.exe")
 
+$csc = Resolve-CSharpCompiler
+& $csc `
+  /nologo `
+  /codepage:65001 `
+  /target:winexe `
+  /platform:anycpu `
+  /optimize+ `
+  /reference:System.dll `
+  /reference:System.Windows.Forms.dll `
+  /out:$launcherExe `
+  $launcherSource
+if ($LASTEXITCODE -ne 0) {
+  throw "C# launcher build failed with exit code $LASTEXITCODE."
+}
+
 $portableReadme = @(
   "Link Checker Portable",
   "",
   "How to use:",
   "1. Extract the whole folder.",
-  "2. Run gui.cmd.",
-  "3. Open http://127.0.0.1:8787 in your browser.",
-  "4. Run analyzer.cmd or open http://127.0.0.1:8787/analyzer.html to analyze external link exports.",
+  "2. Run Start Link Checker.exe.",
+  "3. The browser opens automatically after the local GUI starts.",
+  "4. If you need command-line diagnostics, run gui.cmd instead.",
+  "5. Run analyzer.cmd or open the Analyzer link in the GUI to analyze external link exports.",
   "",
   "Command line:",
   "  check-links.cmd https://example.com",
@@ -70,6 +120,7 @@ $portableReadme = @(
   "",
   "Notes:",
   "- Keep the whole folder together. Do not move only one cmd file.",
+  "- Start Link Checker.exe starts the local server and opens the correct browser URL.",
   "- runtime\node.exe is bundled, so users do not need to install Node.js.",
   "- GUI checks automatically save logs under the logs folder.",
   "- External Link Analyzer imports report.json or external-links.csv and optional domain rules JSON.",

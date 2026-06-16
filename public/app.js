@@ -1,4 +1,4 @@
-const form = document.querySelector("#check-form");
+﻿const form = document.querySelector("#check-form");
 const urlInput = document.querySelector("#url");
 const maxPagesInput = document.querySelector("#max-pages");
 const maxDepthInput = document.querySelector("#max-depth");

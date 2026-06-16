@@ -12,6 +12,8 @@ const ROOT_DIR = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(ROOT_DIR, "public");
 const LOGS_DIR = join(ROOT_DIR, "logs");
 const DEFAULT_PORT = 8787;
+const HOST = "127.0.0.1";
+const MAX_PORT_FALLBACK_ATTEMPTS = 20;
 const MAX_STORED_EVENTS = 10000;
 const jobs = new Map();
 const queue = {
@@ -1081,18 +1083,114 @@ function createAppServer() {
   });
 }
 
-function parsePort(argv) {
+function parseStartupOptions(argv) {
   const index = argv.indexOf("--port");
   if (index === -1) {
-    return DEFAULT_PORT;
+    return {
+      port: DEFAULT_PORT,
+      explicitPort: false,
+    };
   }
-  return clampInteger(argv[index + 1], DEFAULT_PORT, 1024, 65535);
+
+  const value = argv[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error("--port requires a number between 1024 and 65535.");
+  }
+
+  const port = Number.parseInt(value, 10);
+  if (!/^\d+$/.test(value) || !Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error(`Invalid --port value "${value}". Use a number between 1024 and 65535.`);
+  }
+
+  return {
+    port,
+    explicitPort: true,
+  };
 }
 
-const port = parsePort(process.argv.slice(2));
-const server = createAppServer();
-server.listen(port, "127.0.0.1", () => {
+function listen(server, port) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, HOST);
+  });
+}
+
+async function startServer(options) {
+  for (let attempt = 0; attempt < MAX_PORT_FALLBACK_ATTEMPTS; attempt += 1) {
+    const port = options.port + attempt;
+    if (port > 65535) {
+      break;
+    }
+
+    const server = createAppServer();
+    try {
+      await listen(server, port);
+      return {
+        server,
+        port,
+        fallbackUsed: port !== options.port,
+      };
+    } catch (error) {
+      if (error.code === "EADDRINUSE" && !options.explicitPort) {
+        console.warn(`Port ${port} is already in use; trying ${port + 1}.`);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  const lastPort = Math.min(65535, options.port + MAX_PORT_FALLBACK_ATTEMPTS - 1);
+  throw new Error(`No available local port found from ${options.port} to ${lastPort}.`);
+}
+
+function formatStartupError(error, options) {
+  if (error.code === "EADDRINUSE") {
+    const suffix = options.explicitPort
+      ? "Choose another port with --port <number>, or stop the program using that port."
+      : "The fallback port search also failed. Stop the program using the port or try --port <number>.";
+    return `Port ${options.port} is already in use. ${suffix}`;
+  }
+
+  if (error.code === "EACCES") {
+    return `Cannot listen on port ${options.port}; permission was denied. Try a port between 1024 and 65535.`;
+  }
+
+  if (error.code === "EADDRNOTAVAIL") {
+    return `Cannot bind to ${HOST}. Check the local network configuration.`;
+  }
+
+  return error.message || String(error);
+}
+
+function printStartupSuccess(port, fallbackUsed) {
+  if (fallbackUsed) {
+    console.log(`Default port ${DEFAULT_PORT} was busy; using http://${HOST}:${port} instead.`);
+  }
   console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);
   console.log(`External Link Analyzer is running at http://127.0.0.1:${port}/analyzer.html`);
   console.log(`System CA startup mode: ${isSystemCaEnabled() ? "enabled" : "disabled"}; GUI checkbox can enable it per job.`);
-});
+}
+
+async function main() {
+  let options;
+  try {
+    options = parseStartupOptions(process.argv.slice(2));
+    const { port, fallbackUsed } = await startServer(options);
+    printStartupSuccess(port, fallbackUsed);
+  } catch (error) {
+    console.error(`Link Checker GUI failed to start: ${formatStartupError(error, options || { port: DEFAULT_PORT, explicitPort: false })}`);
+    process.exitCode = 1;
+  }
+}
+
+await main();
