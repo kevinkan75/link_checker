@@ -90,15 +90,15 @@
 
                   <label>
                     <span>每請求隨機延遲最小 ms</span>
-                    <input id="request-delay-min" name="requestDelayMinMs" type="number" min="0" max="60000" step="100" placeholder="300">
+                    <input id="request-delay-min" name="requestDelayMinMs" type="number" min="0" max="60000" step="100" placeholder="留空停用">
                   </label>
 
                   <label>
                     <span>每請求隨機延遲最大 ms</span>
-                    <input id="request-delay-max" name="requestDelayMaxMs" type="number" min="0" max="60000" step="100" placeholder="1000">
+                    <input id="request-delay-max" name="requestDelayMaxMs" type="number" min="0" max="60000" step="100" placeholder="留空停用">
                   </label>
                 </div>
-                <p class="settings-note">隨機延遲最小值等於最大值時，只代表每個任務先等固定時間；若單一 host 併發大於 1，仍可能同時送出多個請求。</p>
+                <p class="settings-note">最小值與最大值都填寫時才會啟用隨機延遲，例如 300 到 1000 ms；兩者相等時，只代表每個任務先等固定時間。若單一 host 併發大於 1，仍可能同時送出多個請求。</p>
               </section>
 
               <section class="settings-section" aria-labelledby="reliability-settings-title">
