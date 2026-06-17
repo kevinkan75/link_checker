@@ -22,15 +22,15 @@ const domainList = document.querySelector("#domain-list");
 const linksTable = document.querySelector("#links-table");
 
 const ISSUE_LABELS = {
-  not_found: "404 Not Found",
-  protected: "防護阻擋",
-  access_denied: "存取拒絕",
-  http_error: "HTTP 錯誤",
+  not_found: "頁面不存在",
+  protected: "網站防護阻擋",
+  access_denied: "網站拒絕檢查",
+  http_error: "其他 HTTP 錯誤",
   redirect_to_error: "轉址到錯誤頁",
   too_many_redirects: "轉址過多",
   redirect_loop: "轉址迴圈",
-  timeout: "逾時",
-  network_error: "網路錯誤",
+  timeout: "連線逾時",
+  network_error: "連線失敗",
   unknown_error: "未知錯誤",
 };
 
@@ -324,7 +324,7 @@ function renderBrokenTable(items) {
   if (items.length > visibleItems.length) {
     const note = document.createElement("p");
     note.className = "list-limit-note";
-    note.textContent = `目前顯示前 ${visibleItems.length} 筆，請用搜尋、錯誤類型或 HTTP 狀態縮小範圍。`;
+    note.textContent = `目前顯示前 ${visibleItems.length} 筆，請用搜尋、問題類型或狀態碼縮小範圍。`;
     linksTable.append(note);
   }
 }
@@ -341,7 +341,7 @@ function renderEmpty(message = "請先上傳 report.json。") {
   sourceSummaryCount.textContent = "0 頁";
   domainSummaryCount.textContent = "0 個";
   linksSummary.textContent = "0 筆";
-  issueList.innerHTML = '<p class="empty-note">載入報告後顯示錯誤分類。</p>';
+  issueList.innerHTML = '<p class="empty-note">載入報告後顯示問題分類。</p>';
   sourceList.innerHTML = '<p class="empty-note">載入報告後顯示來源頁。</p>';
   domainList.innerHTML = '<p class="empty-note">載入報告後顯示網域排行。</p>';
   linksTable.innerHTML = `<p class="empty-note issue-empty">${escapeHtml(message)}</p>`;
@@ -356,10 +356,12 @@ function renderIssueItem(item) {
   const header = document.createElement("div");
   header.className = "issue-item-header";
   header.append(
-    issueBadge(item.issueType),
-    metaBadge(item.status ? `HTTP ${item.status}` : "無狀態"),
+    issueBadge(item.issueType, formatIssueBadgeText(item)),
     metaBadge(formatSourceElement(source) || "無元素"),
   );
+  if (hasIssueStatusMismatch(item)) {
+    header.append(metaBadge("分類與狀態需確認", "impact"));
+  }
   if (sourceCount > 1) {
     header.append(metaBadge(`${formatNumber(sourceCount)} 個來源`, "impact"));
   }
@@ -368,6 +370,7 @@ function renderIssueItem(item) {
     header,
     detailLine("URL", item.url),
     detailLine("來源頁", formatSources(item.sources)),
+    detailLine("建議", getIssueSuggestion(item)),
     detailLine("診斷", item.diagnosis || item.error || "無診斷資訊"),
   );
   return row;
@@ -416,10 +419,10 @@ function metaBadge(value, modifier = "") {
   return span;
 }
 
-function issueBadge(issueType) {
+function issueBadge(issueType, text = getIssueLabel(issueType)) {
   const span = document.createElement("span");
   span.className = `badge ${issueType || "unknown_error"}`;
-  span.textContent = getIssueLabel(issueType);
+  span.textContent = text;
   return span;
 }
 
@@ -453,6 +456,46 @@ function normalizeStatus(value) {
     return "(無狀態)";
   }
   return String(value);
+}
+
+function formatIssueBadgeText(item) {
+  const status = item.status ? `HTTP ${item.status}` : "無狀態";
+  return `${getIssueLabel(item.issueType)} · ${status}`;
+}
+
+function hasIssueStatusMismatch(item) {
+  const status = Number.parseInt(item.status, 10);
+  if (!Number.isFinite(status)) {
+    return ["not_found", "access_denied", "http_error", "redirect_to_error"].includes(item.issueType);
+  }
+  if (item.issueType === "not_found") {
+    return status !== 404 && status !== 410;
+  }
+  if (item.issueType === "access_denied") {
+    return status !== 401 && status !== 403;
+  }
+  if (item.issueType === "http_error") {
+    return status < 400;
+  }
+  if (item.issueType === "network_error") {
+    return true;
+  }
+  return false;
+}
+
+function getIssueSuggestion(item) {
+  const suggestions = {
+    not_found: "檢查網址是否打錯；若頁面已移除，請更新或移除連結。",
+    access_denied: "可能不是壞連結，建議用瀏覽器人工確認登入、權限或網站政策。",
+    protected: "可能被防護機制擋下，建議用瀏覽器或允許清單再確認。",
+    timeout: "稍後重試，或確認目標網站是否回應過慢或不穩定。",
+    network_error: "確認網域、DNS、TLS 憑證或目標網站連線狀態。",
+    redirect_to_error: "檢查原連結與最終轉址頁，更新到可正常開啟的目標。",
+    too_many_redirects: "檢查轉址設定，避免多層或互相跳轉。",
+    redirect_loop: "檢查轉址規則是否形成循環。",
+    http_error: "查看狀態碼與診斷訊息，確認伺服器或頁面是否需要修正。",
+  };
+  return suggestions[item.issueType] || "查看診斷訊息並人工確認連結是否可正常開啟。";
 }
 
 function sortStatus(a, b) {

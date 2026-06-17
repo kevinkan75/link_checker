@@ -11,7 +11,7 @@
       <header class="app-header">
         <div>
           <h1>Report Analyzer</h1>
-          <p>上傳單一 report.json，快速整理壞連結、錯誤類型、來源頁與網域問題排行。</p>
+          <p>上傳單一 report.json，快速整理壞連結、問題類型、來源頁與網域問題排行。</p>
         </div>
         <nav class="header-nav" aria-label="主要導覽">
           <a class="header-link" href="/">Link Checker</a>
@@ -51,12 +51,12 @@
       <section class="summary-layout">
         <section class="panel">
           <div class="section-heading">
-            <h2>錯誤分類</h2>
+            <h2>問題分類</h2>
             <span id="issue-summary-count">0 種</span>
           </div>
           <p class="panel-note">用來判斷修復優先順序。</p>
           <div id="issue-list" class="rank-list">
-            <p class="empty-note">載入報告後顯示錯誤分類。</p>
+            <p class="empty-note">載入報告後顯示問題分類。</p>
           </div>
         </section>
 
@@ -95,14 +95,14 @@
           </label>
 
           <label>
-            <span>錯誤類型</span>
+            <span>問題類型</span>
             <select id="issue-filter">
               <option value="all">全部</option>
             </select>
           </label>
 
           <label>
-            <span>HTTP 狀態</span>
+            <span>狀態碼</span>
             <select id="status-filter">
               <option value="all">全部</option>
             </select>

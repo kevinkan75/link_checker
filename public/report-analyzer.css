@@ -339,10 +339,14 @@ tr:last-child td {
   align-items: center;
   justify-content: center;
   min-width: 92px;
+  max-width: 100%;
   border-radius: 999px;
   padding: 4px 8px;
   font-weight: 700;
   font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .badge.not_found {
