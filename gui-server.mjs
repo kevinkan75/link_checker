@@ -15,6 +15,8 @@ const DEFAULT_PORT = 8787;
 const HOST = "127.0.0.1";
 const MAX_PORT_FALLBACK_ATTEMPTS = 20;
 const MAX_STORED_EVENTS = 10000;
+const DEFAULT_IDLE_CHECK_INTERVAL_MS = 30000;
+const SHUTDOWN_FORCE_EXIT_MS = 3000;
 const jobs = new Map();
 const queue = {
   items: [],
@@ -25,6 +27,11 @@ const queue = {
   startedAt: null,
   finishedAt: null,
 };
+let activeServer = null;
+let idleShutdownTimer = null;
+let idleShutdownMs = null;
+let lastClientSeenAt = Date.now();
+let shutdownStarted = false;
 
 const MIME_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -910,6 +917,76 @@ function sendJson(response, status, value, headers = {}) {
   response.end(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function isLocalRequest(request) {
+  const address = request.socket?.remoteAddress;
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
+function recordClientHeartbeat() {
+  lastClientSeenAt = Date.now();
+  return {
+    ok: true,
+    lastClientSeenAt: new Date(lastClientSeenAt).toISOString(),
+    idleShutdownMs,
+  };
+}
+
+function hasRunningWork() {
+  if (queue.running || queue.stopRequested || queue.currentItemIds.size > 0) {
+    return true;
+  }
+
+  for (const job of jobs.values()) {
+    if (job.state === "running" || job.state === "stopping") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function beginShutdown(reason) {
+  if (shutdownStarted) {
+    return;
+  }
+
+  shutdownStarted = true;
+  if (idleShutdownTimer) {
+    clearInterval(idleShutdownTimer);
+    idleShutdownTimer = null;
+  }
+
+  console.log(`Link Checker GUI is shutting down: ${reason}`);
+  const forceExitTimer = setTimeout(() => process.exit(0), SHUTDOWN_FORCE_EXIT_MS);
+  forceExitTimer.unref?.();
+
+  if (!activeServer) {
+    process.exit(0);
+    return;
+  }
+
+  activeServer.close(() => process.exit(0));
+}
+
+function configureIdleShutdown(server, timeoutMs) {
+  activeServer = server;
+  idleShutdownMs = timeoutMs;
+  lastClientSeenAt = Date.now();
+
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return;
+  }
+
+  const intervalMs = Math.min(DEFAULT_IDLE_CHECK_INTERVAL_MS, Math.max(1000, Math.floor(timeoutMs / 4)));
+  idleShutdownTimer = setInterval(() => {
+    const idleForMs = Date.now() - lastClientSeenAt;
+    if (!hasRunningWork() && idleForMs >= timeoutMs) {
+      beginShutdown(`idle for ${idleForMs}ms`);
+    }
+  }, intervalMs);
+  idleShutdownTimer.unref?.();
+}
+
 function sendError(response, error) {
   sendJson(response, error.status || 500, {
     error: error.message || "Unexpected server error",
@@ -944,6 +1021,29 @@ async function serveStatic(request, response, pathname) {
 
 async function route(request, response) {
   const url = new URL(request.url, "http://127.0.0.1");
+
+  if (request.method === "POST" && url.pathname === "/api/session/heartbeat") {
+    if (!isLocalRequest(request)) {
+      throw httpError(403, "Heartbeat is only available from localhost");
+    }
+    sendJson(response, 200, recordClientHeartbeat());
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shutdown") {
+    if (!isLocalRequest(request)) {
+      throw httpError(403, "Shutdown is only available from localhost");
+    }
+    if (hasRunningWork()) {
+      throw httpError(409, "Cannot shut down while a scan or queue is still running.");
+    }
+    sendJson(response, 200, {
+      ok: true,
+      shuttingDown: true,
+    });
+    setTimeout(() => beginShutdown("manual shutdown requested"), 25).unref?.();
+    return;
+  }
 
   if (request.method === "GET" && url.pathname === "/api/queue") {
     sendJson(response, 200, serializeQueue());
@@ -1084,15 +1184,18 @@ function createAppServer() {
 }
 
 function parseStartupOptions(argv) {
-  const index = argv.indexOf("--port");
-  if (index === -1) {
+  const portIndex = argv.indexOf("--port");
+  const idleShutdown = parseIdleShutdownOption(argv);
+
+  if (portIndex === -1) {
     return {
       port: DEFAULT_PORT,
       explicitPort: false,
+      idleShutdownMs: idleShutdown,
     };
   }
 
-  const value = argv[index + 1];
+  const value = argv[portIndex + 1];
   if (!value || value.startsWith("--")) {
     throw new Error("--port requires a number between 1024 and 65535.");
   }
@@ -1105,7 +1208,31 @@ function parseStartupOptions(argv) {
   return {
     port,
     explicitPort: true,
+    idleShutdownMs: idleShutdown,
   };
+}
+
+function parseIdleShutdownOption(argv) {
+  if (argv.includes("--no-idle-shutdown")) {
+    return null;
+  }
+
+  const index = argv.indexOf("--idle-shutdown-ms");
+  if (index === -1) {
+    return null;
+  }
+
+  const value = argv[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error("--idle-shutdown-ms requires a number of milliseconds, or use --no-idle-shutdown.");
+  }
+
+  const timeoutMs = Number.parseInt(value, 10);
+  if (!/^\d+$/.test(value) || !Number.isInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > 86400000) {
+    throw new Error(`Invalid --idle-shutdown-ms value "${value}". Use 0 to disable, or a value up to 86400000.`);
+  }
+
+  return timeoutMs > 0 ? timeoutMs : null;
 }
 
 function listen(server, port) {
@@ -1135,6 +1262,7 @@ async function startServer(options) {
     const server = createAppServer();
     try {
       await listen(server, port);
+      configureIdleShutdown(server, options.idleShutdownMs);
       return {
         server,
         port,
@@ -1179,6 +1307,9 @@ function printStartupSuccess(port, fallbackUsed) {
   console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);
   console.log(`External Link Analyzer is running at http://127.0.0.1:${port}/analyzer.html`);
   console.log(`System CA startup mode: ${isSystemCaEnabled() ? "enabled" : "disabled"}; GUI checkbox can enable it per job.`);
+  if (idleShutdownMs) {
+    console.log(`Idle shutdown: enabled after ${idleShutdownMs}ms without an open GUI page or running work.`);
+  }
 }
 
 async function main() {

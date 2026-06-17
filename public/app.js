@@ -24,6 +24,7 @@ const advancedValidation = document.querySelector("#advanced-validation");
 const startButton = document.querySelector("#start-button");
 const stopButton = document.querySelector("#stop-button");
 const downloadButton = document.querySelector("#download-button");
+const shutdownButton = document.querySelector("#shutdown-button");
 const batchUrlsInput = document.querySelector("#batch-urls");
 const maxConcurrentSitesInput = document.querySelector("#max-concurrent-sites");
 const addQueueButton = document.querySelector("#add-queue-button");
@@ -119,6 +120,8 @@ let watchedQueueUrl = null;
 let manualWatchSelected = false;
 let activePreset = null;
 
+startSessionHeartbeat();
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   await startCheck();
@@ -185,6 +188,36 @@ downloadButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+shutdownButton.addEventListener("click", async () => {
+  const confirmed = window.confirm("關閉本機服務？目前開啟的 GUI 頁面會停止連線。");
+  if (!confirmed) {
+    return;
+  }
+
+  shutdownButton.disabled = true;
+  shutdownButton.textContent = "正在關閉";
+
+  try {
+    const response = await fetch("/api/shutdown", { method: "POST" });
+    if (response.status === 409) {
+      const data = await response.json().catch(() => ({}));
+      window.alert(data.error || "仍有掃描或佇列正在執行，請先停止後再關閉本機服務。");
+      shutdownButton.disabled = false;
+      shutdownButton.textContent = "關閉本機服務";
+      return;
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+    statusTitle.textContent = "本機服務正在關閉";
+  } catch (error) {
+    window.alert(`關閉本機服務失敗：${error.message}`);
+    shutdownButton.disabled = false;
+    shutdownButton.textContent = "關閉本機服務";
+  }
+});
+
 addQueueButton.addEventListener("click", async () => {
   await addQueueItems();
 });
@@ -240,6 +273,18 @@ filterBar.addEventListener("click", (event) => {
     renderBrokenTable(currentReport.broken || []);
   }
 });
+
+function startSessionHeartbeat() {
+  const send = () => fetch("/api/session/heartbeat", {
+    method: "POST",
+    cache: "no-store",
+    keepalive: true,
+  }).catch(() => {});
+
+  send();
+  setInterval(send, 30000);
+  window.addEventListener("pagehide", send);
+}
 
 function applyPreset(name) {
   const preset = presets[name] || defaultSettings;

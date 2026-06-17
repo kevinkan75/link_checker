@@ -13,6 +13,7 @@ internal static class StartLinkChecker
     private const int DefaultPort = 8787;
     private const int PortProbeAttempts = 20;
     private const int StartupTimeoutMilliseconds = 8000;
+    private const int DefaultIdleShutdownMilliseconds = 300000;
     private static readonly Regex GuiUrlPattern = new Regex(
         @"Link Checker GUI is running at (?<url>http://127\.0\.0\.1:\d+)",
         RegexOptions.Compiled);
@@ -231,7 +232,27 @@ internal static class StartLinkChecker
             serverArgs.Add(Quote(arg));
         }
 
+        if (!HasIdleShutdownOption(args))
+        {
+            serverArgs.Add("--idle-shutdown-ms");
+            serverArgs.Add(DefaultIdleShutdownMilliseconds.ToString());
+        }
+
         return serverArgs.Count == 0 ? "" : " " + String.Join(" ", serverArgs.ToArray());
+    }
+
+    private static bool HasIdleShutdownOption(string[] args)
+    {
+        foreach (string arg in args)
+        {
+            if (String.Equals(arg, "--idle-shutdown-ms", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(arg, "--no-idle-shutdown", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void ApplyEnvironmentOptions(ProcessStartInfo startInfo, string[] args)

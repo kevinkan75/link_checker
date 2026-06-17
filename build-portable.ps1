@@ -121,6 +121,7 @@ $portableReadme = @(
   "Notes:",
   "- Keep the whole folder together. Do not move only one cmd file.",
   "- Start Link Checker.exe starts the local server and opens the correct browser URL.",
+  "- The local server exits automatically after about 5 minutes with no open GUI page and no running work.",
   "- runtime\node.exe is bundled, so users do not need to install Node.js.",
   "- GUI checks automatically save logs under the logs folder.",
   "- External Link Analyzer imports report.json or external-links.csv and optional domain rules JSON.",

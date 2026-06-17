@@ -35,6 +35,8 @@ const ut1ApplyButton = document.querySelector("#ut1-apply-button");
 const ut1DownloadButton = document.querySelector("#ut1-download-button");
 const ut1CategoryTable = document.querySelector("#ut1-category-table");
 
+startSessionHeartbeat();
+
 const UT1_COMMON_CATEGORIES = new Set([
   "social_networks",
   "shortener",
@@ -73,6 +75,18 @@ const UT1_SECURITY_CATEGORIES = new Set([
 let currentAnalysis = null;
 let ut1Categories = [];
 let appliedUt1Rules = [];
+
+function startSessionHeartbeat() {
+  const send = () => fetch("/api/session/heartbeat", {
+    method: "POST",
+    cache: "no-store",
+    keepalive: true,
+  }).catch(() => {});
+
+  send();
+  setInterval(send, 30000);
+  window.addEventListener("pagehide", send);
+}
 
 pickLinksButton.addEventListener("click", () => {
   linksFileInput.click();

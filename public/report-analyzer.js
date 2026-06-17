@@ -21,6 +21,8 @@ const sourceList = document.querySelector("#source-list");
 const domainList = document.querySelector("#domain-list");
 const linksTable = document.querySelector("#links-table");
 
+startSessionHeartbeat();
+
 const ISSUE_LABELS = {
   not_found: "頁面不存在",
   protected: "網站防護阻擋",
@@ -35,6 +37,18 @@ const ISSUE_LABELS = {
 };
 
 let currentAnalysis = null;
+
+function startSessionHeartbeat() {
+  const send = () => fetch("/api/session/heartbeat", {
+    method: "POST",
+    cache: "no-store",
+    keepalive: true,
+  }).catch(() => {});
+
+  send();
+  setInterval(send, 30000);
+  window.addEventListener("pagehide", send);
+}
 
 reportFileInput.addEventListener("change", loadReportFile);
 
