@@ -26,3 +26,17 @@
 - 不先導入 AI 分類、動態 JS 渲染、PostgreSQL、server-client 或 eGov 登入。
 - 不做泛用 404 重試；404 二次確認應採條件式策略，避免拖慢整體掃描。
 
+### 404 二次確認 MVP
+
+- 以使用者可勾選的設定提供，GUI 預設開啟。
+- CLI 對應提供 `--confirm-404` 與 `--no-confirm-404`。
+- 執行時機放在主掃描完成後、輸出報告前，作為集中複查階段。
+- 第一版只針對同站 `404/410` 複查，外部連結先不納入。
+- 複查使用 `GET`，帶來源頁 `Referer` 與瀏覽器相容 User-Agent。
+- User-Agent 策略：一般掃描保留瀏覽器相容 UA 加工具識別；404 二次確認與保守模式使用純瀏覽器相容 UA；不使用或冒充 Googlebot UA。
+- 複查請求使用核心瀏覽器式 headers：`User-Agent`、`Accept`、`Accept-Language`、`Referer`；不預設手動加入 `Cache-Control: no-cache` 或強制覆蓋 `Accept-Encoding`。
+- 內建低速策略：每筆前加入 `1000-3000ms` jitter，全域複查併發 `2`，每 host 併發 `1`。
+- 第一版限制全域最多複查 `100` 筆、每 host 最多複查 `20` 筆，避免大量 404 拖慢報告產出。
+- 報告保留初次結果，新增 `confirmation`、`transientFailure`、`needsReview` 等欄位。
+- Analyzer 顯示是否啟用二次確認，以及「二次確認後已恢復 / 需複查 / 確認不存在」等狀態。
+
