@@ -6,7 +6,7 @@
 - P1 結果模型補強：已完成。
 - P2a URL 正規化策略 MVP：已完成。
 - P2b canonical key integration：未完成，必須在 P3 完成後、P7 TTL cache 前處理。
-- 下一個主要開發項目：P3 URL Inventory 與抽取/驗證分層。
+- 下一個主要開發項目：P3b 抽取 / 合併分層。
 
 ## 開發主軸
 
@@ -133,11 +133,13 @@ P2b 待辦：
 - canonical key 與實際 fetch URL 必須分離，避免 canonicalization 改變實際檢查目標。
 - P2 不應單獨導入 aggressive 去重；否則效能提升有限但誤合併風險高。
 
-### P3. URL Inventory 與抽取/驗證分層（下一個主要項目）
+### P3. URL Inventory 與抽取/驗證分層（P3a 已完成，P3b 下一步）
 
 將目前 `processPage()` 中「抽取、來源合併、檢查」交織的流程整理成 inventory 導向。
 
 P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL，再驗證，避免大型頁面或多頁重複引用造成重複 promise、重複排程與重複請求。
+
+P3a 狀態：已完成。已新增 inventory skeleton、safe canonical inventory key、來源合併與 `summary.inventorySummary` metrics；尚未改動 `checkUrl()` key、`results` key 或實際 fetch 行為。
 
 實作策略：
 
@@ -148,7 +150,7 @@ P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL�
 
 實作切片：
 
-1. P3a inventory skeleton：
+1. P3a inventory skeleton（已完成）：
    - 新增 `this.inventory = new Map()`。
    - 新增 `addInventoryItem(resolvedUrl, source, link, intent)`。
    - 保存 `canonicalUrl`、`originalUrls`、`resolvedUrls`、`representativeUrl`、`sources`。

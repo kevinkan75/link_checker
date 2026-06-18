@@ -420,6 +420,13 @@ class LinkChecker {
     this.results = new Map();
     this.sources = new Map();
     this.externalLinks = new Map();
+    this.inventory = new Map();
+    this.inventoryMetrics = {
+      urlsDiscovered: 0,
+      validationSkippedByInventory: 0,
+      statusCacheHits: 0,
+      bodyCacheHits: 0,
+    };
     this.domainCategoryRules = [
       ...EXTERNAL_CATEGORY_RULES,
       ...normalizeDomainCategoryRules(options.domainCategoryRules || []),
@@ -520,18 +527,28 @@ class LinkChecker {
         this.addSource(resolved, source);
 
         const isExternal = !this.isCrawlOrigin(resolved);
+        const shouldCheck = this.shouldCheck(resolved);
+        const shouldCrawl = this.shouldCrawl(resolved, link, depth + 1);
+        this.addInventoryItem(resolved, source, link, {
+          isExternal,
+          shouldCheck,
+          shouldCrawl,
+          needsStatusCheck: shouldCheck,
+          needsBodyFetch: shouldCrawl,
+        });
+
         if (isExternal) {
           this.addExternalLink(resolved, link, source);
         }
 
-        if (this.shouldCheck(resolved)) {
+        if (shouldCheck) {
           checks.push(this.checkUrl(resolved, { requireBody: false }));
         } else {
           this.skippedExternal += 1;
           this.reporter?.externalSkipped(resolved, url);
         }
 
-        if (this.shouldCrawl(resolved, link, depth + 1)) {
+        if (shouldCrawl) {
           this.enqueuePage(resolved, depth + 1);
         }
       }
@@ -610,19 +627,74 @@ class LinkChecker {
     }
   }
 
+  addInventoryItem(resolvedUrl, source, link, intent) {
+    this.inventoryMetrics.urlsDiscovered += 1;
+
+    const canonicalUrl = canonicalizeCheckedUrl(resolvedUrl, "safe");
+    if (!this.inventory.has(canonicalUrl)) {
+      const classification = intent.isExternal
+        ? classifyExternalLink(resolvedUrl, link, this.domainCategoryRules)
+        : null;
+      this.inventory.set(canonicalUrl, {
+        canonicalUrl,
+        originalUrls: [],
+        resolvedUrls: [],
+        representativeUrl: resolvedUrl,
+        sources: [],
+        isExternal: intent.isExternal,
+        linkType: classification?.type || null,
+        categories: classification?.categories || [],
+        categorySources: classification?.categorySources || [],
+        shouldCheck: Boolean(intent.shouldCheck),
+        shouldCrawl: Boolean(intent.shouldCrawl),
+        needsStatusCheck: Boolean(intent.needsStatusCheck),
+        needsBodyFetch: Boolean(intent.needsBodyFetch),
+        checked: false,
+        bodyFetched: false,
+      });
+    }
+
+    const item = this.inventory.get(canonicalUrl);
+    addUnique(item.originalUrls, link.value);
+    addUnique(item.resolvedUrls, resolvedUrl);
+    item.isExternal = item.isExternal || intent.isExternal;
+    item.shouldCheck = item.shouldCheck || Boolean(intent.shouldCheck);
+    item.shouldCrawl = item.shouldCrawl || Boolean(intent.shouldCrawl);
+    item.needsStatusCheck = item.needsStatusCheck || Boolean(intent.needsStatusCheck);
+    item.needsBodyFetch = item.needsBodyFetch || Boolean(intent.needsBodyFetch);
+
+    const sourceEntry = {
+      page: source.page,
+      tag: source.tag,
+      attribute: source.attribute,
+      text: source.text,
+      rawValue: link.value,
+      resolvedUrl,
+    };
+    const key = `${sourceEntry.page}|${sourceEntry.tag}|${sourceEntry.attribute}|${sourceEntry.text}|${sourceEntry.resolvedUrl}`;
+    if (!item.sources.some((existing) => existing.key === key)) {
+      item.sources.push({ key, ...sourceEntry });
+    }
+  }
+
   async checkUrl(url, { requireBody }) {
     if (requireBody) {
-      if (!this.bodyCache.has(url)) {
+      if (this.bodyCache.has(url)) {
+        this.inventoryMetrics.bodyCacheHits += 1;
+      } else {
         this.bodyCache.set(url, this.fetchWithCache(url, true));
       }
       return this.bodyCache.get(url);
     }
 
     if (this.bodyCache.has(url)) {
+      this.inventoryMetrics.bodyCacheHits += 1;
       return this.bodyCache.get(url);
     }
 
-    if (!this.statusCache.has(url)) {
+    if (this.statusCache.has(url)) {
+      this.inventoryMetrics.statusCacheHits += 1;
+    } else {
       this.statusCache.set(url, this.fetchWithCache(url, false));
     }
     return this.statusCache.get(url);
@@ -812,6 +884,7 @@ class LinkChecker {
   buildReport() {
     const checked = [...this.results.values()];
     const externalLinks = this.buildExternalLinks(checked);
+    const inventorySummary = this.buildInventorySummary();
     const broken = checked
       .filter((result) => !result.ok)
       .map((result) => ({
@@ -858,10 +931,32 @@ class LinkChecker {
         externalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
         externalByType: countExternalByType(externalLinks),
         externalByCategory: countExternalByCategory(externalLinks),
+        inventorySummary,
       },
       broken,
       checked,
       externalLinks,
+    };
+  }
+
+  buildInventorySummary() {
+    const uniqueCanonicalUrls = this.inventory.size;
+    const sourceReferences = [...this.inventory.values()]
+      .reduce((total, item) => total + item.sources.length, 0);
+    const duplicateUrlReferences = Math.max(0, this.inventoryMetrics.urlsDiscovered - uniqueCanonicalUrls);
+    const sourcesMerged = Math.max(0, sourceReferences - uniqueCanonicalUrls);
+
+    return {
+      urlsDiscovered: this.inventoryMetrics.urlsDiscovered,
+      uniqueCanonicalUrls,
+      duplicateUrlReferences,
+      sourcesMerged,
+      validationSkippedByInventory: this.inventoryMetrics.validationSkippedByInventory,
+      statusCacheHits: this.inventoryMetrics.statusCacheHits,
+      bodyCacheHits: this.inventoryMetrics.bodyCacheHits,
+      inventoryMergeRatio: this.inventoryMetrics.urlsDiscovered > 0
+        ? Number((duplicateUrlReferences / this.inventoryMetrics.urlsDiscovered).toFixed(4))
+        : 0,
     };
   }
 
@@ -2354,6 +2449,12 @@ function countExternalByCategory(items) {
 
 function countUnique(items) {
   return new Set(items.filter(Boolean)).size;
+}
+
+function addUnique(items, value) {
+  if (value && !items.includes(value)) {
+    items.push(value);
+  }
 }
 
 function getIssueTypeLabel(issueType) {
