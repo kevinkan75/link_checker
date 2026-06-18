@@ -125,6 +125,7 @@ dist\LinkChecker-portable.zip
 - `--accept-language <value>`：送出的語言標頭，預設 `zh-TW,zh;q=0.9,en;q=0.8`。
 - `--user-agent <value>`：送出的 User-Agent。預設使用瀏覽器相容字串並包含 `LocalLinkChecker/1.0` 識別。
 - `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
+- `--canonical-strategy <safe|moderate|aggressive>`：設定報告中 `canonicalUrl` 的正規化策略，預設 `safe`；此設定不改變實際請求 URL。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
 - `--conservative`：套用低併發、隨機延遲、偏好 `GET` 與外部連結 `Referer` 的保守檢查設定。
 - `--prefer-get`：使用輕量 `GET` 檢查，不先嘗試 `HEAD`。

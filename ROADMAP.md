@@ -66,9 +66,19 @@ CDN/WAF 處理邊界：
 - 後續 TTL cache 需要 `checkedAt` 與 cache headers。
 - CDN/WAF 欄位能讓防護阻擋與真正壞連結分流，避免直接進入修壞連結流程。
 
-### P2. URL 正規化策略
+### P2. URL 正規化策略（MVP 已完成）
 
-將 URL 正規化從單一 `normalizeUrl()` 擴充為可配置策略，但預設保持保守，避免誤合併不同資源。
+狀態：MVP 已完成。已將 URL 正規化從單一 `normalizeUrl()` 擴充為可配置策略，預設保持保守，避免誤合併不同資源。
+
+目前完成範圍：
+
+- 已新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
+- 已保留 `normalizeUrl()` 作為 safe 相容包裝。
+- 已新增 CLI 設定入口：`--canonical-strategy safe|moderate|aggressive`，預設 `safe`。
+- GUI job API 已可接收 `canonicalStrategy`，但 GUI 先不顯示可見選項。
+- report options 已記錄 `canonicalStrategy`。
+- result `canonicalUrl` 會依策略輸出；`moderate/aggressive` 目前只作為 report canonicalization 與後續驗證用途。
+- canonical strategy 不改變實際 fetch URL，也尚未作為 cache/result/inventory key；這部分留到 P3。
 
 P2 應作為 P3 inventory 的 key foundation；性能收益主要來自 P3 的 unique inventory validation，P2 的目標是提供穩定、可測、可配置的 canonical key。
 
@@ -86,12 +96,12 @@ P2 應作為 P3 inventory 的 key foundation；性能收益主要來自 P3 的 u
 
 P2 MVP：
 
-- 新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
-- 保留 `normalizeUrl()` 作為相容包裝或逐步替換入口。
-- 將 `canonicalUrl` 明確作為 inventory / cache / report key，不等同於實際 fetch URL。
-- 新增 CLI 設定入口：`--canonical-strategy safe|moderate|aggressive`，預設 `safe`。
+- 已新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
+- 已保留 `normalizeUrl()` 作為相容包裝或逐步替換入口。
+- 已讓 `canonicalUrl` 作為 report canonical key；作為 inventory / cache key 的切換留到 P3，不等同於實際 fetch URL。
+- 已新增 CLI 設定入口：`--canonical-strategy safe|moderate|aggressive`，預設 `safe`。
 - GUI 先可不顯示策略選項，但 job options / report options 必須記錄 `canonicalStrategy`。
-- 新增 smoke tests 或測試案例：fragment、host 大小寫、default port、相對路徑、基本編碼。
+- 已新增 smoke tests 或測試案例：fragment、host 大小寫、default port、相對路徑、基本編碼。
 
 後續可選 moderate 策略：
 
@@ -105,7 +115,7 @@ P2 MVP：
 - 移除 `utm_*`、`fbclid`、`gclid` 等追蹤參數。
 - 自訂 canonical rules。
 - 不預設合併 `http` / `https`，除非使用者明確啟用。
-- 必須建立在 P3 inventory 已能保留 `originalUrls`、`resolvedUrls` 與所有 sources 後才可啟用。
+- 作為去重、cache 或 validation key 時，必須建立在 P3 inventory 已能保留 `originalUrls`、`resolvedUrls` 與所有 sources 後才可啟用。
 
 理由：
 

@@ -10,6 +10,8 @@ import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
+const TRACKING_QUERY_KEYS = new Set(["fbclid", "gclid", "msclkid", "yclid"]);
 const BODY_SIGNATURE_SNIPPET_LENGTH = 240;
 const WAF_HEADER_NAMES = [
   "server",
@@ -72,6 +74,7 @@ const DEFAULTS = {
   preferGet: false,
   externalReferer: false,
   conservativeMode: false,
+  canonicalStrategy: "safe",
   legacyTls: false,
   systemCa: false,
   userAgent: `${BROWSER_USER_AGENT} LocalLinkChecker/1.0`,
@@ -638,6 +641,7 @@ class LinkChecker {
       acceptLanguage: this.options.acceptLanguage,
       referer,
       preferGet: this.options.preferGet,
+      canonicalStrategy: this.options.canonicalStrategy,
       legacyTls: this.options.legacyTls,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
     });
@@ -694,6 +698,7 @@ class LinkChecker {
         acceptLanguage: this.options.acceptLanguage,
         referer: url,
         preferGet: this.options.preferGet,
+        canonicalStrategy: this.options.canonicalStrategy,
         legacyTls: this.options.legacyTls,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
@@ -738,6 +743,7 @@ class LinkChecker {
         acceptLanguage: this.options.acceptLanguage,
         referer: source.page,
         preferGet: this.options.preferGet,
+        canonicalStrategy: this.options.canonicalStrategy,
         legacyTls: this.options.legacyTls,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
@@ -773,6 +779,7 @@ class LinkChecker {
           acceptLanguage: this.options.acceptLanguage,
           referer,
           preferGet: this.options.preferGet,
+          canonicalStrategy: this.options.canonicalStrategy,
           legacyTls: this.options.legacyTls,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         });
@@ -834,6 +841,7 @@ class LinkChecker {
         preferGet: this.options.preferGet,
         externalReferer: this.options.externalReferer,
         conservativeMode: this.options.conservativeMode,
+        canonicalStrategy: this.options.canonicalStrategy,
         legacyTls: this.options.legacyTls,
         systemCa: this.options.systemCa,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
@@ -897,6 +905,7 @@ async function fetchUrl(url, {
   acceptLanguage,
   referer,
   preferGet = false,
+  canonicalStrategy = DEFAULTS.canonicalStrategy,
   legacyTls = false,
   scheduleRequest,
 }) {
@@ -914,6 +923,7 @@ async function fetchUrl(url, {
       acceptLanguage,
       referer,
       preferGet,
+      canonicalStrategy,
       legacyTls,
       scheduleRequest,
       started,
@@ -940,6 +950,7 @@ async function fetchUrlOnce(url, {
   acceptLanguage,
   referer,
   preferGet,
+  canonicalStrategy,
   legacyTls,
   scheduleRequest,
   started,
@@ -953,6 +964,7 @@ async function fetchUrlOnce(url, {
         userAgent,
         acceptLanguage,
         referer,
+        canonicalStrategy,
         legacyTls,
         readBody: true,
         scheduleRequest,
@@ -968,6 +980,7 @@ async function fetchUrlOnce(url, {
         userAgent,
         acceptLanguage,
         referer,
+        canonicalStrategy,
         legacyTls,
         readBody: false,
         scheduleRequest,
@@ -982,6 +995,7 @@ async function fetchUrlOnce(url, {
       userAgent,
       acceptLanguage,
       referer,
+      canonicalStrategy,
       legacyTls,
       readBody: false,
       scheduleRequest,
@@ -998,6 +1012,7 @@ async function fetchUrlOnce(url, {
       userAgent,
       acceptLanguage,
       referer,
+      canonicalStrategy,
       legacyTls,
       readBody: false,
       scheduleRequest,
@@ -1007,7 +1022,7 @@ async function fetchUrlOnce(url, {
     const cause = getErrorCause(error);
     return {
       url,
-      canonicalUrl: canonicalizeCheckedUrl(url),
+      canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
       checkedAt: new Date().toISOString(),
       ok: false,
       status: null,
@@ -1128,6 +1143,7 @@ async function request(url, method, {
   userAgent,
   acceptLanguage,
   referer,
+  canonicalStrategy,
   legacyTls,
   readBody,
   scheduleRequest,
@@ -1157,6 +1173,7 @@ async function request(url, method, {
           readBody,
           referer,
           started,
+          canonicalStrategy,
           redirectChain,
           maxRedirects,
           longRedirectThreshold,
@@ -1186,6 +1203,7 @@ async function request(url, method, {
           redirectChain,
           maxRedirects,
           longRedirectThreshold,
+          canonicalStrategy,
           started,
         });
       }
@@ -1204,6 +1222,7 @@ async function request(url, method, {
           redirectChain,
           maxRedirects,
           longRedirectThreshold,
+          canonicalStrategy,
           started,
         });
       }
@@ -1222,6 +1241,7 @@ async function request(url, method, {
       readBody,
       referer,
       started,
+      canonicalStrategy,
       redirectChain,
       maxRedirects,
       longRedirectThreshold,
@@ -1337,6 +1357,7 @@ async function buildResponseResult(response, {
   readBody,
   referer,
   started,
+  canonicalStrategy,
   redirectChain,
   maxRedirects,
   longRedirectThreshold,
@@ -1344,7 +1365,7 @@ async function buildResponseResult(response, {
   const contentType = response.headers.get("content-type");
   const result = {
     url,
-    canonicalUrl: canonicalizeCheckedUrl(url),
+    canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
     checkedAt: new Date().toISOString(),
     ok: response.status < 400,
     status: response.status,
@@ -1408,9 +1429,9 @@ async function releaseResponseBody(response, { maxDrainBytes = 64 * 1024 } = {})
   }
 }
 
-function canonicalizeCheckedUrl(value) {
+function canonicalizeCheckedUrl(value, strategy = DEFAULTS.canonicalStrategy) {
   try {
-    return normalizeUrl(value);
+    return canonicalizeUrl(value, { strategy });
   } catch {
     return value;
   }
@@ -1512,11 +1533,12 @@ function buildRedirectFailureResult({
   redirectChain,
   maxRedirects,
   longRedirectThreshold,
+  canonicalStrategy,
   started,
 }) {
   const result = {
     url,
-    canonicalUrl: canonicalizeCheckedUrl(url),
+    canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
     checkedAt: new Date().toISOString(),
     ok: false,
     status,
@@ -2022,13 +2044,78 @@ function getRouteDirectoryBaseUrl(pageUrl) {
 }
 
 function normalizeUrl(value) {
+  return canonicalizeUrl(value, { strategy: "safe" });
+}
+
+function canonicalizeUrl(value, { strategy = DEFAULTS.canonicalStrategy } = {}) {
+  const normalizedStrategy = normalizeCanonicalStrategy(strategy);
   const url = new URL(value);
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error(`Only http and https URLs are supported: ${value}`);
   }
 
   url.hash = "";
+
+  if (normalizedStrategy === "moderate" || normalizedStrategy === "aggressive") {
+    sortQueryParameters(url);
+    normalizePageTrailingSlash(url);
+  }
+
+  if (normalizedStrategy === "aggressive") {
+    removeTrackingParameters(url);
+    sortQueryParameters(url);
+  }
+
   return url.toString();
+}
+
+function normalizeCanonicalStrategy(value) {
+  const strategy = String(value || DEFAULTS.canonicalStrategy).toLowerCase();
+  if (!CANONICAL_STRATEGIES.has(strategy)) {
+    throw new Error(`Invalid canonical strategy "${value}". Use safe, moderate, or aggressive.`);
+  }
+  return strategy;
+}
+
+function sortQueryParameters(url) {
+  if (!url.search) {
+    return;
+  }
+
+  const entries = [...url.searchParams.entries()]
+    .sort(([leftKey, leftValue], [rightKey, rightValue]) => (
+      leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue)
+    ));
+  url.search = "";
+  for (const [key, value] of entries) {
+    url.searchParams.append(key, value);
+  }
+}
+
+function removeTrackingParameters(url) {
+  if (!url.search) {
+    return;
+  }
+
+  for (const key of [...url.searchParams.keys()]) {
+    const normalized = key.toLowerCase();
+    if (normalized.startsWith("utm_") || TRACKING_QUERY_KEYS.has(normalized)) {
+      url.searchParams.delete(key);
+    }
+  }
+}
+
+function normalizePageTrailingSlash(url) {
+  if (!url.pathname || url.pathname === "/" || url.pathname.endsWith("/") || url.search) {
+    return;
+  }
+
+  const lastSegment = url.pathname.split("/").pop() || "";
+  if (lastSegment.includes(".")) {
+    return;
+  }
+
+  url.pathname = `${url.pathname}/`;
 }
 
 function sameOrigin(left, right) {
@@ -2521,6 +2608,14 @@ function parseArgs(argv) {
       }
       continue;
     }
+    if (arg === "--canonical-strategy") {
+      const value = args.shift();
+      if (!value || value.startsWith("-")) {
+        throw new Error("--canonical-strategy requires safe, moderate, or aggressive");
+      }
+      options.canonicalStrategy = normalizeCanonicalStrategy(value);
+      continue;
+    }
     if (arg === "--output" || arg === "-o") {
       output = args.shift();
       if (!output) {
@@ -2559,6 +2654,7 @@ function parseArgs(argv) {
   options.retryCount = Math.max(0, Math.min(options.retryCount, 5));
   options.maxRedirects = Math.max(0, Math.min(options.maxRedirects, 20));
   options.longRedirectThreshold = Math.max(0, Math.min(options.longRedirectThreshold, options.maxRedirects));
+  options.canonicalStrategy = normalizeCanonicalStrategy(options.canonicalStrategy);
   return { startUrl, options, output, json, progress, verbose, domainRulesSource };
 }
 
@@ -2672,6 +2768,8 @@ Options:
   --user-agent <value> User-Agent header.
   --domain-rules <file-or-url>
                        JSON domain category rules: [{ "category": "...", "domains": ["example.com"] }].
+  --canonical-strategy <safe|moderate|aggressive>
+                       Canonical URL strategy for report keys. Default: ${DEFAULTS.canonicalStrategy}
   --external          Also check links that point to other domains.
                       External links are always inventoried in the JSON report.
   --conservative      Lower request rate and use browser-like checks to reduce blocking.
@@ -2817,7 +2915,7 @@ function restartWithSystemCa(args) {
   });
 }
 
-export { BROWSER_USER_AGENT, DEFAULTS, LinkChecker, applyConservativeDefaults, isSystemCaEnabled };
+export { BROWSER_USER_AGENT, DEFAULTS, LinkChecker, applyConservativeDefaults, canonicalizeUrl, isSystemCaEnabled };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {

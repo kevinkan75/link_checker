@@ -756,6 +756,7 @@ function parseJobOptions(input) {
     legacyTls: Boolean(input.legacyTls ?? baseOptions.legacyTls),
     systemCa: Boolean(input.systemCa ?? baseOptions.systemCa),
     conservativeMode: Boolean(input.conservativeMode),
+    canonicalStrategy: parseCanonicalStrategy(input.canonicalStrategy, baseOptions.canonicalStrategy),
     progressIntervalMs: DEFAULTS.progressIntervalMs,
     userAgent: typeof input.userAgent === "string" && input.userAgent.trim()
       ? input.userAgent.trim()
@@ -764,6 +765,14 @@ function parseJobOptions(input) {
       ? input.acceptLanguage.trim()
       : baseOptions.acceptLanguage,
   };
+}
+
+function parseCanonicalStrategy(value, fallback = DEFAULTS.canonicalStrategy) {
+  const strategy = String(value || fallback || "safe").toLowerCase();
+  if (["safe", "moderate", "aggressive"].includes(strategy)) {
+    return strategy;
+  }
+  throw httpError(400, "canonicalStrategy must be safe, moderate, or aggressive");
 }
 
 function parseRandomDelayOptions(input, defaults = DEFAULTS) {
