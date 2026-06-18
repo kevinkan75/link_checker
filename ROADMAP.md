@@ -2,12 +2,23 @@
 
 ## 狀態總覽
 
-- P0 單機版服務生命週期：已完成。
-- P1 結果模型補強：已完成。
-- P2a URL 正規化策略 MVP：已完成。
-- P2b canonical key integration：已完成。
-- P3 URL Inventory 與抽取/驗證分層：P3a/P3b/P3c/P3d 已完成。
-- 下一個主要開發項目：P4 404 / 410 二次確認 MVP。
+目前基礎資料模型已穩定，下一階段應進入降低誤判與治理分析功能。
+
+| 階段 | 狀態 | 重點 |
+| --- | --- | --- |
+| P0 | 已完成 | 單機版服務生命週期、idle shutdown、heartbeat。 |
+| P1 | 已完成 | 結果模型、WAF/Bot/CDN 診斷、cache headers。 |
+| P2 | 已完成 | URL canonical strategy 與 canonical key integration。 |
+| P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
+| P4 | 下一個主要項目 | 404 / 410 二次確認 MVP。 |
+
+近期順序：
+
+1. P4 404 / 410 二次確認 MVP。
+2. P5 外連風險規則。
+3. P6 歷史比對。
+4. P7 TTL 檢查快取。
+5. P8 增量掃描。
 
 ## 開發主軸
 
@@ -69,11 +80,9 @@ CDN/WAF 處理邊界：
 
 ### P2. URL 正規化策略（P2a/P2b 已完成）
 
-P2 是 P3 inventory 的 key foundation。性能收益主要來自 P3 的 unique inventory validation；P2 的目標是提供穩定、可測、可配置的 canonical key。
+P2 提供穩定、可測、可配置的 canonical key，並已和 P3 inventory / cache / report join 對齊。
 
-P2a MVP 狀態：已完成。
-
-已完成範圍：
+已完成能力：
 
 - 新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
 - 保留 `normalizeUrl()` 作為 safe 相容包裝。
@@ -81,51 +90,18 @@ P2a MVP 狀態：已完成。
 - GUI job API 已可接收 `canonicalStrategy`，但 GUI 先不顯示可見選項。
 - report options 已記錄 `canonicalStrategy`。
 - result `canonicalUrl` 會依策略輸出。
-- `moderate/aggressive` 可作為 inventory、cache、results、sources 與 externalLinks 的 canonical key。
-- canonical strategy 不改變實際 fetch URL；validator 保留 representative fetch URL。
-
-預設 safe 策略：
-
-- resolve 相對 URL。
-- 移除 fragment。
-- scheme / host 小寫。
-- 移除 default port：`80`、`443`。
-- 交由 `URL` 物件處理基本編碼與路徑正規化。
-- 不改變 query 順序。
-- 不移除 tracking query。
-- 不改變尾斜線。
-- 不合併 `http` / `https`。
-
-後續可選 moderate 策略：
-
-- query 參數排序。
-- 移除空 query。
-- 對明確頁面路徑套用尾斜線規則。
-- 必須 opt-in，不可預設啟用。
-
-後續可選 aggressive 策略：
-
-- 移除 `utm_*`、`fbclid`、`gclid` 等追蹤參數。
-- 自訂 canonical rules。
-- 不預設合併 `http` / `https`，除非使用者明確啟用。
-- 作為去重、cache 或 validation key 時，必須建立在 P3 inventory 已能保留 `originalUrls`、`resolvedUrls` 與所有 sources 後才可啟用。
-
-P2b canonical key integration：已完成。
-
-完成時機：
-
-- 已在 P3 inventory 完成後處理。
-- 已在 P7 TTL cache 前完成，避免 cache key 返工。
-- `canonicalUrl` 已作為 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 與 inventory 的 key。
-- `moderate/aggressive` 只影響 canonical key，不改變實際 fetch URL。
-
-P2b 已完成：
-
-- 將 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 對齊 canonical key。
+- `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 與 inventory 已使用 canonical key。
 - Validator 使用 inventory item 的 `canonicalUrl` 做 unique validation key。
-- 保留 representative fetch URL，避免 canonicalization 改變實際請求目標。
-- `moderate/aggressive` 只能在 inventory 已保留 `originalUrls`、`resolvedUrls`、sources 後，用於去重 / cache / validation key。
-- 報告呈現「檢查一次，影響 N 個來源」。
+- 保留 representative fetch URL，canonical strategy 不改變實際請求目標。
+- report 可呈現「檢查一次，影響 N 個來源」。
+
+Canonical strategy：
+
+| Strategy | 行為 | 使用建議 |
+| --- | --- | --- |
+| `safe` | resolve 相對 URL、移除 fragment、scheme/host 小寫、移除 default port。保留 query 順序、tracking query、尾斜線與 http/https 差異。 | 預設策略，低誤合併風險。 |
+| `moderate` | 在 safe 基礎上排序 query、移除空 query、對明確頁面路徑套用尾斜線規則。 | 可 opt-in 用於內容站常見重複 URL。 |
+| `aggressive` | 在 moderate 基礎上移除 `utm_*`、`fbclid`、`gclid` 等追蹤參數。 | 高風險 opt-in；不預設啟用。 |
 
 理由：
 
@@ -136,49 +112,16 @@ P2b 已完成：
 
 ### P3. URL Inventory 與抽取/驗證分層（P3a/P3b/P3c/P3d 已完成）
 
-將目前 `processPage()` 中「抽取、來源合併、檢查」交織的流程整理成 inventory 導向。
+P3 將 `processPage()` 中交織的抽取、來源合併與檢查流程整理成 inventory 導向。它是 P2/P3 的主要性能基礎：先合併 unique canonical URL，再驗證，降低大型頁面或跨頁重複引用造成的 promise、排程與請求壓力。
 
-P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL，再驗證，避免大型頁面或多頁重複引用造成重複 promise、重複排程與重複請求。
+已完成能力：
 
-P3a 狀態：已完成。已新增 inventory skeleton、safe canonical inventory key、來源合併與 `summary.inventorySummary` metrics；尚未改動 `checkUrl()` key、`results` key 或實際 fetch 行為。
-
-P3b 狀態：已完成。`processPage()` 會先寫 inventory，再透過 inventory-level scheduled flag 避免相同 safe canonical URL 重複加入 validation checks；仍沿用現有 `checkUrl(resolved)` 與既有 cache/result key。
-
-P3c 狀態：已完成。inventory validation state 已拆成 status/body 兩條 scheduled flag；頁面 crawl body fetch 會透過 inventory-aware wrapper 標記 `needsBodyFetch` / `bodyFetched`，不會被先前 status check 擋住。
-
-P3d 狀態：已完成。validation queue 已取代每頁內大量 `Promise.all(checks)`；頁面解析只 enqueue unique validation job，crawler completion 會等待 validation queue drain，避免 report 提早完成。
-
-實作策略：
-
-- 不要一次把整個資料流改成 inventory 架構。
-- 先做低風險的 inventory skeleton 與 metrics。
-- 保持既有 fetch/cache 行為，再逐步搬移 validation flow。
-- P2b canonical key integration 必須等 P3 穩定後再做。
-
-實作切片：
-
-1. P3a inventory skeleton（已完成）：
-   - 新增 `this.inventory = new Map()`。
-   - 新增 `addInventoryItem(resolvedUrl, source, link, intent)`。
-   - 保存 `canonicalUrl`、`originalUrls`、`resolvedUrls`、`representativeUrl`、`sources`。
-   - 暫時不改 `checkUrl()` key、不改 `results` key、不改實際 fetch 行為。
-   - 在現有 `addSource()` / `addExternalLink()` 附近補 inventory 寫入。
-   - report summary 先新增 metrics，可先只輸出 `inventorySummary`，不必輸出完整 inventory array。
-2. P3b 抽取 / 合併分層（已完成）：
-   - `processPage()` 抽 link 後先寫 inventory。
-   - check 前先看 inventory 是否已見過，減少同頁或跨頁 duplicate scheduling。
-   - 仍可沿用現有 `checkUrl(resolved)`，避免一次改動底層 map。
-3. P3c validation intent（已完成）：
-   - 加入 `needsStatusCheck`、`needsBodyFetch`、`checked`、`bodyFetched`。
-   - 支援 status check 升級 body fetch。
-   - 避免「先 HEAD / 輕 GET 後，頁面沒有 body 可爬」的問題。
-4. P3d validation queue（已完成）：
-   - 用 validation queue 取代每頁內大量 `Promise.all(checks)`。
-   - 控制大型頁面的 promise / backpressure。
-   - 這一步才會明顯改善大型站台效能。
-5. P2b canonical key integration（已完成）：
-   - P3 穩定後已把 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 對齊 canonical key。
-   - 這一步已在 P7 TTL cache 前完成。
+- 建立 `inventory`：以 canonical URL 合併 `originalUrls`、`resolvedUrls`、`representativeUrl` 與所有 `sources`。
+- `processPage()` 抽 link 後先寫 inventory，再依 inventory state 排程 validation。
+- 相同 canonical URL 不重複加入 status validation queue，並累計 `validationSkippedByInventory`。
+- validation intent 拆成 status/body 兩條狀態，支援先 status check、後續升級 body fetch。
+- validation queue 已取代每頁內大量 `Promise.all(checks)`；crawler completion 會等待 queue drain。
+- report summary 新增 `inventorySummary`，舊 report 主要 shape 保持相容。
 
 共用資料模型：
 
@@ -210,49 +153,32 @@ P3d 狀態：已完成。validation queue 已取代每頁內大量 `Promise.all(
 }
 ```
 
-最終目標：
+Inventory metrics：
 
-- 抽出 HTML link extraction 階段。
-- 抽出 URL resolve / canonicalize 階段。
-- 新增 inventory map：`Map<canonicalUrl, inventoryItem>`。
-- 將相同 canonical URL 的 sources 合併。
-- Validator 只接收 unique URL 或 inventory item。
-- 報告保留每個 URL 的所有出現位置。
-- 分離 crawl queue 與 validation queue：
-  - crawl queue 負責抓頁面與抽取 HTML。
-  - inventory queue 負責合併 URL、分類、決定 check/crawl intent。
-  - validation queue 負責檢查 unique inventory item。
-- 用 validation queue 取代每頁內大量 `Promise.all(checks)`，降低大型頁面產生的 promise 與排程壓力。
-- 新增 validation intent：同一 canonical URL 若先做 status check、後續又需要 body，必須能升級為 body fetch，不可漏爬頁面。
-- 建立 representative URL 選擇規則：
-  - 優先第一個 resolved URL。
-  - 優先非 fallback URL。
-  - 同站 crawl 情境優先同站 URL。
-  - fallback 成功時保留 `normalizedFrom` / `normalizationFallback` 證據。
-- 明確處理既有 `homepageFallback`、`getResolutionFallbackUrls()` 與 inventory 的關係，避免降低誤判邏輯被去重吃掉。
-- 報告新增 inventory / performance metrics：
-  - `urlsDiscovered`
-  - `uniqueCanonicalUrls`
-  - `duplicateUrlReferences`
-  - `sourcesMerged`
-  - `validationSkippedByInventory`
-  - `statusCacheHits`
-  - `bodyCacheHits`
-  - `inventoryMergeRatio`
-- Analyzer / GUI 必須相容沒有 inventory 與新 summary 欄位的舊 report。
+- `urlsDiscovered`
+- `uniqueCanonicalUrls`
+- `duplicateUrlReferences`
+- `sourcesMerged`
+- `validationSkippedByInventory`
+- `statusCacheHits`
+- `bodyCacheHits`
+- `inventoryMergeRatio`
 
-P3 前置風險控制：
+保留邊界：
 
-- 不在 P3a 就把 cache/result key 改成 `canonicalUrl`。
-- 不在 P3a 就讓 `moderate/aggressive` 影響去重、cache 或 validation key。
+- representative fetch URL 與 canonical key 必須分離。
 - `homepageFallback`、`getResolutionFallbackUrls()`、`normalizationFallback` 必須保留，不可被 inventory 去重吃掉。
-- GUI / Analyzer / CSV 目前依賴 `broken[].sources` 與 `externalLinks[]`，report shape 不可突然大改。
+- GUI / Analyzer / CSV 仍依賴 `broken[].sources` 與 `externalLinks[]`，report shape 不可突然大改。
+- `aggressive` canonicalization 仍應維持 opt-in，避免不同資源被錯誤合併。
 
 驗證矩陣：
 
 - fragment duplicate：`/a#one`、`/a#two`。
 - 多頁引用同一 URL，inventory metrics 能顯示合併。
 - 同 URL 多 source 能保留所有來源。
+- query order duplicate：`?b=2&a=1`、`?a=1&b=2` 在 `moderate` 策略下合併。
+- externalLinks canonical join 能對回 checked result。
+- broken report canonical join 能保留所有 sources。
 - fallback URL 成功時仍保留 `normalizationFallback`。
 - 起始頁 body fetch 不被 status check 覆蓋。
 - 舊 report Analyzer 不壞。
