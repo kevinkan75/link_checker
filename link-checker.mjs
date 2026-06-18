@@ -491,7 +491,13 @@ class LinkChecker {
     this.currentPages.set(url, depth);
     this.reporter?.pageStarted(url, depth);
     try {
-      const pageResult = await this.checkUrl(url, { requireBody: true });
+      const pageInventoryEntry = this.getInventoryEntry(url);
+      if (pageInventoryEntry) {
+        this.scheduleInventoryValidation(pageInventoryEntry, { requireBody: true });
+      }
+      const pageResult = pageInventoryEntry
+        ? await this.checkInventoryUrl(pageInventoryEntry, url, { requireBody: true })
+        : await this.checkUrl(url, { requireBody: true });
 
       if (url === this.startUrl && pageResult.finalUrl) {
         this.startFinalOrigin = new URL(pageResult.finalUrl).origin;
@@ -541,7 +547,7 @@ class LinkChecker {
           this.addExternalLink(resolved, link, source);
         }
 
-        if (shouldCheck && this.scheduleInventoryValidation(inventoryEntry)) {
+        if (shouldCheck && this.scheduleInventoryValidation(inventoryEntry, { requireBody: false })) {
           checks.push(this.checkInventoryUrl(inventoryEntry, resolved, { requireBody: false }));
         } else if (shouldCheck) {
           this.inventoryMetrics.validationSkippedByInventory += 1;
@@ -652,7 +658,8 @@ class LinkChecker {
         shouldCrawl: Boolean(intent.shouldCrawl),
         needsStatusCheck: Boolean(intent.needsStatusCheck),
         needsBodyFetch: Boolean(intent.needsBodyFetch),
-        validationScheduled: false,
+        statusValidationScheduled: false,
+        bodyValidationScheduled: false,
         checked: false,
         bodyFetched: false,
       });
@@ -685,12 +692,29 @@ class LinkChecker {
     return { item, canonicalUrl, isNewCanonical, sourceAdded };
   }
 
-  scheduleInventoryValidation({ item }) {
-    if (item.validationScheduled || item.checked || item.bodyFetched) {
+  getInventoryEntry(url) {
+    const canonicalUrl = canonicalizeCheckedUrl(url, "safe");
+    const item = this.inventory.get(canonicalUrl);
+    return item ? { item, canonicalUrl, isNewCanonical: false, sourceAdded: false } : null;
+  }
+
+  scheduleInventoryValidation({ item }, { requireBody }) {
+    if (requireBody) {
+      item.needsBodyFetch = true;
+      if (item.bodyValidationScheduled || item.bodyFetched) {
+        return false;
+      }
+
+      item.bodyValidationScheduled = true;
+      return true;
+    }
+
+    item.needsStatusCheck = true;
+    if (item.statusValidationScheduled || item.checked || item.bodyFetched) {
       return false;
     }
 
-    item.validationScheduled = true;
+    item.statusValidationScheduled = true;
     return true;
   }
 
