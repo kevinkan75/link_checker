@@ -33,30 +33,31 @@ CDN/WAF 處理邊界：
 - 已新增 GUI 手動關閉本機服務入口。
 - 已確認 dev / CLI 模式不預設啟用 idle shutdown。
 
-### P1. 結果模型補強
+### P1. 結果模型補強（已完成）
 
-先補強報告資料，讓後續 Analyzer、歷史比對、快取與治理規則都有穩定欄位可用。
+狀態：已完成。已補強報告資料，讓後續 Analyzer、歷史比對、快取與治理規則都有穩定欄位可用。
 
-- 每筆 checked result 新增 `checkedAt`。
-- 新增 `canonicalUrl`，明確區分原始 URL 與檢查用 URL。
-- 新增 `cacheHeaders`：
+- 每筆 checked result 已新增 `checkedAt`。
+- 已新增 `canonicalUrl`，明確區分原始 URL 與檢查用 URL。
+- 已新增 `cacheHeaders`：
   - `cacheControl`
   - `etag`
   - `expires`
   - `lastModified`
   - `age`
   - `vary`
-- 新增 `contentLength`。
-- 新增 CDN/WAF 診斷欄位：
+- 已新增 `contentLength`。
+- 已新增 CDN/WAF 診斷欄位：
   - `wafHeaders`
   - `blockedReason`
   - `blockedRuleId`
   - `bodySignature`
   - `suspectedWaf`
   - `suspectedBot`
-- 保留既有 `finalUrl`、`redirectChain`、`elapsedMs`、`contentType`、`server`、`diagnosis`。
-- `bodySignature` 只保存摘要與特徵，不保存完整 body；建議包含 `signatureType`、`matchedPatterns`、`bodyHash`、`title` 與 sanitized snippet。
-- CSV / JSON / GUI Analyzer 逐步顯示重要欄位，不一次塞滿 UI。
+- 已保留既有 `finalUrl`、`redirectChain`、`elapsedMs`、`contentType`、`server`、`diagnosis`。
+- `bodySignature` 只保存摘要與特徵，不保存完整 body；包含 `signatureType`、`matchedPatterns`、`bodyHash`、`title` 與 sanitized snippet。
+- CSV / JSON / GUI Analyzer 已逐步顯示重要欄位，避免一次塞滿 UI。
+- 已通過本機 smoke test：確認 404 與 Cloudflare-like 403 報告會輸出 P1 欄位與 WAF/Bot 診斷。
 
 理由：
 

@@ -868,6 +868,15 @@ function renderBrokenItem(item) {
   header.append(statusCode, metaBadge(item.method || "HTTP"), metaBadge(item.status ? `Status ${item.status}` : "No status"));
 
   row.append(header, detailLine("URL", item.url));
+  if (item.checkedAt) {
+    row.append(detailLine("檢查時間", item.checkedAt));
+  }
+  if (item.canonicalUrl && item.canonicalUrl !== item.url) {
+    row.append(detailLine("Canonical URL", item.canonicalUrl));
+  }
+  if (item.contentLength !== null && item.contentLength !== undefined) {
+    row.append(detailLine("Content-Length", item.contentLength));
+  }
 
   if (item.redirected) {
     row.append(detailLine("轉址", `${item.redirectCount} 次轉址，最終 URL：${item.finalUrl}`));
@@ -1055,5 +1064,11 @@ function formatDiagnosis(item) {
     return item.diagnosis || `${status}，伺服器拒絕目前工具請求，需人工確認。`;
   }
   const evidence = item.protection?.evidence?.join("、");
-  return evidence ? `${status}，證據：${evidence}` : status;
+  const diagnostics = [
+    evidence ? `證據：${evidence}` : "",
+    item.blockedReason ? `原因：${item.blockedReason}` : "",
+    item.suspectedWaf ? "疑似 WAF" : "",
+    item.suspectedBot ? "疑似 Bot challenge" : "",
+  ].filter(Boolean).join("，");
+  return diagnostics ? `${status}，${diagnostics}` : status;
 }

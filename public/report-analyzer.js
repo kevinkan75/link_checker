@@ -153,9 +153,19 @@ function normalizeBrokenItems(items) {
       status: item.status ?? "",
       issueType: item.issueType || "",
       classification: item.classification || "",
+      checkedAt: item.checkedAt || "",
+      canonicalUrl: item.canonicalUrl || "",
       method: item.method || "",
       finalUrl: item.finalUrl || "",
       contentType: item.contentType || "",
+      contentLength: item.contentLength ?? "",
+      cacheHeaders: item.cacheHeaders && typeof item.cacheHeaders === "object" ? item.cacheHeaders : {},
+      wafHeaders: item.wafHeaders && typeof item.wafHeaders === "object" ? item.wafHeaders : {},
+      blockedReason: item.blockedReason || "",
+      blockedRuleId: item.blockedRuleId || "",
+      bodySignature: item.bodySignature && typeof item.bodySignature === "object" ? item.bodySignature : null,
+      suspectedWaf: Boolean(item.suspectedWaf),
+      suspectedBot: Boolean(item.suspectedBot),
       elapsedMs: item.elapsedMs ?? "",
       error: item.error || "",
       diagnosis: item.diagnosis || "",
@@ -216,12 +226,16 @@ function applyFilters(analysis) {
     return [
       item.url,
       item.finalUrl,
+      item.canonicalUrl,
       item.domain,
       item.issueType,
       ISSUE_LABELS[item.issueType],
       item.status,
       item.error,
       item.diagnosis,
+      item.blockedReason,
+      item.bodySignature?.title,
+      item.bodySignature?.matchedPatterns?.join(" "),
       ...item.sources.flatMap((source) => [source.page, source.tag, source.attribute, source.text]),
     ].some((value) => String(value || "").toLowerCase().includes(query));
   });
@@ -383,10 +397,21 @@ function renderIssueItem(item) {
   row.append(
     header,
     detailLine("URL", item.url),
+    detailLine("檢查時間", item.checkedAt || "未記錄"),
+    detailLine("Canonical URL", item.canonicalUrl || item.url),
     detailLine("來源頁", formatSources(item.sources)),
     detailLine("建議", getIssueSuggestion(item)),
     detailLine("診斷", item.diagnosis || item.error || "無診斷資訊"),
   );
+  if (item.contentLength !== "") {
+    row.append(detailLine("Content-Length", item.contentLength));
+  }
+  if (item.cacheHeaders?.cacheControl) {
+    row.append(detailLine("Cache-Control", item.cacheHeaders.cacheControl));
+  }
+  if (item.blockedReason || item.suspectedWaf || item.suspectedBot) {
+    row.append(detailLine("防護診斷", formatProtectionDiagnostics(item)));
+  }
   return row;
 }
 
@@ -411,6 +436,23 @@ function formatSources(sources) {
   return remaining > 0
     ? `${visible.join("；")}；另有 ${formatNumber(remaining)} 個來源`
     : visible.join("；");
+}
+
+function formatProtectionDiagnostics(item) {
+  const parts = [];
+  if (item.blockedReason) {
+    parts.push(item.blockedReason);
+  }
+  if (item.suspectedWaf) {
+    parts.push("suspected WAF");
+  }
+  if (item.suspectedBot) {
+    parts.push("suspected bot challenge");
+  }
+  if (item.bodySignature?.matchedPatterns?.length) {
+    parts.push(`patterns: ${item.bodySignature.matchedPatterns.join(", ")}`);
+  }
+  return parts.join("；") || "無";
 }
 
 function detailLine(label, value) {
@@ -572,9 +614,16 @@ function makeBrokenCsv(items) {
     "issueLabel",
     "status",
     "url",
+    "canonicalUrl",
+    "checkedAt",
     "finalUrl",
     "domain",
     "method",
+    "contentLength",
+    "cacheControl",
+    "suspectedWaf",
+    "suspectedBot",
+    "blockedReason",
     "sourcePage",
     "tag",
     "attribute",
@@ -590,9 +639,16 @@ function makeBrokenCsv(items) {
         getIssueLabel(item.issueType),
         item.status,
         item.url,
+        item.canonicalUrl,
+        item.checkedAt,
         item.finalUrl,
         item.domain,
         item.method,
+        item.contentLength,
+        item.cacheHeaders?.cacheControl || "",
+        item.suspectedWaf ? "yes" : "no",
+        item.suspectedBot ? "yes" : "no",
+        item.blockedReason,
         source.page || "",
         source.tag || "",
         source.attribute || "",

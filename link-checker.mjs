@@ -5,10 +5,43 @@ import { spawn } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
 import tls from "node:tls";
+import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const BODY_SIGNATURE_SNIPPET_LENGTH = 240;
+const WAF_HEADER_NAMES = [
+  "server",
+  "cf-ray",
+  "cf-cache-status",
+  "akamai-origin-hop",
+  "x-akamai-request-id",
+  "x-sucuri-id",
+  "x-sucuri-cache",
+  "x-iinfo",
+  "x-cdn",
+  "x-waf-rule-id",
+  "x-mod-security-message",
+  "x-blocked-by",
+];
+const BLOCK_RULE_HEADER_NAMES = [
+  "x-waf-rule-id",
+  "x-mod-security-message",
+  "x-blocked-by",
+  "x-sucuri-block",
+];
+const PROTECTION_BODY_PATTERNS = [
+  { id: "cloudflare_attention_required", text: "attention required! | cloudflare", provider: "Cloudflare", reason: "cloudflare_challenge", suspectedWaf: true, suspectedBot: true, evidence: "Cloudflare challenge page" },
+  { id: "cloudflare_challenge_platform", text: "/cdn-cgi/challenge-platform", provider: "Cloudflare", reason: "cloudflare_challenge", suspectedWaf: true, suspectedBot: true, evidence: "Cloudflare challenge page" },
+  { id: "cloudflare_just_a_moment", text: "just a moment...", provider: "Cloudflare", reason: "cloudflare_browser_verification", suspectedWaf: true, suspectedBot: true, evidence: "Cloudflare browser verification page" },
+  { id: "imperva_incapsula", text: "incapsula incident id", provider: "Imperva", reason: "imperva_block", suspectedWaf: true, suspectedBot: false, evidence: "Imperva/Incapsula block page" },
+  { id: "sucuri_firewall", text: "sucuri website firewall", provider: "Sucuri", reason: "sucuri_firewall", suspectedWaf: true, suspectedBot: false, evidence: "Sucuri firewall page" },
+  { id: "captcha", text: "captcha", provider: null, reason: "captcha_or_challenge", suspectedWaf: false, suspectedBot: true, evidence: "CAPTCHA wording" },
+  { id: "bot_verification", text: "bot verification", provider: null, reason: "bot_verification", suspectedWaf: false, suspectedBot: true, evidence: "Bot verification wording" },
+  { id: "access_denied", text: "access denied", provider: null, reason: "access_denied_wording", suspectedWaf: false, suspectedBot: false, evidence: "Access denied wording" },
+  { id: "request_blocked", text: "request blocked", provider: null, reason: "request_blocked_wording", suspectedWaf: true, suspectedBot: false, evidence: "Access denied wording" },
+];
 
 const CONSERVATIVE_DEFAULTS = {
   concurrency: 3,
@@ -835,7 +868,16 @@ class LinkChecker {
           status: result?.status ?? null,
           ok: result?.ok ?? null,
           method: result?.method || null,
+          checkedAt: result?.checkedAt || null,
+          canonicalUrl: result?.canonicalUrl || null,
           finalUrl: result?.finalUrl || null,
+          contentLength: result?.contentLength ?? null,
+          cacheHeaders: result?.cacheHeaders || null,
+          issueType: result?.issueType || null,
+          classification: result?.classification || null,
+          blockedReason: result?.blockedReason || null,
+          suspectedWaf: result?.suspectedWaf || false,
+          suspectedBot: result?.suspectedBot || false,
           sourceCount: item.sources.length,
           sources: item.sources.map(({ key, fallbackUrls, ...source }) => source),
         };
@@ -965,11 +1007,21 @@ async function fetchUrlOnce(url, {
     const cause = getErrorCause(error);
     return {
       url,
+      canonicalUrl: canonicalizeCheckedUrl(url),
+      checkedAt: new Date().toISOString(),
       ok: false,
       status: null,
       method: requireBody || forceGet || preferGet ? "GET" : "HEAD",
       finalUrl: null,
       contentType: null,
+      contentLength: null,
+      cacheHeaders: emptyCacheHeaders(),
+      wafHeaders: {},
+      blockedReason: null,
+      blockedRuleId: null,
+      bodySignature: null,
+      suspectedWaf: false,
+      suspectedBot: false,
       redirected: false,
       redirectCount: 0,
       redirectChain: [],
@@ -1292,13 +1344,23 @@ async function buildResponseResult(response, {
   const contentType = response.headers.get("content-type");
   const result = {
     url,
+    canonicalUrl: canonicalizeCheckedUrl(url),
+    checkedAt: new Date().toISOString(),
     ok: response.status < 400,
     status: response.status,
     method,
     finalMethod: currentMethod,
     finalUrl: response.url,
     contentType,
+    contentLength: parseContentLength(response.headers),
+    cacheHeaders: extractCacheHeaders(response.headers),
     server: response.headers.get("server"),
+    wafHeaders: extractWafHeaders(response.headers),
+    blockedReason: null,
+    blockedRuleId: extractBlockedRuleId(response.headers),
+    bodySignature: null,
+    suspectedWaf: false,
+    suspectedBot: false,
     requestReferer: referer || null,
     elapsedMs: Math.round(performance.now() - started),
     error: null,
@@ -1310,6 +1372,11 @@ async function buildResponseResult(response, {
     result.diagnosticBody = (await response.text()).slice(0, 4096);
   } else {
     await releaseResponseBody(response);
+  }
+
+  const signature = buildBodySignature(result.body || result.diagnosticBody || "");
+  if (signature && (!result.ok || signature.matchedPatterns.length > 0)) {
+    result.bodySignature = signature;
   }
 
   applyRedirectMetadata(result, {
@@ -1341,6 +1408,99 @@ async function releaseResponseBody(response, { maxDrainBytes = 64 * 1024 } = {})
   }
 }
 
+function canonicalizeCheckedUrl(value) {
+  try {
+    return normalizeUrl(value);
+  } catch {
+    return value;
+  }
+}
+
+function emptyCacheHeaders() {
+  return {
+    cacheControl: null,
+    etag: null,
+    expires: null,
+    lastModified: null,
+    age: null,
+    vary: null,
+  };
+}
+
+function extractCacheHeaders(headers) {
+  return {
+    cacheControl: headers.get("cache-control"),
+    etag: headers.get("etag"),
+    expires: headers.get("expires"),
+    lastModified: headers.get("last-modified"),
+    age: headers.get("age"),
+    vary: headers.get("vary"),
+  };
+}
+
+function extractWafHeaders(headers) {
+  const result = {};
+  for (const name of WAF_HEADER_NAMES) {
+    const value = headers.get(name);
+    if (value) {
+      result[toCamelCase(name)] = value;
+    }
+  }
+  return result;
+}
+
+function extractBlockedRuleId(headers) {
+  for (const name of BLOCK_RULE_HEADER_NAMES) {
+    const value = headers.get(name);
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function parseContentLength(headers) {
+  const value = Number.parseInt(headers.get("content-length") || "", 10);
+  return Number.isFinite(value) ? value : null;
+}
+
+function toCamelCase(headerName) {
+  return headerName.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function buildBodySignature(body) {
+  if (!body) {
+    return null;
+  }
+
+  const text = String(body);
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const lower = normalized.toLowerCase();
+  const matchedPatterns = PROTECTION_BODY_PATTERNS
+    .filter((pattern) => lower.includes(pattern.text))
+    .map((pattern) => pattern.id);
+
+  return {
+    signatureType: "html_text",
+    matchedPatterns,
+    bodyHash: createHash("sha256").update(text).digest("hex"),
+    title: extractTitle(text) || null,
+    snippet: sanitizeSnippet(normalized),
+  };
+}
+
+function sanitizeSnippet(value) {
+  return value
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+    .replace(/\b(?:\d[ -]*?){12,19}\b/g, "[number]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, BODY_SIGNATURE_SNIPPET_LENGTH);
+}
+
 function buildRedirectFailureResult({
   url,
   finalUrl,
@@ -1356,12 +1516,22 @@ function buildRedirectFailureResult({
 }) {
   const result = {
     url,
+    canonicalUrl: canonicalizeCheckedUrl(url),
+    checkedAt: new Date().toISOString(),
     ok: false,
     status,
     method,
     finalUrl,
     contentType: null,
+    contentLength: null,
+    cacheHeaders: emptyCacheHeaders(),
     server: null,
+    wafHeaders: {},
+    blockedReason: null,
+    blockedRuleId: null,
+    bodySignature: null,
+    suspectedWaf: false,
+    suspectedBot: false,
     elapsedMs: Math.round(performance.now() - started),
     error,
     classification: "redirect_error",
@@ -1504,9 +1674,12 @@ function applyRedirectIssueClassification(result) {
 
 function applyResponseClassification(result, headers) {
   if (result.ok) {
+    applyBodySignatureDiagnostics(result);
     result.classification = "ok";
     result.issueType = "ok";
-    result.diagnosis = "HTTP response is successful.";
+    result.diagnosis = result.blockedReason
+      ? "HTTP response is successful, but the body contains challenge or block-page indicators."
+      : "HTTP response is successful.";
     return;
   }
 
@@ -1515,6 +1688,10 @@ function applyResponseClassification(result, headers) {
     result.classification = "protected";
     result.issueType = "protected";
     result.protection = protection;
+    result.blockedReason = protection.blockedReason;
+    result.blockedRuleId = result.blockedRuleId || protection.blockedRuleId || null;
+    result.suspectedWaf = protection.suspectedWaf;
+    result.suspectedBot = protection.suspectedBot;
     result.diagnosis = `Blocked by protection layer${protection.provider ? ` (${protection.provider})` : ""}.`;
     return;
   }
@@ -1533,40 +1710,67 @@ function applyResponseClassification(result, headers) {
     : "HTTP request failed.";
 }
 
+function applyBodySignatureDiagnostics(result) {
+  const matched = result.bodySignature?.matchedPatterns || [];
+  for (const id of matched) {
+    const pattern = PROTECTION_BODY_PATTERNS.find((item) => item.id === id);
+    if (!pattern) {
+      continue;
+    }
+    result.blockedReason = result.blockedReason || pattern.reason;
+    result.suspectedWaf = result.suspectedWaf || pattern.suspectedWaf;
+    result.suspectedBot = result.suspectedBot || pattern.suspectedBot;
+  }
+}
+
 function detectProtectionLayer(result, headers) {
   const server = (result.server || "").toLowerCase();
   const body = (result.body || result.diagnosticBody || "").toLowerCase();
   const title = extractTitle(result.body || result.diagnosticBody || "");
   const statusLooksBlocked = result.status === 403 || result.status === 429 || result.status === 503;
   const evidence = [];
+  const matchedPatterns = [];
+  let blockedReason = null;
   let provider = null;
+  let suspectedWaf = false;
+  let suspectedBot = false;
 
   if (server.includes("cloudflare") || headers.get("cf-ray") || headers.get("cf-cache-status")) {
     provider = "Cloudflare";
+    blockedReason = blockedReason || "cloudflare_header";
+    suspectedWaf = true;
     evidence.push("Cloudflare response header");
-  }
-  if (body.includes("attention required! | cloudflare") || body.includes("/cdn-cgi/challenge-platform")) {
-    provider = "Cloudflare";
-    evidence.push("Cloudflare challenge page");
-  }
-  if (body.includes("just a moment...") && body.includes("cloudflare")) {
-    provider = "Cloudflare";
-    evidence.push("Cloudflare browser verification page");
   }
   if (server.includes("akamai") || headers.get("akamai-origin-hop")) {
     provider = provider || "Akamai";
+    blockedReason = blockedReason || "akamai_header";
+    suspectedWaf = true;
     evidence.push("Akamai response header");
-  }
-  if (server.includes("imperva") || body.includes("incapsula incident id")) {
-    provider = provider || "Imperva";
-    evidence.push("Imperva/Incapsula block page");
   }
   if (headers.get("x-sucuri-id") || body.includes("sucuri website firewall")) {
     provider = provider || "Sucuri";
-    evidence.push("Sucuri firewall page");
+    blockedReason = blockedReason || "sucuri_header";
+    suspectedWaf = true;
+    if (headers.get("x-sucuri-id")) {
+      evidence.push("Sucuri response header");
+    }
   }
-  if (body.includes("access denied") || body.includes("request blocked")) {
-    evidence.push("Access denied wording");
+
+  for (const pattern of PROTECTION_BODY_PATTERNS) {
+    if (!body.includes(pattern.text)) {
+      continue;
+    }
+    if (pattern.id === "cloudflare_just_a_moment" && !body.includes("cloudflare")) {
+      continue;
+    }
+    matchedPatterns.push(pattern.id);
+    provider = provider || pattern.provider;
+    blockedReason = blockedReason || pattern.reason;
+    suspectedWaf = suspectedWaf || pattern.suspectedWaf;
+    suspectedBot = suspectedBot || pattern.suspectedBot;
+    if (!evidence.includes(pattern.evidence)) {
+      evidence.push(pattern.evidence);
+    }
   }
 
   if (!statusLooksBlocked || evidence.length === 0) {
@@ -1577,6 +1781,11 @@ function detectProtectionLayer(result, headers) {
     provider,
     status: result.status,
     title,
+    blockedReason,
+    blockedRuleId: extractBlockedRuleId(headers),
+    matchedPatterns,
+    suspectedWaf,
+    suspectedBot,
     evidence,
   };
 }
