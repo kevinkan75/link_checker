@@ -70,6 +70,8 @@ CDN/WAF 處理邊界：
 
 將 URL 正規化從單一 `normalizeUrl()` 擴充為可配置策略，但預設保持保守，避免誤合併不同資源。
 
+P2 應作為 P3 inventory 的 key foundation；性能收益主要來自 P3 的 unique inventory validation，P2 的目標是提供穩定、可測、可配置的 canonical key。
+
 預設 safe 策略：
 
 - resolve 相對 URL。
@@ -77,27 +79,46 @@ CDN/WAF 處理邊界：
 - scheme / host 小寫。
 - 移除 default port：`80`、`443`。
 - 交由 `URL` 物件處理基本編碼與路徑正規化。
+- 不改變 query 順序。
+- 不移除 tracking query。
+- 不改變尾斜線。
+- 不合併 `http` / `https`。
+
+P2 MVP：
+
+- 新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
+- 保留 `normalizeUrl()` 作為相容包裝或逐步替換入口。
+- 將 `canonicalUrl` 明確作為 inventory / cache / report key，不等同於實際 fetch URL。
+- 新增 CLI 設定入口：`--canonical-strategy safe|moderate|aggressive`，預設 `safe`。
+- GUI 先可不顯示策略選項，但 job options / report options 必須記錄 `canonicalStrategy`。
+- 新增 smoke tests 或測試案例：fragment、host 大小寫、default port、相對路徑、基本編碼。
 
 後續可選 moderate 策略：
 
 - query 參數排序。
 - 移除空 query。
 - 對明確頁面路徑套用尾斜線規則。
+- 必須 opt-in，不可預設啟用。
 
 後續可選 aggressive 策略：
 
 - 移除 `utm_*`、`fbclid`、`gclid` 等追蹤參數。
 - 自訂 canonical rules。
 - 不預設合併 `http` / `https`，除非使用者明確啟用。
+- 必須建立在 P3 inventory 已能保留 `originalUrls`、`resolvedUrls` 與所有 sources 後才可啟用。
 
 理由：
 
 - 去重必須建立在一致的 canonical key 上。
 - 過度正規化會造成誤判，尤其是下載、搜尋、API、語系與分頁 URL。
+- canonical key 與實際 fetch URL 必須分離，避免 canonicalization 改變實際檢查目標。
+- P2 不應單獨導入 aggressive 去重；否則效能提升有限但誤合併風險高。
 
 ### P3. URL Inventory 與抽取/驗證分層
 
 將目前 `processPage()` 中「抽取、來源合併、檢查」交織的流程整理成 inventory 導向。
+
+P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL，再驗證，避免大型頁面或多頁重複引用造成重複 promise、重複排程與重複請求。
 
 建議資料模型：
 
@@ -105,6 +126,8 @@ CDN/WAF 處理邊界：
 {
   canonicalUrl,
   originalUrls: [],
+  resolvedUrls: [],
+  representativeUrl,
   sources: [
     {
       page,
@@ -119,7 +142,11 @@ CDN/WAF 處理邊界：
   linkType,
   categories,
   shouldCheck,
-  shouldCrawl
+  shouldCrawl,
+  needsStatusCheck,
+  needsBodyFetch,
+  checked,
+  bodyFetched
 }
 ```
 
@@ -130,12 +157,38 @@ CDN/WAF 處理邊界：
 - 將相同 canonical URL 的 sources 合併。
 - Validator 只接收 unique URL 或 inventory item。
 - 報告保留每個 URL 的所有出現位置。
+- 新增 inventory map：`Map<canonicalUrl, inventoryItem>`。
+- 將 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 逐步改以 canonical key 對齊。
+- 分離 crawl queue 與 validation queue：
+  - crawl queue 負責抓頁面與抽取 HTML。
+  - inventory queue 負責合併 URL、分類、決定 check/crawl intent。
+  - validation queue 負責檢查 unique inventory item。
+- 用 validation queue 取代每頁內大量 `Promise.all(checks)`，降低大型頁面產生的 promise 與排程壓力。
+- 新增 validation intent：同一 canonical URL 若先做 status check、後續又需要 body，必須能升級為 body fetch，不可漏爬頁面。
+- 建立 representative URL 選擇規則：
+  - 優先第一個 resolved URL。
+  - 優先非 fallback URL。
+  - 同站 crawl 情境優先同站 URL。
+  - fallback 成功時保留 `normalizedFrom` / `normalizationFallback` 證據。
+- 明確處理既有 `homepageFallback`、`getResolutionFallbackUrls()` 與 inventory 的關係，避免降低誤判邏輯被去重吃掉。
+- 報告新增 inventory / performance metrics：
+  - `urlsDiscovered`
+  - `uniqueCanonicalUrls`
+  - `duplicateUrlReferences`
+  - `sourcesMerged`
+  - `validationSkippedByInventory`
+  - `statusCacheHits`
+  - `bodyCacheHits`
+  - `inventoryMergeRatio`
+- Analyzer / GUI 必須相容沒有 inventory 與新 summary 欄位的舊 report。
 
 理由：
 
 - 同一外部 URL 在多個頁面出現時，只檢查一次。
 - 能清楚呈現「檢查一次、影響 N 個頁面」。
 - 這是 TTL cache、歷史比對、增量掃描與分級排程的共同基礎。
+- P3 的 queue/backpressure 才是真正改善大型站台效能的主體；P2 只是提供穩定 canonical key。
+- inventory 必須保留原始 URL 與所有來源，才能安全支撐後續 moderate/aggressive canonicalization。
 
 ### P4. 404 / 410 二次確認 MVP
 
