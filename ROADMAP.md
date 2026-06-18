@@ -5,8 +5,9 @@
 - P0 單機版服務生命週期：已完成。
 - P1 結果模型補強：已完成。
 - P2a URL 正規化策略 MVP：已完成。
-- P2b canonical key integration：下一個主要開發項目，必須在 P7 TTL cache 前處理。
+- P2b canonical key integration：已完成。
 - P3 URL Inventory 與抽取/驗證分層：P3a/P3b/P3c/P3d 已完成。
+- 下一個主要開發項目：P4 404 / 410 二次確認 MVP。
 
 ## 開發主軸
 
@@ -66,7 +67,7 @@ CDN/WAF 處理邊界：
 - 後續 TTL cache 需要 `checkedAt` 與 cache headers。
 - CDN/WAF 欄位能讓防護阻擋與真正壞連結分流，避免直接進入修壞連結流程。
 
-### P2. URL 正規化策略（P2a 已完成，P2b 待 P3 後完成）
+### P2. URL 正規化策略（P2a/P2b 已完成）
 
 P2 是 P3 inventory 的 key foundation。性能收益主要來自 P3 的 unique inventory validation；P2 的目標是提供穩定、可測、可配置的 canonical key。
 
@@ -80,8 +81,8 @@ P2a MVP 狀態：已完成。
 - GUI job API 已可接收 `canonicalStrategy`，但 GUI 先不顯示可見選項。
 - report options 已記錄 `canonicalStrategy`。
 - result `canonicalUrl` 會依策略輸出。
-- `moderate/aggressive` 目前只作為 report canonicalization 與後續驗證用途。
-- canonical strategy 不改變實際 fetch URL，也尚未作為 cache/result/inventory key。
+- `moderate/aggressive` 可作為 inventory、cache、results、sources 與 externalLinks 的 canonical key。
+- canonical strategy 不改變實際 fetch URL；validator 保留 representative fetch URL。
 
 預設 safe 策略：
 
@@ -109,16 +110,16 @@ P2a MVP 狀態：已完成。
 - 不預設合併 `http` / `https`，除非使用者明確啟用。
 - 作為去重、cache 或 validation key 時，必須建立在 P3 inventory 已能保留 `originalUrls`、`resolvedUrls` 與所有 sources 後才可啟用。
 
-P2b canonical key integration：未完成。
+P2b canonical key integration：已完成。
 
 完成時機：
 
-- 必須在 P3 inventory 完成後處理。
-- 必須在 P7 TTL cache 前完成，避免 cache key 返工。
-- 不應在 P3 前把 `canonicalUrl` 改成 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 的 key。
-- 不應在 P3 前讓 `moderate/aggressive` 影響實際去重、cache 或 validation key。
+- 已在 P3 inventory 完成後處理。
+- 已在 P7 TTL cache 前完成，避免 cache key 返工。
+- `canonicalUrl` 已作為 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 與 inventory 的 key。
+- `moderate/aggressive` 只影響 canonical key，不改變實際 fetch URL。
 
-P2b 待辦：
+P2b 已完成：
 
 - 將 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 對齊 canonical key。
 - Validator 使用 inventory item 的 `canonicalUrl` 做 unique validation key。
@@ -175,9 +176,9 @@ P3d 狀態：已完成。validation queue 已取代每頁內大量 `Promise.all(
    - 用 validation queue 取代每頁內大量 `Promise.all(checks)`。
    - 控制大型頁面的 promise / backpressure。
    - 這一步才會明顯改善大型站台效能。
-5. P2b canonical key integration：
-   - P3 穩定後才把 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 對齊 canonical key。
-   - 這一步必須在 P7 TTL cache 前完成。
+5. P2b canonical key integration（已完成）：
+   - P3 穩定後已把 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 對齊 canonical key。
+   - 這一步已在 P7 TTL cache 前完成。
 
 共用資料模型：
 

@@ -609,22 +609,25 @@ class LinkChecker {
   }
 
   addSource(url, source) {
-    if (!this.sources.has(url)) {
-      this.sources.set(url, []);
+    const key = this.getCanonicalKey(url);
+    if (!this.sources.has(key)) {
+      this.sources.set(key, []);
     }
-    const list = this.sources.get(url);
-    const key = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
-    if (!list.some((item) => item.key === key)) {
-      list.push({ key, ...source });
+    const list = this.sources.get(key);
+    const sourceKey = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
+    if (!list.some((item) => item.key === sourceKey)) {
+      list.push({ key: sourceKey, ...source });
     }
   }
 
   addExternalLink(url, link, source) {
+    const key = this.getCanonicalKey(url);
     const parsed = new URL(url);
-    if (!this.externalLinks.has(url)) {
+    if (!this.externalLinks.has(key)) {
       const classification = classifyExternalLink(url, link, this.domainCategoryRules);
-      this.externalLinks.set(url, {
+      this.externalLinks.set(key, {
         url,
+        canonicalUrl: key,
         hostname: parsed.hostname,
         registrableDomain: getRegistrableDomain(parsed.hostname),
         type: classification.type,
@@ -634,17 +637,47 @@ class LinkChecker {
       });
     }
 
-    const item = this.externalLinks.get(url);
-    const key = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
-    if (!item.sources.some((existing) => existing.key === key)) {
-      item.sources.push({ key, ...source });
+    const item = this.externalLinks.get(key);
+    const sourceKey = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
+    if (!item.sources.some((existing) => existing.key === sourceKey)) {
+      item.sources.push({ key: sourceKey, ...source });
     }
+  }
+
+  getCanonicalKey(url) {
+    return canonicalizeCheckedUrl(url, this.options.canonicalStrategy);
+  }
+
+  getResultCanonicalKey(result) {
+    if (result?.normalizedFrom) {
+      return this.getCanonicalKey(result.normalizedFrom);
+    }
+    return this.getCanonicalKey(result?.url || "");
+  }
+
+  setResultForUrl(url, result) {
+    this.results.set(this.getCanonicalKey(url), stripBody(result));
+  }
+
+  hasResultForUrl(url) {
+    return this.results.has(this.getCanonicalKey(url));
+  }
+
+  getSourcesForUrl(url) {
+    return this.sources.get(this.getCanonicalKey(url)) || [];
+  }
+
+  getSourcesForResult(result) {
+    if (result?.normalizedFrom) {
+      return this.getSourcesForUrl(result.normalizedFrom);
+    }
+    return this.getSourcesForUrl(result.url);
   }
 
   addInventoryItem(resolvedUrl, source, link, intent) {
     this.inventoryMetrics.urlsDiscovered += 1;
 
-    const canonicalUrl = canonicalizeCheckedUrl(resolvedUrl, "safe");
+    const canonicalUrl = this.getCanonicalKey(resolvedUrl);
     const isNewCanonical = !this.inventory.has(canonicalUrl);
     if (isNewCanonical) {
       const classification = intent.isExternal
@@ -699,7 +732,7 @@ class LinkChecker {
   }
 
   getInventoryEntry(url) {
-    const canonicalUrl = canonicalizeCheckedUrl(url, "safe");
+    const canonicalUrl = this.getCanonicalKey(url);
     const item = this.inventory.get(canonicalUrl);
     return item ? { item, canonicalUrl, isNewCanonical: false, sourceAdded: false } : null;
   }
@@ -760,26 +793,27 @@ class LinkChecker {
   }
 
   async checkUrl(url, { requireBody }) {
+    const key = this.getCanonicalKey(url);
     if (requireBody) {
-      if (this.bodyCache.has(url)) {
+      if (this.bodyCache.has(key)) {
         this.inventoryMetrics.bodyCacheHits += 1;
       } else {
-        this.bodyCache.set(url, this.fetchWithCache(url, true));
+        this.bodyCache.set(key, this.fetchWithCache(url, true));
       }
-      return this.bodyCache.get(url);
+      return this.bodyCache.get(key);
     }
 
-    if (this.bodyCache.has(url)) {
+    if (this.bodyCache.has(key)) {
       this.inventoryMetrics.bodyCacheHits += 1;
-      return this.bodyCache.get(url);
+      return this.bodyCache.get(key);
     }
 
-    if (this.statusCache.has(url)) {
+    if (this.statusCache.has(key)) {
       this.inventoryMetrics.statusCacheHits += 1;
     } else {
-      this.statusCache.set(url, this.fetchWithCache(url, false));
+      this.statusCache.set(key, this.fetchWithCache(url, false));
     }
-    return this.statusCache.get(url);
+    return this.statusCache.get(key);
   }
 
   async fetchWithCache(url, requireBody) {
@@ -803,7 +837,7 @@ class LinkChecker {
     if (this.shouldConfirmWithHomepageFallback(url, result, requireBody)) {
       const homepageFallback = await this.confirmWithHomepageFallback(url);
       if (homepageFallback.ok) {
-        this.results.set(url, stripBody(homepageFallback));
+        this.setResultForUrl(url, homepageFallback);
         this.reporter?.requestFinished(homepageFallback);
         return homepageFallback;
       }
@@ -812,7 +846,7 @@ class LinkChecker {
     if (this.shouldConfirmWithSourceGet(url, result)) {
       const confirmed = await this.confirmWithSourceGet(url);
       if (confirmed.ok) {
-        this.results.set(url, stripBody(confirmed));
+        this.setResultForUrl(url, confirmed);
         this.reporter?.requestFinished(confirmed);
         return confirmed;
       }
@@ -821,13 +855,13 @@ class LinkChecker {
     if (!result.ok && result.status === 404) {
       const fallbackResult = await this.confirmWithFallbackUrls(url, result);
       if (fallbackResult !== result && fallbackResult.ok) {
-        this.results.set(url, stripBody(fallbackResult));
+        this.setResultForUrl(url, fallbackResult);
         this.reporter?.requestFinished(fallbackResult);
         return fallbackResult;
       }
     }
 
-    this.results.set(url, stripBody(result));
+    this.setResultForUrl(url, result);
     this.reporter?.requestFinished(result);
     return result;
   }
@@ -873,15 +907,15 @@ class LinkChecker {
   }
 
   shouldConfirmWithSourceGet(url, result) {
+    const sources = this.getSourcesForUrl(url);
     return !result.ok
       && result.status === 404
       && result.method === "GET"
-      && this.sources.has(url)
-      && this.sources.get(url).some((source) => sameOrigin(source.page, url));
+      && sources.some((source) => sameOrigin(source.page, url));
   }
 
   async confirmWithSourceGet(url) {
-    for (const source of this.sources.get(url) || []) {
+    for (const source of this.getSourcesForUrl(url)) {
       if (!sameOrigin(source.page, url)) {
         continue;
       }
@@ -911,13 +945,14 @@ class LinkChecker {
   }
 
   async confirmWithFallbackUrls(url, result) {
-    if (!this.sources.has(url)) {
+    const sources = this.getSourcesForUrl(url);
+    if (sources.length === 0) {
       return result;
     }
 
-    for (const source of this.sources.get(url) || []) {
+    for (const source of sources) {
       for (const fallbackUrl of source.fallbackUrls || []) {
-        if (fallbackUrl === url || this.results.has(fallbackUrl)) {
+        if (fallbackUrl === url || this.hasResultForUrl(fallbackUrl)) {
           continue;
         }
 
@@ -951,7 +986,7 @@ class LinkChecker {
   }
 
   getRequestReferer(url) {
-    const source = this.sources.get(url)?.[0]?.page;
+    const source = this.getSourcesForUrl(url)[0]?.page;
     if (!source) {
       return null;
     }
@@ -971,7 +1006,7 @@ class LinkChecker {
       .filter((result) => !result.ok)
       .map((result) => ({
         ...result,
-        sources: (this.sources.get(result.url) || []).map(({ key, ...source }) => source),
+        sources: this.getSourcesForResult(result).map(({ key, ...source }) => source),
       }))
       .sort((a, b) => a.url.localeCompare(b.url));
 
@@ -1043,10 +1078,10 @@ class LinkChecker {
   }
 
   buildExternalLinks(checked) {
-    const resultsByUrl = new Map(checked.map((result) => [result.url, result]));
+    const resultsByUrl = new Map(checked.map((result) => [this.getResultCanonicalKey(result), result]));
     return [...this.externalLinks.values()]
       .map((item) => {
-        const result = resultsByUrl.get(item.url);
+        const result = resultsByUrl.get(item.canonicalUrl || this.getCanonicalKey(item.url));
         return {
           ...item,
           checked: Boolean(result),
@@ -1054,7 +1089,7 @@ class LinkChecker {
           ok: result?.ok ?? null,
           method: result?.method || null,
           checkedAt: result?.checkedAt || null,
-          canonicalUrl: result?.canonicalUrl || null,
+          canonicalUrl: result?.canonicalUrl || item.canonicalUrl || null,
           finalUrl: result?.finalUrl || null,
           contentLength: result?.contentLength ?? null,
           cacheHeaders: result?.cacheHeaders || null,
