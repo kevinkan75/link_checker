@@ -529,7 +529,7 @@ class LinkChecker {
         const isExternal = !this.isCrawlOrigin(resolved);
         const shouldCheck = this.shouldCheck(resolved);
         const shouldCrawl = this.shouldCrawl(resolved, link, depth + 1);
-        this.addInventoryItem(resolved, source, link, {
+        const inventoryEntry = this.addInventoryItem(resolved, source, link, {
           isExternal,
           shouldCheck,
           shouldCrawl,
@@ -541,8 +541,10 @@ class LinkChecker {
           this.addExternalLink(resolved, link, source);
         }
 
-        if (shouldCheck) {
-          checks.push(this.checkUrl(resolved, { requireBody: false }));
+        if (shouldCheck && this.scheduleInventoryValidation(inventoryEntry)) {
+          checks.push(this.checkInventoryUrl(inventoryEntry, resolved, { requireBody: false }));
+        } else if (shouldCheck) {
+          this.inventoryMetrics.validationSkippedByInventory += 1;
         } else {
           this.skippedExternal += 1;
           this.reporter?.externalSkipped(resolved, url);
@@ -631,7 +633,8 @@ class LinkChecker {
     this.inventoryMetrics.urlsDiscovered += 1;
 
     const canonicalUrl = canonicalizeCheckedUrl(resolvedUrl, "safe");
-    if (!this.inventory.has(canonicalUrl)) {
+    const isNewCanonical = !this.inventory.has(canonicalUrl);
+    if (isNewCanonical) {
       const classification = intent.isExternal
         ? classifyExternalLink(resolvedUrl, link, this.domainCategoryRules)
         : null;
@@ -649,6 +652,7 @@ class LinkChecker {
         shouldCrawl: Boolean(intent.shouldCrawl),
         needsStatusCheck: Boolean(intent.needsStatusCheck),
         needsBodyFetch: Boolean(intent.needsBodyFetch),
+        validationScheduled: false,
         checked: false,
         bodyFetched: false,
       });
@@ -672,9 +676,31 @@ class LinkChecker {
       resolvedUrl,
     };
     const key = `${sourceEntry.page}|${sourceEntry.tag}|${sourceEntry.attribute}|${sourceEntry.text}|${sourceEntry.resolvedUrl}`;
+    let sourceAdded = false;
     if (!item.sources.some((existing) => existing.key === key)) {
       item.sources.push({ key, ...sourceEntry });
+      sourceAdded = true;
     }
+
+    return { item, canonicalUrl, isNewCanonical, sourceAdded };
+  }
+
+  scheduleInventoryValidation({ item }) {
+    if (item.validationScheduled || item.checked || item.bodyFetched) {
+      return false;
+    }
+
+    item.validationScheduled = true;
+    return true;
+  }
+
+  async checkInventoryUrl({ item }, url, options) {
+    const result = await this.checkUrl(url, options);
+    item.checked = true;
+    if (options.requireBody) {
+      item.bodyFetched = true;
+    }
+    return result;
   }
 
   async checkUrl(url, { requireBody }) {
