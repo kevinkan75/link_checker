@@ -1,4 +1,12 @@
-﻿# 開發路線紀錄
+# 開發路線紀錄
+
+## 狀態總覽
+
+- P0 單機版服務生命週期：已完成。
+- P1 結果模型補強：已完成。
+- P2a URL 正規化策略 MVP：已完成。
+- P2b canonical key integration：未完成，必須在 P3 完成後、P7 TTL cache 前處理。
+- 下一個主要開發項目：P3 URL Inventory 與抽取/驗證分層。
 
 ## 開發主軸
 
@@ -22,65 +30,58 @@ CDN/WAF 處理邊界：
 - 可採用 WAF/Bot/CDN 感知分類與診斷欄位。
 - 不採用繞過防護的策略，例如輪換身分、偽裝搜尋引擎、代理 IP 輪換、解 CAPTCHA 或模擬真人互動。
 
-## 重新安排後的開發順序
+## 開發順序
 
 ### P0. 單機版服務生命週期（已完成）
 
-狀態：已完成。已驗證 portable / exe 啟動模式的 idle shutdown、browser heartbeat、GUI 手動關閉服務入口，以及 dev / CLI 模式不預設啟用 idle shutdown。
+狀態：已完成並通過 smoke test。portable / exe 啟動模式已具備 idle shutdown、browser heartbeat、GUI 手動關閉服務入口；dev / CLI 模式不預設啟用 idle shutdown。
 
-- 已新增 portable / exe 模式的 idle shutdown。
-- 已新增 browser heartbeat。
-- 已新增 GUI 手動關閉本機服務入口。
-- 已確認 dev / CLI 模式不預設啟用 idle shutdown。
+已完成項目：
+
+- portable / exe 模式 idle shutdown。
+- browser heartbeat：GUI 每 `30s` 呼叫 `POST /api/session/heartbeat`。
+- GUI 手動關閉本機服務：`POST /api/shutdown`。
+- exe 啟動器預設帶入 `--idle-shutdown-ms 300000`。
+- idle shutdown 只在無執行中掃描、無停止中任務、queue 未運作，且超過 idle timeout 無 heartbeat 時觸發。
+- 關閉前盡量呼叫 `server.close()`，必要時以短暫 timeout 強制結束 process。
 
 ### P1. 結果模型補強（已完成）
 
-狀態：已完成。已補強報告資料，讓後續 Analyzer、歷史比對、快取與治理規則都有穩定欄位可用。
+狀態：已完成並通過本機 smoke test。404 與 Cloudflare-like 403 報告可輸出 P1 欄位與 WAF/Bot 診斷。
 
-- 每筆 checked result 已新增 `checkedAt`。
-- 已新增 `canonicalUrl`，明確區分原始 URL 與檢查用 URL。
-- 已新增 `cacheHeaders`：
-  - `cacheControl`
-  - `etag`
-  - `expires`
-  - `lastModified`
-  - `age`
-  - `vary`
-- 已新增 `contentLength`。
-- 已新增 CDN/WAF 診斷欄位：
-  - `wafHeaders`
-  - `blockedReason`
-  - `blockedRuleId`
-  - `bodySignature`
-  - `suspectedWaf`
-  - `suspectedBot`
-- 已保留既有 `finalUrl`、`redirectChain`、`elapsedMs`、`contentType`、`server`、`diagnosis`。
+已完成欄位：
+
+- 每筆 checked result 新增 `checkedAt`。
+- 新增 `canonicalUrl`，明確區分原始 URL 與檢查用 URL。
+- 新增 `cacheHeaders`：`cacheControl`、`etag`、`expires`、`lastModified`、`age`、`vary`。
+- 新增 `contentLength`。
+- 新增 CDN/WAF 診斷欄位：`wafHeaders`、`blockedReason`、`blockedRuleId`、`bodySignature`、`suspectedWaf`、`suspectedBot`。
+- 保留既有 `finalUrl`、`redirectChain`、`elapsedMs`、`contentType`、`server`、`diagnosis`。
 - `bodySignature` 只保存摘要與特徵，不保存完整 body；包含 `signatureType`、`matchedPatterns`、`bodyHash`、`title` 與 sanitized snippet。
 - CSV / JSON / GUI Analyzer 已逐步顯示重要欄位，避免一次塞滿 UI。
-- 已通過本機 smoke test：確認 404 與 Cloudflare-like 403 報告會輸出 P1 欄位與 WAF/Bot 診斷。
 
 理由：
 
-- 這是低風險、高價值工作。
 - 能立即改善「不是單純 200/404」的診斷能力。
 - 後續 TTL cache 需要 `checkedAt` 與 cache headers。
 - CDN/WAF 欄位能讓防護阻擋與真正壞連結分流，避免直接進入修壞連結流程。
 
-### P2. URL 正規化策略（MVP 已完成）
+### P2. URL 正規化策略（P2a 已完成，P2b 待 P3 後完成）
 
-狀態：MVP 已完成。已將 URL 正規化從單一 `normalizeUrl()` 擴充為可配置策略，預設保持保守，避免誤合併不同資源。
+P2 是 P3 inventory 的 key foundation。性能收益主要來自 P3 的 unique inventory validation；P2 的目標是提供穩定、可測、可配置的 canonical key。
 
-目前完成範圍：
+P2a MVP 狀態：已完成。
 
-- 已新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
-- 已保留 `normalizeUrl()` 作為 safe 相容包裝。
-- 已新增 CLI 設定入口：`--canonical-strategy safe|moderate|aggressive`，預設 `safe`。
+已完成範圍：
+
+- 新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
+- 保留 `normalizeUrl()` 作為 safe 相容包裝。
+- 新增 CLI 設定入口：`--canonical-strategy safe|moderate|aggressive`，預設 `safe`。
 - GUI job API 已可接收 `canonicalStrategy`，但 GUI 先不顯示可見選項。
 - report options 已記錄 `canonicalStrategy`。
-- result `canonicalUrl` 會依策略輸出；`moderate/aggressive` 目前只作為 report canonicalization 與後續驗證用途。
-- canonical strategy 不改變實際 fetch URL，也尚未作為 cache/result/inventory key；這部分留到 P3。
-
-P2 應作為 P3 inventory 的 key foundation；性能收益主要來自 P3 的 unique inventory validation，P2 的目標是提供穩定、可測、可配置的 canonical key。
+- result `canonicalUrl` 會依策略輸出。
+- `moderate/aggressive` 目前只作為 report canonicalization 與後續驗證用途。
+- canonical strategy 不改變實際 fetch URL，也尚未作為 cache/result/inventory key。
 
 預設 safe 策略：
 
@@ -93,15 +94,6 @@ P2 應作為 P3 inventory 的 key foundation；性能收益主要來自 P3 的 u
 - 不移除 tracking query。
 - 不改變尾斜線。
 - 不合併 `http` / `https`。
-
-P2 MVP：
-
-- 已新增 `canonicalizeUrl(value, { strategy })`，預設 `safe`。
-- 已保留 `normalizeUrl()` 作為相容包裝或逐步替換入口。
-- 已讓 `canonicalUrl` 作為 report canonical key；作為 inventory / cache key 的切換留到 P3，不等同於實際 fetch URL。
-- 已新增 CLI 設定入口：`--canonical-strategy safe|moderate|aggressive`，預設 `safe`。
-- GUI 先可不顯示策略選項，但 job options / report options 必須記錄 `canonicalStrategy`。
-- 已新增 smoke tests 或測試案例：fragment、host 大小寫、default port、相對路徑、基本編碼。
 
 後續可選 moderate 策略：
 
@@ -117,6 +109,23 @@ P2 MVP：
 - 不預設合併 `http` / `https`，除非使用者明確啟用。
 - 作為去重、cache 或 validation key 時，必須建立在 P3 inventory 已能保留 `originalUrls`、`resolvedUrls` 與所有 sources 後才可啟用。
 
+P2b canonical key integration：未完成。
+
+完成時機：
+
+- 必須在 P3 inventory 完成後處理。
+- 必須在 P7 TTL cache 前完成，避免 cache key 返工。
+- 不應在 P3 前把 `canonicalUrl` 改成 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 的 key。
+- 不應在 P3 前讓 `moderate/aggressive` 影響實際去重、cache 或 validation key。
+
+P2b 待辦：
+
+- 將 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 對齊 canonical key。
+- Validator 使用 inventory item 的 `canonicalUrl` 做 unique validation key。
+- 保留 representative fetch URL，避免 canonicalization 改變實際請求目標。
+- `moderate/aggressive` 只能在 inventory 已保留 `originalUrls`、`resolvedUrls`、sources 後，用於去重 / cache / validation key。
+- 報告呈現「檢查一次，影響 N 個來源」。
+
 理由：
 
 - 去重必須建立在一致的 canonical key 上。
@@ -124,7 +133,7 @@ P2 MVP：
 - canonical key 與實際 fetch URL 必須分離，避免 canonicalization 改變實際檢查目標。
 - P2 不應單獨導入 aggressive 去重；否則效能提升有限但誤合併風險高。
 
-### P3. URL Inventory 與抽取/驗證分層
+### P3. URL Inventory 與抽取/驗證分層（下一個主要項目）
 
 將目前 `processPage()` 中「抽取、來源合併、檢查」交織的流程整理成 inventory 導向。
 
@@ -164,11 +173,10 @@ P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL�
 
 - 抽出 HTML link extraction 階段。
 - 抽出 URL resolve / canonicalize 階段。
+- 新增 inventory map：`Map<canonicalUrl, inventoryItem>`。
 - 將相同 canonical URL 的 sources 合併。
 - Validator 只接收 unique URL 或 inventory item。
 - 報告保留每個 URL 的所有出現位置。
-- 新增 inventory map：`Map<canonicalUrl, inventoryItem>`。
-- 將 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 逐步改以 canonical key 對齊。
 - 分離 crawl queue 與 validation queue：
   - crawl queue 負責抓頁面與抽取 HTML。
   - inventory queue 負責合併 URL、分類、決定 check/crawl intent。
@@ -197,7 +205,7 @@ P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL�
 - 同一外部 URL 在多個頁面出現時，只檢查一次。
 - 能清楚呈現「檢查一次、影響 N 個頁面」。
 - 這是 TTL cache、歷史比對、增量掃描與分級排程的共同基礎。
-- P3 的 queue/backpressure 才是真正改善大型站台效能的主體；P2 只是提供穩定 canonical key。
+- P3 的 queue/backpressure 才是真正改善大型站台效能的主體。
 - inventory 必須保留原始 URL 與所有來源，才能安全支撐後續 moderate/aggressive canonicalization。
 
 ### P4. 404 / 410 二次確認 MVP
@@ -283,7 +291,7 @@ P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL�
 
 ### P7. TTL 檢查快取
 
-在 result model 與 inventory 穩定後加入持久化快取，避免大型內容庫每次全站重打外部 URL。
+在 result model、inventory 與 P2b canonical key integration 穩定後加入持久化快取，避免大型內容庫每次全站重打外部 URL。
 
 建議 cache file：
 
@@ -327,7 +335,7 @@ CLI 可新增：
 理由：
 
 - 大型站台與外部連結檢查需要控制頻率。
-- 快取必須晚於 P1-P3，否則 key 與 result schema 容易返工。
+- 快取必須晚於 P1、P2b、P3，否則 key 與 result schema 容易返工。
 
 ### P8. 增量掃描
 
@@ -412,22 +420,8 @@ Analyzer 應在底層資料與規則結果穩定後補強，避免先做空 UI�
 - 不做泛用 404 重試；404 二次確認應採條件式策略，避免拖慢整體掃描。
 - 不以追蹤瀏覽器 process 作為關閉服務的主要機制；`Process.Start(url)` 無法可靠代表使用者是否仍開著該頁籤。
 - 不把單機版改成常駐 Windows Service；目前需求是可預期地收尾本機工具，而不是背景服務化。
-- 不預設啟用 aggressive URL canonicalization；避免把實際不同的資源錯誤合併。
+- 不預設啟用 aggressive URL canonicalization 作為去重、cache 或 validation key；避免把實際不同的資源錯誤合併。
 - 不做輪換 User-Agent、偽裝 Googlebot、代理 IP 輪換、解 CAPTCHA、模擬真人互動或其他繞過 WAF/Bot 防護的策略。
 - 不把 `200` 且 body 過短單獨判定為 `suspected_false_positive`；必須搭配 content-type、標頭、title 或 challenge pattern。
 - 不對明確 WAF/Bot challenge 做多次 aggressive retry；這類結果應保存證據並提示調整掃描策略或與站方協調。
 - 不保存完整 response body 作為診斷欄位，避免報告包含登入頁、錯誤頁或防護頁中的敏感內容。
-
-## 單機版服務生命週期 MVP（已完成）
-
-- 目標：使用者透過 exe 啟動 GUI 後，關閉或離開瀏覽器頁面時，本機 Node 服務能在合理時間內自動結束。
-- 狀態：已完成並通過 smoke test；`POST /api/session/heartbeat` 可更新 session，`POST /api/shutdown` 可在無執行中工作時關閉服務。
-- 採用 `idle shutdown + browser heartbeat + 手動關閉服務` 的設計。
-- exe 啟動器預設帶入 `--idle-shutdown-ms 300000`，讓 portable 模式在無使用者活動後約 5 分鐘自動關閉。
-- GUI 頁面每 `30s` 呼叫 `POST /api/session/heartbeat`，server 以最後一次 heartbeat 判斷是否仍有使用者正在操作。
-- idle shutdown 只在沒有執行中掃描、沒有停止中的任務、queue 未運作，且超過 idle timeout 沒有 heartbeat 時觸發。
-- 新增 `POST /api/shutdown` 作為 GUI 的「關閉本機服務」入口；若仍有掃描任務，應提示或拒絕直接關閉。
-- GUI 可在導覽列或設定區提供「關閉本機服務」按鈕，讓使用者不用開工作管理員處理殘留程序。
-- dev / CLI 模式不預設啟用 idle shutdown，避免開發或長時間分析時服務被意外關閉。
-- 服務關閉前應盡量呼叫 `server.close()`，必要時再以短暫 timeout 強制結束 process。
-- 文件需說明 portable 版本的服務會在無開啟 GUI 頁面且無工作執行時自動結束。
