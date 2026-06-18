@@ -5,8 +5,8 @@
 - P0 單機版服務生命週期：已完成。
 - P1 結果模型補強：已完成。
 - P2a URL 正規化策略 MVP：已完成。
-- P2b canonical key integration：未完成，必須在 P3 完成後、P7 TTL cache 前處理。
-- 下一個主要開發項目：P3d validation queue。
+- P2b canonical key integration：下一個主要開發項目，必須在 P7 TTL cache 前處理。
+- P3 URL Inventory 與抽取/驗證分層：P3a/P3b/P3c/P3d 已完成。
 
 ## 開發主軸
 
@@ -133,7 +133,7 @@ P2b 待辦：
 - canonical key 與實際 fetch URL 必須分離，避免 canonicalization 改變實際檢查目標。
 - P2 不應單獨導入 aggressive 去重；否則效能提升有限但誤合併風險高。
 
-### P3. URL Inventory 與抽取/驗證分層（P3a/P3b/P3c 已完成，P3d 下一步）
+### P3. URL Inventory 與抽取/驗證分層（P3a/P3b/P3c/P3d 已完成）
 
 將目前 `processPage()` 中「抽取、來源合併、檢查」交織的流程整理成 inventory 導向。
 
@@ -144,6 +144,8 @@ P3a 狀態：已完成。已新增 inventory skeleton、safe canonical inventory
 P3b 狀態：已完成。`processPage()` 會先寫 inventory，再透過 inventory-level scheduled flag 避免相同 safe canonical URL 重複加入 validation checks；仍沿用現有 `checkUrl(resolved)` 與既有 cache/result key。
 
 P3c 狀態：已完成。inventory validation state 已拆成 status/body 兩條 scheduled flag；頁面 crawl body fetch 會透過 inventory-aware wrapper 標記 `needsBodyFetch` / `bodyFetched`，不會被先前 status check 擋住。
+
+P3d 狀態：已完成。validation queue 已取代每頁內大量 `Promise.all(checks)`；頁面解析只 enqueue unique validation job，crawler completion 會等待 validation queue drain，避免 report 提早完成。
 
 實作策略：
 
@@ -169,7 +171,7 @@ P3c 狀態：已完成。inventory validation state 已拆成 status/body 兩條
    - 加入 `needsStatusCheck`、`needsBodyFetch`、`checked`、`bodyFetched`。
    - 支援 status check 升級 body fetch。
    - 避免「先 HEAD / 輕 GET 後，頁面沒有 body 可爬」的問題。
-4. P3d validation queue：
+4. P3d validation queue（已完成）：
    - 用 validation queue 取代每頁內大量 `Promise.all(checks)`。
    - 控制大型頁面的 promise / backpressure。
    - 這一步才會明顯改善大型站台效能。

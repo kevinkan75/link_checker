@@ -355,6 +355,7 @@ class ProgressReporter {
     const parts = [
       `Crawled ${this.checker.crawledPages.size}/${this.checker.options.maxPages} pages`,
       `Queued ${this.checker.pageQueue.length}`,
+      `Validation ${this.checker.validationQueue.length}/${this.checker.activeValidationTasks}`,
       `Checked ${this.checker.results.size} URLs`,
       `Active ${this.checker.fetchLimiter.active}`,
       `Host queues ${this.checker.hostScheduler.pendingCount()}`,
@@ -415,6 +416,9 @@ class LinkChecker {
     this.pageQueue = [{ url: this.startUrl, depth: 0 }];
     this.queuedPages = new Set([this.startUrl]);
     this.crawledPages = new Set();
+    this.validationQueue = [];
+    this.activeValidationTasks = 0;
+    this.validationError = null;
     this.statusCache = new Map();
     this.bodyCache = new Map();
     this.results = new Map();
@@ -453,6 +457,9 @@ class LinkChecker {
 
   async pageWorker() {
     while (true) {
+      if (this.validationError) {
+        throw this.validationError;
+      }
       if (this.stopped) {
         return;
       }
@@ -473,6 +480,8 @@ class LinkChecker {
   isCrawlFinished() {
     return this.stopped || (
       this.pageQueue.length === 0
+      && this.validationQueue.length === 0
+      && this.activeValidationTasks === 0
       && this.fetchLimiter.active === 0
       && !this.hostScheduler.hasPending()
     );
@@ -510,7 +519,6 @@ class LinkChecker {
       const pageBaseUrl = getDocumentBaseUrl(pageResult.body, pageResult.finalUrl || url);
       const links = extractLinks(pageResult.body, pageBaseUrl);
       this.reporter?.pageLinksFound(url, links.length);
-      const checks = [];
 
       for (const link of links) {
         if (this.stopped) {
@@ -548,7 +556,7 @@ class LinkChecker {
         }
 
         if (shouldCheck && this.scheduleInventoryValidation(inventoryEntry, { requireBody: false })) {
-          checks.push(this.checkInventoryUrl(inventoryEntry, resolved, { requireBody: false }));
+          this.enqueueValidation(inventoryEntry, resolved, { requireBody: false });
         } else if (shouldCheck) {
           this.inventoryMetrics.validationSkippedByInventory += 1;
         } else {
@@ -560,8 +568,6 @@ class LinkChecker {
           this.enqueuePage(resolved, depth + 1);
         }
       }
-
-      await Promise.all(checks);
     } finally {
       this.currentPages.delete(url);
     }
@@ -725,6 +731,32 @@ class LinkChecker {
       item.bodyFetched = true;
     }
     return result;
+  }
+
+  enqueueValidation(inventoryEntry, url, options) {
+    this.validationQueue.push({ inventoryEntry, url, options });
+    this.pumpValidationQueue();
+  }
+
+  pumpValidationQueue() {
+    while (
+      !this.stopped
+      && !this.validationError
+      && this.activeValidationTasks < this.options.concurrency
+      && this.validationQueue.length > 0
+    ) {
+      const job = this.validationQueue.shift();
+      this.activeValidationTasks += 1;
+      this.checkInventoryUrl(job.inventoryEntry, job.url, job.options)
+        .catch((error) => {
+          this.validationError = error;
+          this.stopped = true;
+        })
+        .finally(() => {
+          this.activeValidationTasks -= 1;
+          this.pumpValidationQueue();
+        });
+    }
   }
 
   async checkUrl(url, { requireBody }) {
