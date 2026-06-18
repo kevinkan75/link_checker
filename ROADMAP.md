@@ -139,7 +139,39 @@ P2b 待辦：
 
 P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL，再驗證，避免大型頁面或多頁重複引用造成重複 promise、重複排程與重複請求。
 
-建議資料模型：
+實作策略：
+
+- 不要一次把整個資料流改成 inventory 架構。
+- 先做低風險的 inventory skeleton 與 metrics。
+- 保持既有 fetch/cache 行為，再逐步搬移 validation flow。
+- P2b canonical key integration 必須等 P3 穩定後再做。
+
+實作切片：
+
+1. P3a inventory skeleton：
+   - 新增 `this.inventory = new Map()`。
+   - 新增 `addInventoryItem(resolvedUrl, source, link, intent)`。
+   - 保存 `canonicalUrl`、`originalUrls`、`resolvedUrls`、`representativeUrl`、`sources`。
+   - 暫時不改 `checkUrl()` key、不改 `results` key、不改實際 fetch 行為。
+   - 在現有 `addSource()` / `addExternalLink()` 附近補 inventory 寫入。
+   - report summary 先新增 metrics，可先只輸出 `inventorySummary`，不必輸出完整 inventory array。
+2. P3b 抽取 / 合併分層：
+   - `processPage()` 抽 link 後先寫 inventory。
+   - check 前先看 inventory 是否已見過，減少同頁或跨頁 duplicate scheduling。
+   - 仍可沿用現有 `checkUrl(resolved)`，避免一次改動底層 map。
+3. P3c validation intent：
+   - 加入 `needsStatusCheck`、`needsBodyFetch`、`checked`、`bodyFetched`。
+   - 支援 status check 升級 body fetch。
+   - 避免「先 HEAD / 輕 GET 後，頁面沒有 body 可爬」的問題。
+4. P3d validation queue：
+   - 用 validation queue 取代每頁內大量 `Promise.all(checks)`。
+   - 控制大型頁面的 promise / backpressure。
+   - 這一步才會明顯改善大型站台效能。
+5. P2b canonical key integration：
+   - P3 穩定後才把 `statusCache`、`bodyCache`、`results`、`sources`、`externalLinks` 對齊 canonical key。
+   - 這一步必須在 P7 TTL cache 前完成。
+
+共用資料模型：
 
 ```js
 {
@@ -169,7 +201,7 @@ P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL�
 }
 ```
 
-開發項目：
+最終目標：
 
 - 抽出 HTML link extraction 階段。
 - 抽出 URL resolve / canonicalize 階段。
@@ -199,6 +231,22 @@ P3 是 P2/P3 中主要的性能最佳化工作：先合併 unique canonical URL�
   - `bodyCacheHits`
   - `inventoryMergeRatio`
 - Analyzer / GUI 必須相容沒有 inventory 與新 summary 欄位的舊 report。
+
+P3 前置風險控制：
+
+- 不在 P3a 就把 cache/result key 改成 `canonicalUrl`。
+- 不在 P3a 就讓 `moderate/aggressive` 影響去重、cache 或 validation key。
+- `homepageFallback`、`getResolutionFallbackUrls()`、`normalizationFallback` 必須保留，不可被 inventory 去重吃掉。
+- GUI / Analyzer / CSV 目前依賴 `broken[].sources` 與 `externalLinks[]`，report shape 不可突然大改。
+
+驗證矩陣：
+
+- fragment duplicate：`/a#one`、`/a#two`。
+- 多頁引用同一 URL，inventory metrics 能顯示合併。
+- 同 URL 多 source 能保留所有來源。
+- fallback URL 成功時仍保留 `normalizationFallback`。
+- 起始頁 body fetch 不被 status check 覆蓋。
+- 舊 report Analyzer 不壞。
 
 理由：
 
