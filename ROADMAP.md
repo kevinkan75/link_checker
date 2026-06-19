@@ -10,12 +10,12 @@
 | P1 | 已完成 | 結果模型、WAF/Bot/CDN 診斷、cache headers。 |
 | P2 | 已完成 | URL canonical strategy 與 canonical key integration。 |
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
-| P4-0 | 下一個小項 | 404 / 410 分類與 UI 文案一致化。 |
+| P4-0 | P4 前置 gate | 404 / 410 分類與 UI 文案一致化，小 commit。 |
 | P4 | 下一個主要項目 | 404 / 410 二次確認 MVP。 |
 
 近期順序：
 
-1. P4-0 先補齊 410 分類與「不存在」文案一致性。
+1. P4-0 先以小 commit 補齊 410 分類與「不存在」文案一致性。
 2. P4a 建立 confirmation result model 與報告欄位。
 3. P4b 建立主掃描後的 404 / 410 集中複查管線。
 4. P4c 補齊 CLI / GUI / Analyzer 最小呈現。
@@ -197,7 +197,13 @@ Inventory metrics：
 
 ### P4-0. 404 / 410 分類與文案一致化
 
-P4 之前應先補齊 410 的分類邊界，避免二次確認功能同時背負資料語意修正。
+P4-0 是 P4 的前置 gate，不是獨立大型功能。它只處理分類語意與文案一致性，讓後續 P4a/P4b 不必一邊做二次確認、一邊修正 `404/410` 基礎分類。
+
+必要性：
+
+- `HTTP 410 Gone` 代表資源已永久移除，對 link checker 來說應和 `404 Not Found` 一樣歸為「不存在」。
+- 如果 P4 用 `issueType === "not_found"` 找二次確認候選 URL，`410` 不應被漏掉。
+- Analyzer 已能將 `404/410` 視為 `not_found`，但核心報告、GUI server 與主 GUI 仍需對齊，否則同一份 report 在不同畫面會出現分類不一致。
 
 優先處理：
 
@@ -205,6 +211,14 @@ P4 之前應先補齊 410 的分類邊界，避免二次確認功能同時背負
 - UI 篩選、標籤與摘要文案不應只寫 `404`；建議改為 `404 / 410` 或「不存在」。
 - Analyzer 已能將 `404/410` 視為 `not_found`，但仍應和主報告與 GUI 文案對齊。
 - README 的結果判讀應同步說明 `404 / 410` 都代表頁面或資源不存在。
+
+不納入 P4-0：
+
+- 不做 confirmation pipeline。
+- 不改 retry 策略。
+- 不重構既有 source referer GET、homepage fallback 或 normalization fallback。
+- 不納入外連風險規則。
+- 不先擴充 Analyzer 大型 UI。
 
 驗證矩陣：
 
@@ -216,6 +230,7 @@ P4 之前應先補齊 410 的分類邊界，避免二次確認功能同時背負
 
 - P4 明確處理 `404 / 410`，分類語意必須先穩定。
 - 若 410 仍落在 `http_error`，P4 的候選 URL、統計與 UI 會出現不一致。
+- P4-0 成本低、風險低，適合獨立成 P4 前第一個小 commit。
 
 ### P4. 404 / 410 二次確認 MVP
 
@@ -231,6 +246,8 @@ P4a 資料模型：
 
 - 報告保留初次結果，不以二次確認結果覆蓋原始掃描證據。
 - 在 result 上新增 `confirmation`，至少包含 `enabled`、`checked`、`status`、`ok`、`finalUrl`、`checkedAt`、`method`、`referer`、`elapsedMs`、`outcome`。
+- 每個候選 result 都應有 `confirmation`；未啟用或非候選項目也要能明確表達 `enabled: false` 或 `checked: false`，避免 UI 需要猜測欄位缺漏。
+- 初次掃描的 `status`、`method`、`checkedAt`、`finalUrl`、`issueType` 與 `sources` 不因二次確認被覆蓋。
 - 新增或衍生 `transientFailure` 與 `needsReview`，供 UI 與後續歷史比對使用。
 - `confirmation.outcome` 第一版收斂為三類：`confirmed_missing`、`recovered`、`needs_review`。
 - `confirmed_missing` 代表二次確認仍為 `404/410`；`recovered` 代表二次確認轉為 `2xx/3xx`；`needs_review` 代表逾時、`429`、`403`、WAF/Bot、網路錯誤或結果不明。
@@ -239,18 +256,21 @@ P4b 複查管線：
 
 - 執行時機放在主掃描完成後、輸出報告前，作為集中複查階段。
 - 第一版只針對同站 `404/410` 複查，外部連結先不納入。
+- 候選 URL 定義：同站、初次結果為 `404/410`、非外連、非 WAF/Bot challenge。
 - 候選 URL 以 canonical result 為單位，並保留所有 `sources`；不要對每個 source 重複複查同一 URL。
 - 複查使用 `GET`，帶來源頁 `Referer` 與瀏覽器相容 User-Agent。
 - User-Agent 策略：一般掃描保留瀏覽器相容 UA 加工具識別；404 二次確認與保守模式使用純瀏覽器相容 UA；不使用或冒充 Googlebot UA。
 - 複查請求使用核心瀏覽器式 headers：`User-Agent`、`Accept`、`Accept-Language`、`Referer`；不預設手動加入 `Cache-Control: no-cache` 或強制覆蓋 `Accept-Encoding`。
 - 內建低速策略：每筆前加入 `1000-3000ms` jitter，全域複查併發 `2`，每 host 併發 `1`。
 - 第一版限制全域最多複查 `100` 筆、每 host 最多複查 `20` 筆，避免大量 404 拖慢報告產出。
+- 若使用者停止掃描，confirmation 階段也必須停止，並在已產生的 report 中清楚標示未完成或未複查項目。
 - 若初次結果已明確判定為 WAF/Bot challenge，不進入 aggressive retry；應標示 `blocked_waf` / `blocked_bot` 或 `needsReview`。
 
 P4c 使用者入口與呈現：
 
 - 以使用者可勾選的設定提供，GUI 預設開啟。
 - CLI 對應提供 `--confirm-404` 與 `--no-confirm-404`。
+- CLI 預設策略需明確固定。建議預設開啟，並用 `--no-confirm-404` 關閉；若後續改採預設關閉，roadmap 與 README 必須同步說明。
 - report options 記錄是否啟用二次確認與複查限制設定。
 - Analyzer 顯示是否啟用二次確認，以及「二次確認後已恢復 / 需複查 / 確認不存在」等狀態。
 - GUI 第一版只需顯示二次確認狀態與統計，不先做大型 Analyzer 改版。
@@ -260,6 +280,16 @@ P4c 使用者入口與呈現：
 - 現有 source referer GET、homepage fallback 與 normalization fallback 屬於即時降誤判，不等同 P4 confirmation。
 - P4 confirmation 是主掃描後的集中複查，應保留初次結果與二次確認結果兩份證據。
 - 不把現有 fallback 欄位混入 `confirmation`；可在 UI 上共同呈現，但資料語意要分開。
+
+P4 驗收矩陣：
+
+- 初次 `404`，二次 `200`，結果應為 `confirmation.outcome: "recovered"`。
+- 初次 `410`，二次 `410`，結果應為 `confirmation.outcome: "confirmed_missing"`。
+- 初次 `404`，二次 timeout，結果應為 `confirmation.outcome: "needs_review"`，並標示 `transientFailure` 或 `needsReview`。
+- 同一 canonical URL 有多個 sources 時，只複查一次，report 仍保留所有 sources。
+- 外連 `404/410` 不進入 P4 MVP 的候選清單。
+- WAF/Bot challenge 不做 aggressive retry，應進入 `needs_review` 或既有防護分類。
+- 達到全域或每 host 複查上限時，未複查項目要能被 UI 區分為 skipped / unchecked，而不是誤判為確認不存在。
 
 理由：
 
