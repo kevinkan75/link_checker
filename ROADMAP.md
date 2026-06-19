@@ -344,6 +344,13 @@ P4 驗收矩陣：
 
 狀態：下一個主要項目。P5 應先產生穩定 report schema，再補規則引擎與 UI 呈現；不要先做大型 Analyzer 改版。
 
+落地原則：
+
+- 先讓 `report.json` 本身產生一致的外連風險結果，再讓 CLI、GUI 匯出與 Analyzer 讀同一份資料。
+- P5 MVP 不改 crawler 主流程，不做 P6 report diff，不引入 stateful cache。
+- 現有 `--domain-rules` 維持網域分類用途；治理規則另以獨立規則模型承載，例如後續新增 `--external-risk-rules`。
+- `governanceStatus` 第一版維持固定 vocabulary；WAF、bot、rate limit、auth required 等細分類放入 `riskReasons` / `matchedRules`，不要擴張 `governanceStatus`。
+
 P5a 資料模型：
 
 - 在外連項目上新增 `externalRisk`，保留既有 `externalLinks[]` shape 相容。
@@ -351,24 +358,37 @@ P5a 資料模型：
 - `governanceStatus` 第一版收斂為 `allowed`、`blocked`、`watchlisted`、`unknown`、`needs_review`。
 - `riskLevel` 第一版收斂為 `high`、`medium`、`low`、`info`。
 - report summary 新增外連風險統計，例如 by risk level、by governance status、by domain。
+- 未啟用外連檢查時，仍應對 inventory-only 訊號產生風險，例如短網址、追蹤分析、下載、嵌入內容與重複引用；HTTP redirect / WAF / status 類風險只有在有檢查結果時標示。
 
 P5b 規則引擎：
 
 - 支援白名單、黑名單與觀察名單。
+- 白名單優先於一般分類規則；白名單網域不應因 `cdn`、`social`、`tracking_or_analytics` 等一般分類被升為高風險。
+- 黑名單直接產生 `governanceStatus: "blocked"` 與 `riskLevel: "high"`。
+- 觀察名單產生 `governanceStatus: "watchlisted"` 並標示 `needsReview: true`。
 - 標示短網址、社群、追蹤分析、CDN、下載、嵌入內容等類型。
 - 標示跨 host redirect、長 redirect chain、redirect to error。
-- 將現有 `protected` 細分為 `blocked_waf`、`blocked_bot`、`rate_limited`、`auth_required` 與 `access_denied` 等治理狀態。
+- 將現有 `protected`、`access_denied`、`429` 等結果轉成治理訊號；細分類如 `blocked_waf`、`blocked_bot`、`rate_limited`、`auth_required`、`access_denied` 放入 `riskReasons` 或 `matchedRules`。
 - 針對 `text/html` 回應偵測 challenge / CAPTCHA / bot verification / WAF block page 特徵。
 - 針對 `200` 但具明確 challenge 特徵的 HTML 標示 `suspected_false_positive`，不得只靠 body 過短單獨判定。
-- 保存 CDN/WAF 診斷證據：provider、matched headers、matched body patterns、blocked reason、body hash。
+- 保存 CDN/WAF 診斷證據：provider、matched headers、matched body patterns、blocked reason；body hash 可列為後續強化，不列入 MVP 必要項。
 - 標示外部連結是否有多頁重複引用。
 - 報告提供 `riskLevel` 與 `riskReasons`。
 
 P5c 呈現：
 
-- GUI / Analyzer 以分類篩選外連風險。
+- GUI / Analyzer 以 report 內建 `externalRisk` 篩選外連風險；舊 report 沒有 `externalRisk` 時，Analyzer 才 fallback 到現有 client-side 規則。
 - Analyzer 顯示高風險外連、需人工確認、重複引用外連與高風險網域排行。
 - CSV 追加 `riskLevel`、`riskReasons`、`governanceStatus`、`matchedRules`、`sourceCount`。
+- `external-summary.json` 補上 risk level、governance status 與高風險網域摘要。
+
+P5 MVP 驗收範圍：
+
+- 每筆 `externalLinks[]` 都有 `externalRisk`。
+- `summary` 有外連風險統計：by risk level、by governance status、by domain。
+- GUI 自動保存的 `external-links.csv` 與 `external-summary.json` 包含外連風險欄位。
+- Analyzer 可篩選 report 內建風險，並保留舊 report fallback。
+- 不做 P6 歷史 diff、不做長期 cache、不大改掃描流程。
 
 P5 驗收矩陣：
 
@@ -377,7 +397,7 @@ P5 驗收矩陣：
 - 觀察名單網域應標為 `watchlisted` 並進入需檢視摘要。
 - 短網址與追蹤分析 URL 應產生對應 `riskReasons`。
 - 外連 redirect to error 應同時保留 redirect 證據與外連風險原因。
-- WAF/Bot/CDN 類結果應進治理狀態，不直接混入一般 broken link 修復流程。
+- WAF/Bot/CDN 類結果應進 `externalRisk.riskReasons` 與需人工確認摘要，不直接混入一般 broken link 修復流程。
 
 理由：
 
