@@ -12,7 +12,7 @@
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
 | P4-0 | 已完成 | 404 / 410 分類與 UI 文案一致化。 |
 | P4 | 已完成 | 404 / 410 二次確認 MVP。 |
-| P5 | 進行中 | 外連風險規則、治理分類與風險摘要；P5a report schema 已落地。 |
+| P5 | 待驗收 | 外連風險規則、治理分類與風險摘要；P5 MVP 已落地。 |
 | P6 | 待規劃 | 兩份 report 歷史比對。 |
 | P7 | 待規劃 | TTL 檢查快取。 |
 | P8 | 待規劃 | 建立在 history/cache 上的增量掃描。 |
@@ -27,8 +27,8 @@
 下一個工作包：
 
 1. P5a 已完成：建立外連風險 result model：`riskLevel`、`riskReasons`、`governanceStatus`、`externalRisk`。
-2. P5b 建立外連規則引擎：白名單、黑名單、觀察名單、短網址、社群、追蹤分析、下載、嵌入內容、redirect 風險。
-3. P5c 補齊 GUI / Analyzer 最小呈現：外連風險篩選、網域排行、CSV 欄位與治理摘要。
+2. P5b 已完成：建立外連規則引擎 MVP：白名單、黑名單、觀察名單、短網址、社群、追蹤分析、下載、嵌入內容、redirect 風險。
+3. P5c 已完成：補齊 GUI / Analyzer 最小呈現：外連風險篩選、網域排行、CSV 欄位與治理摘要。
 4. P5 驗收後再進入 P6 report diff；不要先做完整 stateful incremental scan。
 
 ## 開發主軸
@@ -342,7 +342,7 @@ P4 驗收矩陣：
 
 建立在既有外連盤點、網域分類與 URL inventory 上，補足治理分析。
 
-狀態：進行中。P5a report schema 已落地；下一步應補 P5b 規則引擎與 P5c 最小呈現，不要先做大型 Analyzer 改版。
+狀態：待驗收。P5a report schema、P5b 最小規則引擎與 P5c Analyzer 最小呈現已落地；驗收後再進入 P6，不要先做大型 Analyzer 改版。
 
 落地原則：
 
@@ -390,6 +390,16 @@ P5 MVP 驗收範圍：
 - Analyzer 可篩選 report 內建風險，並保留舊 report fallback。
 - 不做 P6 歷史 diff、不做長期 cache、不大改掃描流程。
 
+P5 評估結論：
+
+- P5 MVP 已達成，可進入驗收；目前不建議直接進 P6，應先完成 P5 驗收與小修。
+- P5a/P5b/P5c 已涵蓋 report schema、最小治理規則、CSV / summary 與 Analyzer 最小呈現。
+- P5b/P5c 目前為未提交工作區變更；驗收前應先 commit，避免後續 P6 工作混入同一批變更。
+- GUI 主頁尚未提供 `--external-risk-rules` 輸入欄位；MVP 可接受 CLI / 程式化 API 先可用，若 GUI 使用者也需要治理規則，應列為 P5 小修。
+- Analyzer 已支援 report 內建 `externalRisk` 與舊資料 fallback，但尚未做瀏覽器視覺驗收。
+- 目前治理規則只支援 domain-based matching，尚未支援 URL pattern、path、tag/source 條件。
+- 驗收通過後再進 P6 report diff；P6 可直接比對 `externalRisk` 與 governance 狀態。
+
 P5 驗收矩陣：
 
 - 白名單網域應標為 `allowed`，不因一般分類規則升為高風險。
@@ -398,6 +408,8 @@ P5 驗收矩陣：
 - 短網址與追蹤分析 URL 應產生對應 `riskReasons`。
 - 外連 redirect to error 應同時保留 redirect 證據與外連風險原因。
 - WAF/Bot/CDN 類結果應進 `externalRisk.riskReasons` 與需人工確認摘要，不直接混入一般 broken link 修復流程。
+- Analyzer 載入新 report 時應使用 report 內建 `externalRisk`；載入舊 report 或舊 CSV 時 fallback 不應中斷。
+- `external-links.csv` 應包含 `riskLevel`、`riskReasons`、`governanceStatus`、`matchedRules`、`sourceCount`，且可用 Excel 開啟。
 
 理由：
 

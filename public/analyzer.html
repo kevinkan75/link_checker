@@ -123,7 +123,7 @@
         <div><span>外部網域</span><strong id="metric-domains">0</strong></div>
         <div class="metric-card-danger"><span>高風險</span><strong id="metric-high">0</strong></div>
         <div class="metric-card-warn"><span>需檢視</span><strong id="metric-medium">0</strong></div>
-        <div><span>未分類</span><strong id="metric-uncategorized">0</strong></div>
+        <div><span>未知資訊</span><strong id="metric-uncategorized">0</strong></div>
         <div class="metric-card-warn"><span>外部表單/嵌入/腳本</span><strong id="metric-sensitive">0</strong></div>
       </section>
 
@@ -145,10 +145,21 @@
               <option value="high">高風險</option>
               <option value="medium">需檢視</option>
               <option value="low">一般</option>
-              <option value="trusted">白名單</option>
-              <option value="uncategorized">未分類</option>
+              <option value="info">資訊</option>
             </select>
-            <small class="file-hint">風險由分類規則、UT1、白名單與連結類型判斷</small>
+            <small class="file-hint">新 report 優先使用內建 externalRisk；舊資料才使用此頁規則推導</small>
+          </label>
+
+          <label>
+            <span>治理狀態</span>
+            <select id="governance-filter">
+              <option value="all">全部</option>
+              <option value="allowed">白名單</option>
+              <option value="blocked">黑名單</option>
+              <option value="watchlisted">觀察名單</option>
+              <option value="needs_review">需人工確認</option>
+              <option value="unknown">未知</option>
+            </select>
           </label>
         </div>
         <div class="result-actions" aria-label="匯出目前篩選結果">
@@ -168,6 +179,7 @@
               <thead>
                 <tr>
                   <th>風險</th>
+                  <th>治理</th>
                   <th>網域</th>
                   <th>筆數</th>
                   <th>類型</th>
@@ -175,7 +187,7 @@
                 </tr>
               </thead>
               <tbody id="domain-table">
-                <tr class="empty-row"><td colspan="5">匯入資料後會顯示網域彙整。</td></tr>
+                <tr class="empty-row"><td colspan="6">匯入資料後會顯示網域彙整。</td></tr>
               </tbody>
             </table>
           </div>

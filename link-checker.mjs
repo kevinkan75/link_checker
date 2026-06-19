@@ -164,6 +164,19 @@ const EXTERNAL_RISK_RANK = {
   info: 0,
 };
 
+const EXTERNAL_RISK_RULE_ACTIONS = new Map([
+  ["allow", "allowed"],
+  ["allowed", "allowed"],
+  ["allowlist", "allowed"],
+  ["block", "blocked"],
+  ["blocked", "blocked"],
+  ["blocklist", "blocked"],
+  ["deny", "blocked"],
+  ["watch", "watchlisted"],
+  ["watchlisted", "watchlisted"],
+  ["watchlist", "watchlisted"],
+]);
+
 const DOWNLOAD_EXTENSIONS = new Set([
   ".7z", ".csv", ".doc", ".docx", ".gz", ".pdf", ".ppt", ".pptx",
   ".rar", ".tar", ".txt", ".xls", ".xlsx", ".zip",
@@ -469,6 +482,7 @@ class LinkChecker {
       ...EXTERNAL_CATEGORY_RULES,
       ...normalizeDomainCategoryRules(options.domainCategoryRules || []),
     ];
+    this.externalRiskRules = normalizeExternalRiskRules(options.externalRiskRules || []);
     this.skippedExternal = 0;
     this.reporter = options.reporter || null;
     this.currentPages = new Map();
@@ -1215,6 +1229,7 @@ class LinkChecker {
         confirmationDelayMinMs: this.options.confirmationDelayMinMs,
         confirmationDelayMaxMs: this.options.confirmationDelayMaxMs,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
+        externalRiskRulesSource: this.options.externalRiskRulesSource || null,
       },
       summary: {
         pagesCrawled: this.crawledPages.size,
@@ -1267,7 +1282,10 @@ class LinkChecker {
       .map((item) => {
         const result = resultsByUrl.get(item.canonicalUrl || this.getCanonicalKey(item.url));
         const sourceCount = item.sources.length;
-        const externalRisk = evaluateExternalRisk(item, result, { sourceCount });
+        const externalRisk = evaluateExternalRisk(item, result, {
+          sourceCount,
+          externalRiskRules: this.externalRiskRules,
+        });
         return {
           ...item,
           checked: Boolean(result),
@@ -2577,7 +2595,10 @@ function safeUrl(value) {
   }
 }
 
-function evaluateExternalRisk(item, result, { sourceCount = item.sources?.length || 0 } = {}) {
+function evaluateExternalRisk(item, result, {
+  sourceCount = item.sources?.length || 0,
+  externalRiskRules = [],
+} = {}) {
   const riskReasons = new Set();
   const matchedRules = [];
   let riskLevel = "info";
@@ -2598,19 +2619,60 @@ function evaluateExternalRisk(item, result, { sourceCount = item.sources?.length
     });
   };
 
-  for (const category of item.categories || []) {
-    const level = EXTERNAL_RISK_CATEGORY_LEVELS.get(category);
-    if (!level) {
-      continue;
-    }
-    addSignal(category, level, {
-      id: `category:${category}`,
-      source: "category",
+  const governanceMatches = findExternalRiskRuleMatches(item, externalRiskRules);
+  const blockedMatch = governanceMatches.find((rule) => rule.governanceStatus === "blocked");
+  const allowedMatch = governanceMatches.find((rule) => rule.governanceStatus === "allowed");
+  const watchlistedMatch = governanceMatches.find((rule) => rule.governanceStatus === "watchlisted");
+
+  if (blockedMatch) {
+    governanceStatus = "blocked";
+    needsReview = true;
+    addSignal("blocked_domain", "high", {
+      id: blockedMatch.id,
+      source: blockedMatch.source,
+      details: {
+        domain: blockedMatch.domain,
+        label: blockedMatch.label,
+      },
+    });
+  } else if (watchlistedMatch) {
+    governanceStatus = "watchlisted";
+    needsReview = true;
+    addSignal("watchlisted_domain", "medium", {
+      id: watchlistedMatch.id,
+      source: watchlistedMatch.source,
+      details: {
+        domain: watchlistedMatch.domain,
+        label: watchlistedMatch.label,
+      },
+    });
+  } else if (allowedMatch) {
+    governanceStatus = "allowed";
+    addSignal("allowed_domain", "info", {
+      id: allowedMatch.id,
+      source: allowedMatch.source,
+      details: {
+        domain: allowedMatch.domain,
+        label: allowedMatch.label,
+      },
     });
   }
 
+  if (!allowedMatch && !blockedMatch) {
+    for (const category of item.categories || []) {
+      const level = EXTERNAL_RISK_CATEGORY_LEVELS.get(category);
+      if (!level) {
+        continue;
+      }
+      addSignal(category, level, {
+        id: `category:${category}`,
+        source: "category",
+      });
+    }
+  }
+
   const parsed = safeUrl(item.url);
-  if (parsed) {
+  if (parsed && !allowedMatch && !blockedMatch) {
     for (const key of parsed.searchParams.keys()) {
       const normalized = key.toLowerCase();
       if (normalized.startsWith("utm_") || TRACKING_QUERY_KEYS.has(normalized)) {
@@ -2682,7 +2744,9 @@ function evaluateExternalRisk(item, result, { sourceCount = item.sources?.length
 
   if (EXTERNAL_RISK_RANK[riskLevel] >= EXTERNAL_RISK_RANK.medium) {
     needsReview = true;
-    governanceStatus = "needs_review";
+    if (governanceStatus === "unknown") {
+      governanceStatus = "needs_review";
+    }
   }
 
   return {
@@ -2692,6 +2756,105 @@ function evaluateExternalRisk(item, result, { sourceCount = item.sources?.length
     matchedRules,
     needsReview,
   };
+}
+
+function findExternalRiskRuleMatches(item, rules) {
+  const matches = [];
+  for (const rule of rules) {
+    const domain = rule.domains.find((candidate) => (
+      hostnameMatchesDomain(item.hostname || "", candidate)
+      || hostnameMatchesDomain(item.registrableDomain || "", candidate)
+    ));
+    if (!domain) {
+      continue;
+    }
+    matches.push({
+      ...rule,
+      domain,
+    });
+  }
+  return matches;
+}
+
+function normalizeExternalRiskRules(value, source = "external-risk-rules") {
+  const rawRules = collectExternalRiskRules(value);
+  return rawRules
+    .flatMap((rule, index) => normalizeExternalRiskRule(rule, index, source))
+    .filter((rule) => rule.domains.length > 0);
+}
+
+function collectExternalRiskRules(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  const rules = [];
+  for (const [key, governanceStatus] of [
+    ["allowlist", "allowed"],
+    ["allowed", "allowed"],
+    ["blocklist", "blocked"],
+    ["blocked", "blocked"],
+    ["watchlist", "watchlisted"],
+    ["watchlisted", "watchlisted"],
+  ]) {
+    if (Array.isArray(value[key])) {
+      rules.push(...value[key].map((entry) => ({ governanceStatus, entry })));
+    }
+  }
+
+  if (Array.isArray(value.rules)) {
+    rules.push(...value.rules);
+  }
+
+  return rules;
+}
+
+function normalizeExternalRiskRule(rule, index, source) {
+  if (typeof rule === "string") {
+    return [{
+      id: `${source}:rule-${index + 1}`,
+      governanceStatus: "watchlisted",
+      domains: [normalizeRuleDomain(rule)].filter(Boolean),
+      source,
+      label: "",
+    }];
+  }
+
+  const entry = rule?.entry ?? rule;
+  const rawStatus = rule?.governanceStatus || rule?.action || rule?.status || rule?.type || "";
+  const governanceStatus = EXTERNAL_RISK_RULE_ACTIONS.get(String(rawStatus).trim().toLowerCase());
+  if (!entry || !governanceStatus) {
+    return [];
+  }
+
+  const domains = collectRuleDomains(entry).map(normalizeRuleDomain).filter(Boolean);
+  return [{
+    id: String(entry.id || rule.id || `${source}:${governanceStatus}:${index + 1}`).trim(),
+    governanceStatus,
+    domains,
+    source: String(entry.source || rule.source || source).trim(),
+    label: String(entry.label || entry.name || rule.label || rule.name || "").trim(),
+  }];
+}
+
+function collectRuleDomains(rule) {
+  if (typeof rule === "string") {
+    return [rule];
+  }
+  if (Array.isArray(rule.domains)) {
+    return rule.domains;
+  }
+  if (Array.isArray(rule.hostnames)) {
+    return rule.hostnames;
+  }
+  return [rule.domain, rule.hostname, rule.host].filter(Boolean);
+}
+
+function normalizeRuleDomain(value) {
+  return String(value || "").trim().toLowerCase().replace(/^\.+/, "").replace(/\.$/, "");
 }
 
 function normalizeDomainCategoryRules(rules) {
@@ -3165,6 +3328,7 @@ function parseArgs(argv) {
   let progress = false;
   let verbose = false;
   let domainRulesSource = null;
+  let externalRiskRulesSource = null;
   let conservativeMode = false;
   const explicitOptions = new Set();
 
@@ -3325,6 +3489,13 @@ function parseArgs(argv) {
       }
       continue;
     }
+    if (arg === "--external-risk-rules") {
+      externalRiskRulesSource = args.shift();
+      if (!externalRiskRulesSource) {
+        throw new Error("--external-risk-rules requires a file path or URL");
+      }
+      continue;
+    }
     if (arg === "--canonical-strategy") {
       const value = args.shift();
       if (!value || value.startsWith("-")) {
@@ -3378,7 +3549,7 @@ function parseArgs(argv) {
   options.confirmationDelayMinMs = Math.max(0, Math.min(options.confirmationDelayMinMs, 60000));
   options.confirmationDelayMaxMs = Math.max(0, Math.min(options.confirmationDelayMaxMs, 60000));
   options.canonicalStrategy = normalizeCanonicalStrategy(options.canonicalStrategy);
-  return { startUrl, options, output, json, progress, verbose, domainRulesSource };
+  return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource };
 }
 
 async function loadDomainCategoryRules(source) {
@@ -3386,7 +3557,7 @@ async function loadDomainCategoryRules(source) {
     return [];
   }
 
-  const text = await readDomainRulesText(source);
+  const text = await readRulesText(source, "--domain-rules");
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -3405,7 +3576,27 @@ async function loadDomainCategoryRules(source) {
   }));
 }
 
-async function readDomainRulesText(source) {
+async function loadExternalRiskRules(source) {
+  if (!source) {
+    return [];
+  }
+
+  const text = await readRulesText(source, "--external-risk-rules");
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("--external-risk-rules must point to JSON");
+  }
+
+  const normalized = normalizeExternalRiskRules(parsed, source);
+  if (normalized.length === 0) {
+    throw new Error("--external-risk-rules did not contain any valid rules");
+  }
+  return normalized;
+}
+
+async function readRulesText(source, optionName) {
   if (/^https?:\/\//i.test(source)) {
     const response = await fetch(source, {
       headers: {
@@ -3414,7 +3605,7 @@ async function readDomainRulesText(source) {
       },
     });
     if (!response.ok) {
-      throw new Error(`Unable to load --domain-rules URL: HTTP ${response.status}`);
+      throw new Error(`Unable to load ${optionName} URL: HTTP ${response.status}`);
     }
     return response.text();
   }
@@ -3491,6 +3682,8 @@ Options:
   --user-agent <value> User-Agent header.
   --domain-rules <file-or-url>
                        JSON domain category rules: [{ "category": "...", "domains": ["example.com"] }].
+  --external-risk-rules <file-or-url>
+                       JSON external governance rules with allowlist, blocklist, and watchlist domains.
   --canonical-strategy <safe|moderate|aggressive>
                        Canonical URL strategy for report keys. Default: ${DEFAULTS.canonicalStrategy}
   --external          Also check links that point to other domains.
@@ -3592,6 +3785,7 @@ async function main() {
   }
 
   const domainCategoryRules = await loadDomainCategoryRules(parsed.domainRulesSource);
+  const externalRiskRules = await loadExternalRiskRules(parsed.externalRiskRulesSource);
 
   const reporter = parsed.json
     ? null
@@ -3604,6 +3798,8 @@ async function main() {
     ...parsed.options,
     domainCategoryRules,
     domainCategoryRulesSource: parsed.domainRulesSource,
+    externalRiskRules,
+    externalRiskRulesSource: parsed.externalRiskRulesSource,
     reporter,
   });
   const report = await checker.run();

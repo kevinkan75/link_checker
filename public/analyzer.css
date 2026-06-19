@@ -389,9 +389,38 @@ tr:last-child td {
   color: var(--muted);
 }
 
-.risk.trusted {
+.risk.info {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.governance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-weight: 700;
+  font-size: 12px;
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.governance.allowed {
   background: var(--ok-bg);
   color: var(--ok);
+}
+
+.governance.blocked {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.governance.watchlisted,
+.governance.needs_review {
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 
 .category-list {

@@ -3,6 +3,7 @@ const pickLinksButton = document.querySelector("#pick-links-button");
 const rulesFileInput = document.querySelector("#rules-file");
 const searchInput = document.querySelector("#search");
 const riskFilterInput = document.querySelector("#risk-filter");
+const governanceFilterInput = document.querySelector("#governance-filter");
 const highRiskInput = document.querySelector("#high-risk-categories");
 const mediumRiskInput = document.querySelector("#medium-risk-categories");
 const trustedDomainsInput = document.querySelector("#trusted-domains");
@@ -101,7 +102,7 @@ linksFileInput.addEventListener("change", () => {
   loadState.textContent = `已選擇 ${file.name}，按「分析」開始處理`;
 });
 
-for (const input of [searchInput, riskFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
+for (const input of [searchInput, riskFilterInput, governanceFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
   input.addEventListener("input", () => {
     if (currentAnalysis) {
       currentAnalysis = analyze(currentAnalysis.links, currentAnalysis.ruleIndex);
@@ -505,6 +506,7 @@ function dedupeLinks(links) {
         ...link,
         sourcePages: new Set(link.sourcePage ? [link.sourcePage] : []),
         categories: new Set(link.categories || []),
+        sourceCount: Number(link.sourceCount) || (link.sourcePage ? 1 : 0),
       });
       continue;
     }
@@ -515,6 +517,11 @@ function dedupeLinks(links) {
     for (const category of link.categories || []) {
       existing.categories.add(category);
     }
+    existing.sourceCount = Math.max(
+      Number(existing.sourceCount) || 0,
+      Number(link.sourceCount) || existing.sourcePages.size,
+    );
+    existing.externalRisk = highestExternalRisk([existing.externalRisk, link.externalRisk]);
   }
 
   return [...byUrl.values()].map((item) => ({
@@ -522,6 +529,7 @@ function dedupeLinks(links) {
     sourcePage: [...item.sourcePages].join("; "),
     sourcePages: undefined,
     categories: [...item.categories],
+    sourceCount: Number(item.sourceCount) || item.sourcePages.size,
   }));
 }
 
@@ -537,21 +545,49 @@ function normalizeLink(item) {
   const categories = Array.isArray(item.categories)
     ? item.categories
     : splitList(item.categories || "");
+  const sources = Array.isArray(item.sources) ? item.sources : [];
   return {
     url,
     hostname: item.hostname || parsed?.hostname || "",
     registrableDomain: item.registrableDomain || item.domain || item.hostname || parsed?.hostname || "",
     type: item.type || "unknown",
     categories,
+    externalRisk: normalizeExternalRisk(item),
+    sourceCount: Number(item.sourceCount) || sources.length || 0,
     checked: parseBoolean(item.checked),
     ok: item.ok === "" || item.ok === null || item.ok === undefined ? null : parseBoolean(item.ok),
     status: item.status || "",
     method: item.method || "",
     finalUrl: item.finalUrl || "",
-    sourcePage: item.sourcePage || item.page || firstSourcePage(item.sources),
-    tag: item.tag || firstSourceValue(item.sources, "tag"),
-    attribute: item.attribute || firstSourceValue(item.sources, "attribute"),
-    text: item.text || firstSourceValue(item.sources, "text"),
+    sourcePage: item.sourcePage || item.page || firstSourcePage(sources),
+    tag: item.tag || firstSourceValue(sources, "tag"),
+    attribute: item.attribute || firstSourceValue(sources, "attribute"),
+    text: item.text || firstSourceValue(sources, "text"),
+  };
+}
+
+function normalizeExternalRisk(item) {
+  const risk = item.externalRisk && typeof item.externalRisk === "object"
+    ? item.externalRisk
+    : null;
+  const riskLevel = normalizeRiskLevel(risk?.riskLevel || item.riskLevel || item.risk || "");
+  const governanceStatus = normalizeGovernanceStatus(risk?.governanceStatus || item.governanceStatus || "");
+  const riskReasons = Array.isArray(risk?.riskReasons)
+    ? risk.riskReasons
+    : splitList(risk?.riskReasons || item.riskReasons || "");
+  const matchedRules = Array.isArray(risk?.matchedRules)
+    ? risk.matchedRules
+    : splitList(risk?.matchedRules || item.matchedRules || "");
+  const hasRisk = risk || riskLevel || governanceStatus || riskReasons.length > 0 || matchedRules.length > 0;
+  if (!hasRisk) {
+    return null;
+  }
+  return {
+    riskLevel: riskLevel || "info",
+    riskReasons,
+    governanceStatus: governanceStatus || "unknown",
+    matchedRules,
+    needsReview: parseBoolean(risk?.needsReview ?? item.needsReview),
   };
 }
 
@@ -593,21 +629,35 @@ function analyze(links, ruleIndex) {
   const enriched = links.map((link) => {
     const ruleCategories = findRuleCategories(link.hostname || link.registrableDomain, ruleIndex);
     const categories = [...new Set([...link.categories, ...ruleCategories])].filter(Boolean);
-    const trusted = isTrusted(link.hostname, trustedDomains) || isTrusted(link.registrableDomain, trustedDomains);
+    const reportRisk = link.externalRisk;
+    const trusted = reportRisk?.governanceStatus === "allowed"
+      || isTrusted(link.hostname, trustedDomains)
+      || isTrusted(link.registrableDomain, trustedDomains);
     const sensitive = isSensitiveLink(link);
-    const risk = trusted
-      ? "trusted"
+    const fallbackRisk = trusted
+      ? {
+          riskLevel: "info",
+          riskReasons: ["trusted_domain"],
+          governanceStatus: "allowed",
+          matchedRules: [],
+          needsReview: false,
+        }
       : categories.some((category) => highRisk.has(category))
-        ? "high"
+        ? buildFallbackRisk("high", "needs_review", ["high_risk_category"])
         : categories.some((category) => mediumRisk.has(category)) || sensitive
-          ? "medium"
+          ? buildFallbackRisk("medium", "needs_review", [sensitive ? "sensitive_link" : "medium_risk_category"])
           : categories.length === 0
-            ? "uncategorized"
-            : "low";
+            ? buildFallbackRisk("info", "unknown", ["uncategorized"])
+            : buildFallbackRisk("low", "unknown", ["categorized"]);
+    const externalRisk = reportRisk || fallbackRisk;
     return {
       ...link,
       categories,
-      risk,
+      externalRisk,
+      risk: externalRisk.riskLevel,
+      governanceStatus: externalRisk.governanceStatus,
+      riskReasons: externalRisk.riskReasons,
+      needsReview: externalRisk.needsReview,
       trusted,
       sensitive,
     };
@@ -620,8 +670,8 @@ function analyze(links, ruleIndex) {
     links: enriched.length,
     domains: summarizeDomains(enriched).length,
     high: enriched.filter((item) => item.risk === "high").length,
-    medium: enriched.filter((item) => item.risk === "medium").length,
-    uncategorized: enriched.filter((item) => item.risk === "uncategorized").length,
+    medium: enriched.filter((item) => item.needsReview || item.governanceStatus === "needs_review").length,
+    uncategorized: enriched.filter((item) => item.governanceStatus === "unknown" && item.risk === "info").length,
     sensitive: enriched.filter((item) => item.sensitive).length,
   };
 
@@ -642,6 +692,16 @@ function analyze(links, ruleIndex) {
   };
 }
 
+function buildFallbackRisk(riskLevel, governanceStatus, riskReasons) {
+  return {
+    riskLevel,
+    riskReasons,
+    governanceStatus,
+    matchedRules: [],
+    needsReview: riskLevel === "high" || riskLevel === "medium" || governanceStatus === "needs_review",
+  };
+}
+
 function findRuleCategories(hostname, ruleIndex) {
   const labels = normalizeDomain(hostname).split(".");
   const categories = new Set();
@@ -657,8 +717,12 @@ function findRuleCategories(hostname, ruleIndex) {
 function filterLinks(links) {
   const query = searchInput.value.trim().toLowerCase();
   const risk = riskFilterInput.value;
+  const governance = governanceFilterInput.value;
   return links.filter((item) => {
     if (risk !== "all" && item.risk !== risk) {
+      return false;
+    }
+    if (governance !== "all" && item.governanceStatus !== governance) {
       return false;
     }
     if (!query) {
@@ -670,6 +734,8 @@ function filterLinks(links) {
       item.registrableDomain,
       item.type,
       item.categories.join(" "),
+      item.riskReasons.join(" "),
+      item.governanceStatus,
       item.sourcePage,
     ].some((value) => String(value || "").toLowerCase().includes(query));
   });
@@ -687,6 +753,8 @@ function summarizeDomains(links) {
         domain,
         linkCount: 0,
         risks: new Set(),
+        governanceStatuses: new Set(),
+        needsReview: false,
         types: new Set(),
         categories: new Set(),
       });
@@ -694,6 +762,8 @@ function summarizeDomains(links) {
     const item = domains.get(domain);
     item.linkCount += 1;
     item.risks.add(link.risk);
+    item.governanceStatuses.add(link.governanceStatus || "unknown");
+    item.needsReview = item.needsReview || Boolean(link.needsReview);
     item.types.add(link.type || "unknown");
     for (const category of link.categories || []) {
       item.categories.add(category);
@@ -705,6 +775,8 @@ function summarizeDomains(links) {
       domain: item.domain,
       linkCount: item.linkCount,
       risk: highestRisk([...item.risks]),
+      governanceStatuses: [...item.governanceStatuses].sort(),
+      needsReview: item.needsReview,
       types: [...item.types].sort(),
       categories: [...item.categories].sort(),
     }))
@@ -752,7 +824,7 @@ function getAnalysisStatusText(analysis) {
 
 function renderDomainTable(domains) {
   if (domains.length === 0) {
-    domainTable.innerHTML = '<tr class="empty-row"><td colspan="5">沒有符合條件的網域。</td></tr>';
+    domainTable.innerHTML = '<tr class="empty-row"><td colspan="6">沒有符合條件的網域。</td></tr>';
     return;
   }
 
@@ -760,6 +832,7 @@ function renderDomainTable(domains) {
     const row = document.createElement("tr");
     row.append(
       cell(riskBadge(item.risk)),
+      cell(governanceBadge(highestGovernanceStatus(item.governanceStatuses))),
       textCell(item.domain),
       textCell(item.linkCount),
       textCell(item.types.join(", ")),
@@ -814,6 +887,7 @@ function renderLinkItem(item) {
   domain.textContent = item.registrableDomain || item.hostname || "unknown domain";
   header.append(
     riskBadge(item.risk),
+    governanceBadge(item.governanceStatus),
     linkStatusBadge(item),
     domain,
     metaBadge(item.type || "unknown"),
@@ -823,14 +897,19 @@ function renderLinkItem(item) {
   row.append(
     header,
     detailLine("URL", item.url),
+    detailLine("風險原因", item.riskReasons.join(", ") || "無"),
     detailLine("來源頁", item.sourcePage || "無來源頁"),
   );
+  if (item.sourceCount > 1) {
+    row.append(detailLine("引用次數", item.sourceCount));
+  }
   return row;
 }
 
 function sortLinksForDisplay(links) {
   return [...links].sort((a, b) => (
     riskRank(a.risk) - riskRank(b.risk)
+    || governanceRank(a.governanceStatus) - governanceRank(b.governanceStatus)
     || String(a.registrableDomain || a.hostname || "").localeCompare(String(b.registrableDomain || b.hostname || ""))
     || String(a.sourcePage || "").localeCompare(String(b.sourcePage || ""))
     || String(a.url || "").localeCompare(String(b.url || ""))
@@ -885,12 +964,25 @@ function riskBadge(risk) {
     high: "高風險",
     medium: "需檢視",
     low: "一般",
-    trusted: "白名單",
-    uncategorized: "未分類",
+    info: "資訊",
   };
   const span = document.createElement("span");
   span.className = `risk ${risk}`;
   span.textContent = labels[risk] || risk;
+  return span;
+}
+
+function governanceBadge(status) {
+  const labels = {
+    allowed: "白名單",
+    blocked: "黑名單",
+    watchlisted: "觀察",
+    needs_review: "需確認",
+    unknown: "未知",
+  };
+  const span = document.createElement("span");
+  span.className = `governance ${status || "unknown"}`;
+  span.textContent = labels[status] || status || "未知";
   return span;
 }
 
@@ -910,14 +1002,55 @@ function highestRisk(risks) {
   return risks.sort((a, b) => riskRank(a) - riskRank(b))[0] || "low";
 }
 
+function highestExternalRisk(risks) {
+  return risks
+    .filter(Boolean)
+    .sort((a, b) => riskRank(a.riskLevel) - riskRank(b.riskLevel))[0] || null;
+}
+
+function normalizeRiskLevel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["high", "medium", "low", "info"].includes(normalized)) {
+    return normalized;
+  }
+  if (normalized === "trusted" || normalized === "uncategorized") {
+    return "info";
+  }
+  return "";
+}
+
+function normalizeGovernanceStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["allowed", "blocked", "watchlisted", "unknown", "needs_review"].includes(normalized)) {
+    return normalized;
+  }
+  if (normalized === "trusted" || normalized === "allowlisted") {
+    return "allowed";
+  }
+  return "";
+}
+
 function riskRank(risk) {
   return {
     high: 0,
     medium: 1,
-    uncategorized: 2,
-    low: 3,
-    trusted: 4,
+    low: 2,
+    info: 3,
   }[risk] ?? 9;
+}
+
+function governanceRank(status) {
+  return {
+    blocked: 0,
+    watchlisted: 1,
+    needs_review: 2,
+    unknown: 3,
+    allowed: 4,
+  }[status] ?? 9;
+}
+
+function highestGovernanceStatus(statuses) {
+  return [...statuses].sort((a, b) => governanceRank(a) - governanceRank(b))[0] || "unknown";
 }
 
 function isSensitiveLink(link) {
@@ -986,7 +1119,12 @@ function parseCsv(text) {
 
 function makeAnalysisCsv(links) {
   const rows = [[
-    "risk",
+    "riskLevel",
+    "riskReasons",
+    "governanceStatus",
+    "matchedRules",
+    "needsReview",
+    "sourceCount",
     "url",
     "hostname",
     "registrableDomain",
@@ -1000,6 +1138,11 @@ function makeAnalysisCsv(links) {
   for (const link of links) {
     rows.push([
       link.risk,
+      link.riskReasons.join(";"),
+      link.governanceStatus,
+      formatMatchedRules(link.externalRisk?.matchedRules || []),
+      link.needsReview ? "yes" : "no",
+      link.sourceCount || "",
       link.url,
       link.hostname,
       link.registrableDomain,
@@ -1012,6 +1155,18 @@ function makeAnalysisCsv(links) {
     ]);
   }
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+function formatMatchedRules(rules) {
+  return rules
+    .map((rule) => {
+      if (typeof rule === "string") {
+        return rule;
+      }
+      return [rule.id, rule.riskReason, rule.riskLevel].filter(Boolean).join(":");
+    })
+    .filter(Boolean)
+    .join(";");
 }
 
 function downloadText(filename, text, type) {

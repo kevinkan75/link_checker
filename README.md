@@ -126,6 +126,7 @@ dist\LinkChecker-portable.zip
 - `--accept-language <value>`：送出的語言標頭，預設 `zh-TW,zh;q=0.9,en;q=0.8`。
 - `--user-agent <value>`：送出的 User-Agent。預設使用瀏覽器相容字串並包含 `LocalLinkChecker/1.0` 識別。
 - `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
+- `--external-risk-rules <file-or-url>`：載入外連治理規則 JSON，可用白名單、黑名單與觀察名單調整 `externalRisk`。
 - `--canonical-strategy <safe|moderate|aggressive>`：設定報告中 `canonicalUrl` 的正規化策略，預設 `safe`；此設定不改變實際請求 URL。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
 - `--confirm-404` / `--no-confirm-404`：是否在主掃描後集中複查同站 `404 / 410`。預設開啟；關閉時 report 仍會標示 confirmation 未啟用。
@@ -152,6 +153,35 @@ dist\LinkChecker-portable.zip
     "domains": ["partner.example.com"]
   }
 ]
+```
+
+`--external-risk-rules` 的 JSON 格式如下：
+
+```json
+{
+  "allowlist": [
+    "trusted-cdn.example.com",
+    { "id": "partner", "domains": ["partner.example.com"], "label": "合作單位" }
+  ],
+  "blocklist": [
+    "blocked.example.net"
+  ],
+  "watchlist": [
+    { "id": "campaign-sites", "domains": ["campaign.example.org"] }
+  ]
+}
+```
+
+也可以使用 `rules` 陣列：
+
+```json
+{
+  "rules": [
+    { "action": "allow", "domains": ["trusted.example.com"] },
+    { "action": "block", "domains": ["blocked.example.net"] },
+    { "action": "watch", "domains": ["review.example.org"] }
+  ]
+}
 ```
 
 ## 執行狀態
