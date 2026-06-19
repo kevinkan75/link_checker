@@ -10,15 +10,19 @@
 | P1 | 已完成 | 結果模型、WAF/Bot/CDN 診斷、cache headers。 |
 | P2 | 已完成 | URL canonical strategy 與 canonical key integration。 |
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
+| P4-0 | 下一個小項 | 404 / 410 分類與 UI 文案一致化。 |
 | P4 | 下一個主要項目 | 404 / 410 二次確認 MVP。 |
 
 近期順序：
 
-1. P4 404 / 410 二次確認 MVP。
-2. P5 外連風險規則。
-3. P6 歷史比對。
-4. P7 TTL 檢查快取。
-5. P8 增量掃描。
+1. P4-0 先補齊 410 分類與「不存在」文案一致性。
+2. P4a 建立 confirmation result model 與報告欄位。
+3. P4b 建立主掃描後的 404 / 410 集中複查管線。
+4. P4c 補齊 CLI / GUI / Analyzer 最小呈現。
+5. P5 外連風險規則。
+6. P6 歷史比對。
+7. P7 TTL 檢查快取。
+8. P8 增量掃描。
 
 ## 開發主軸
 
@@ -191,27 +195,77 @@ Inventory metrics：
 - P3 的 queue/backpressure 才是真正改善大型站台效能的主體。
 - inventory 必須保留原始 URL 與所有來源，才能安全支撐後續 moderate/aggressive canonicalization。
 
+### P4-0. 404 / 410 分類與文案一致化
+
+P4 之前應先補齊 410 的分類邊界，避免二次確認功能同時背負資料語意修正。
+
+優先處理：
+
+- 核心分類、GUI server 與主 GUI 都應將 `404` 與 `410` 歸為 `not_found`。
+- UI 篩選、標籤與摘要文案不應只寫 `404`；建議改為 `404 / 410` 或「不存在」。
+- Analyzer 已能將 `404/410` 視為 `not_found`，但仍應和主報告與 GUI 文案對齊。
+- README 的結果判讀應同步說明 `404 / 410` 都代表頁面或資源不存在。
+
+驗證矩陣：
+
+- 本機測試頁連到 `410 Gone` 時，`broken[].issueType` 應為 `not_found`。
+- `summary.brokenByType.not_found` 應包含 `404` 與 `410`。
+- GUI 即時統計、報告表格與 Analyzer 匯入同一份 report 時分類一致。
+
+理由：
+
+- P4 明確處理 `404 / 410`，分類語意必須先穩定。
+- 若 410 仍落在 `http_error`，P4 的候選 URL、統計與 UI 會出現不一致。
+
 ### P4. 404 / 410 二次確認 MVP
 
 這是降低誤判的第一個 user-facing 功能，應建立在 P1-P3 後實作，讓 confirmation 結果可以乾淨掛到 result model。
 
-- 以使用者可勾選的設定提供，GUI 預設開啟。
-- CLI 對應提供 `--confirm-404` 與 `--no-confirm-404`。
+優先順序：
+
+1. P4a 資料模型先行。
+2. P4b 複查管線。
+3. P4c CLI / GUI / Analyzer 最小呈現。
+
+P4a 資料模型：
+
+- 報告保留初次結果，不以二次確認結果覆蓋原始掃描證據。
+- 在 result 上新增 `confirmation`，至少包含 `enabled`、`checked`、`status`、`ok`、`finalUrl`、`checkedAt`、`method`、`referer`、`elapsedMs`、`outcome`。
+- 新增或衍生 `transientFailure` 與 `needsReview`，供 UI 與後續歷史比對使用。
+- `confirmation.outcome` 第一版收斂為三類：`confirmed_missing`、`recovered`、`needs_review`。
+- `confirmed_missing` 代表二次確認仍為 `404/410`；`recovered` 代表二次確認轉為 `2xx/3xx`；`needs_review` 代表逾時、`429`、`403`、WAF/Bot、網路錯誤或結果不明。
+
+P4b 複查管線：
+
 - 執行時機放在主掃描完成後、輸出報告前，作為集中複查階段。
 - 第一版只針對同站 `404/410` 複查，外部連結先不納入。
+- 候選 URL 以 canonical result 為單位，並保留所有 `sources`；不要對每個 source 重複複查同一 URL。
 - 複查使用 `GET`，帶來源頁 `Referer` 與瀏覽器相容 User-Agent。
 - User-Agent 策略：一般掃描保留瀏覽器相容 UA 加工具識別；404 二次確認與保守模式使用純瀏覽器相容 UA；不使用或冒充 Googlebot UA。
 - 複查請求使用核心瀏覽器式 headers：`User-Agent`、`Accept`、`Accept-Language`、`Referer`；不預設手動加入 `Cache-Control: no-cache` 或強制覆蓋 `Accept-Encoding`。
 - 內建低速策略：每筆前加入 `1000-3000ms` jitter，全域複查併發 `2`，每 host 併發 `1`。
 - 第一版限制全域最多複查 `100` 筆、每 host 最多複查 `20` 筆，避免大量 404 拖慢報告產出。
-- 報告保留初次結果，新增 `confirmation`、`transientFailure`、`needsReview` 等欄位。
-- Analyzer 顯示是否啟用二次確認，以及「二次確認後已恢復 / 需複查 / 確認不存在」等狀態。
 - 若初次結果已明確判定為 WAF/Bot challenge，不進入 aggressive retry；應標示 `blocked_waf` / `blocked_bot` 或 `needsReview`。
+
+P4c 使用者入口與呈現：
+
+- 以使用者可勾選的設定提供，GUI 預設開啟。
+- CLI 對應提供 `--confirm-404` 與 `--no-confirm-404`。
+- report options 記錄是否啟用二次確認與複查限制設定。
+- Analyzer 顯示是否啟用二次確認，以及「二次確認後已恢復 / 需複查 / 確認不存在」等狀態。
+- GUI 第一版只需顯示二次確認狀態與統計，不先做大型 Analyzer 改版。
+
+與既有 fallback 的邊界：
+
+- 現有 source referer GET、homepage fallback 與 normalization fallback 屬於即時降誤判，不等同 P4 confirmation。
+- P4 confirmation 是主掃描後的集中複查，應保留初次結果與二次確認結果兩份證據。
+- 不把現有 fallback 欄位混入 `confirmation`；可在 UI 上共同呈現，但資料語意要分開。
 
 理由：
 
 - 直接降低「掃描當下回 404、瀏覽器或稍後重試為 200」的誤判。
 - 條件式複查比泛用重試更可控，也不會拖慢整體掃描。
+- 先固定資料模型，再補管線與 UI，可避免 P5/P6/P7 依賴的 report schema 反覆返工。
 
 ### P5. 外連風險規則
 
