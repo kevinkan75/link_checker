@@ -2,7 +2,7 @@
 
 ## 狀態總覽
 
-目前 404 / 410 二次確認 MVP 已落地，P5 外連風險規則已開始進入資料模型落地階段。
+目前 404 / 410 二次確認 MVP 與 P5 外連風險規則 MVP 已落地，下一階段可進入 P6 report diff。
 
 | 階段 | 狀態 | 重點 |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
 | P4-0 | 已完成 | 404 / 410 分類與 UI 文案一致化。 |
 | P4 | 已完成 | 404 / 410 二次確認 MVP。 |
-| P5 | 待驗收 | 外連風險規則、治理分類與風險摘要；P5 MVP 已落地。 |
+| P5 | 已完成 | 外連風險規則、治理分類與風險摘要 MVP；CLI/report、GUI 匯出與 Analyzer 驗收通過。 |
 | P6 | 待規劃 | 兩份 report 歷史比對。 |
 | P7 | 待規劃 | TTL 檢查快取。 |
 | P8 | 待規劃 | 建立在 history/cache 上的增量掃描。 |
@@ -29,7 +29,7 @@
 1. P5a 已完成：建立外連風險 result model：`riskLevel`、`riskReasons`、`governanceStatus`、`externalRisk`。
 2. P5b 已完成：建立外連規則引擎 MVP：白名單、黑名單、觀察名單、短網址、社群、追蹤分析、下載、嵌入內容、redirect 風險。
 3. P5c 已完成：補齊 GUI / Analyzer 最小呈現：外連風險篩選、網域排行、CSV 欄位與治理摘要。
-4. P5 驗收後再進入 P6 report diff；不要先做完整 stateful incremental scan。
+4. 下一步進入 P6 report diff；不要先做完整 stateful incremental scan。
 
 ## 開發主軸
 
@@ -342,7 +342,7 @@ P4 驗收矩陣：
 
 建立在既有外連盤點、網域分類與 URL inventory 上，補足治理分析。
 
-狀態：待驗收。P5a report schema、P5b 最小規則引擎與 P5c Analyzer 最小呈現已落地；驗收後再進入 P6，不要先做大型 Analyzer 改版。
+狀態：已完成。P5a report schema、P5b 最小規則引擎與 P5c Analyzer 最小呈現已落地並通過驗收；下一步進入 P6，不要先做大型 Analyzer 改版。
 
 落地原則：
 
@@ -392,13 +392,12 @@ P5 MVP 驗收範圍：
 
 P5 評估結論：
 
-- P5 MVP 已達成，可進入驗收；目前不建議直接進 P6，應先完成 P5 驗收與小修。
+- P5 MVP 已達成並通過驗收，可進入 P6 report diff。
 - P5a/P5b/P5c 已涵蓋 report schema、最小治理規則、CSV / summary 與 Analyzer 最小呈現。
-- P5b/P5c 目前為未提交工作區變更；驗收前應先 commit，避免後續 P6 工作混入同一批變更。
-- GUI 主頁尚未提供 `--external-risk-rules` 輸入欄位；MVP 可接受 CLI / 程式化 API 先可用，若 GUI 使用者也需要治理規則，應列為 P5 小修。
-- Analyzer 已支援 report 內建 `externalRisk` 與舊資料 fallback，但尚未做瀏覽器視覺驗收。
+- CLI/report fixture、HTTP external fixture、GUI API + logs fixture、Analyzer fallback fixture 與手動視覺驗收均已通過。
+- GUI 主頁尚未提供 `--external-risk-rules` 輸入欄位；MVP 可接受 CLI / 程式化 API 先可用，若 GUI 使用者也需要治理規則，應列為後續小修。
 - 目前治理規則只支援 domain-based matching，尚未支援 URL pattern、path、tag/source 條件。
-- 驗收通過後再進 P6 report diff；P6 可直接比對 `externalRisk` 與 governance 狀態。
+- P6 可直接比對 `externalRisk` 與 governance 狀態。
 
 P5 驗收矩陣：
 
