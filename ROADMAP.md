@@ -2,7 +2,7 @@
 
 ## 狀態總覽
 
-目前 404 / 410 二次確認 MVP 已落地，下一階段應進入外連風險規則與治理分析功能。
+目前 404 / 410 二次確認 MVP 已落地，P5 外連風險規則已開始進入資料模型落地階段。
 
 | 階段 | 狀態 | 重點 |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
 | P4-0 | 已完成 | 404 / 410 分類與 UI 文案一致化。 |
 | P4 | 已完成 | 404 / 410 二次確認 MVP。 |
-| P5 | 下一個主要項目 | 外連風險規則、治理分類與風險摘要。 |
+| P5 | 進行中 | 外連風險規則、治理分類與風險摘要；P5a report schema 已落地。 |
 | P6 | 待規劃 | 兩份 report 歷史比對。 |
 | P7 | 待規劃 | TTL 檢查快取。 |
 | P8 | 待規劃 | 建立在 history/cache 上的增量掃描。 |
@@ -26,7 +26,7 @@
 
 下一個工作包：
 
-1. P5a 建立外連風險 result model：`riskLevel`、`riskReasons`、`governanceStatus`、`externalRisk`。
+1. P5a 已完成：建立外連風險 result model：`riskLevel`、`riskReasons`、`governanceStatus`、`externalRisk`。
 2. P5b 建立外連規則引擎：白名單、黑名單、觀察名單、短網址、社群、追蹤分析、下載、嵌入內容、redirect 風險。
 3. P5c 補齊 GUI / Analyzer 最小呈現：外連風險篩選、網域排行、CSV 欄位與治理摘要。
 4. P5 驗收後再進入 P6 report diff；不要先做完整 stateful incremental scan。
@@ -342,7 +342,7 @@ P4 驗收矩陣：
 
 建立在既有外連盤點、網域分類與 URL inventory 上，補足治理分析。
 
-狀態：下一個主要項目。P5 應先產生穩定 report schema，再補規則引擎與 UI 呈現；不要先做大型 Analyzer 改版。
+狀態：進行中。P5a report schema 已落地；下一步應補 P5b 規則引擎與 P5c 最小呈現，不要先做大型 Analyzer 改版。
 
 落地原則：
 

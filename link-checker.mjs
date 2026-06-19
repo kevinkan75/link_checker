@@ -144,6 +144,26 @@ const EXTERNAL_CATEGORY_RULES = [
   { category: "webmail", domains: ["gmail.com", "outlook.com", "yahoo.com"] },
 ];
 
+const EXTERNAL_RISK_CATEGORY_LEVELS = new Map([
+  ["shortener", "medium"],
+  ["tracking_or_analytics", "medium"],
+  ["download", "medium"],
+  ["embedded_content", "medium"],
+  ["social", "low"],
+  ["cdn", "low"],
+  ["maps", "low"],
+  ["webmail", "low"],
+  ["asset", "low"],
+  ["media", "low"],
+]);
+
+const EXTERNAL_RISK_RANK = {
+  high: 3,
+  medium: 2,
+  low: 1,
+  info: 0,
+};
+
 const DOWNLOAD_EXTENSIONS = new Set([
   ".7z", ".csv", ".doc", ".docx", ".gz", ".pdf", ".ppt", ".pptx",
   ".rar", ".tar", ".txt", ".xls", ".xlsx", ".zip",
@@ -1208,6 +1228,9 @@ class LinkChecker {
         externalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
         externalByType: countExternalByType(externalLinks),
         externalByCategory: countExternalByCategory(externalLinks),
+        externalRiskByLevel: countExternalRiskByLevel(externalLinks),
+        externalRiskByGovernanceStatus: countExternalRiskByGovernanceStatus(externalLinks),
+        externalRiskByDomain: summarizeExternalRiskDomains(externalLinks),
         confirmation: countConfirmationByOutcome(checked),
         inventorySummary,
       },
@@ -1243,6 +1266,8 @@ class LinkChecker {
     return [...this.externalLinks.values()]
       .map((item) => {
         const result = resultsByUrl.get(item.canonicalUrl || this.getCanonicalKey(item.url));
+        const sourceCount = item.sources.length;
+        const externalRisk = evaluateExternalRisk(item, result, { sourceCount });
         return {
           ...item,
           checked: Boolean(result),
@@ -1256,10 +1281,18 @@ class LinkChecker {
           cacheHeaders: result?.cacheHeaders || null,
           issueType: result?.issueType || null,
           classification: result?.classification || null,
+          redirected: result?.redirected || false,
+          redirectCount: result?.redirectCount || 0,
+          redirectType: result?.redirectType || null,
+          redirectIssues: result?.redirectIssues || [],
+          redirectLabels: result?.redirectLabels || [],
           blockedReason: result?.blockedReason || null,
           suspectedWaf: result?.suspectedWaf || false,
           suspectedBot: result?.suspectedBot || false,
-          sourceCount: item.sources.length,
+          protection: result?.protection || null,
+          bodySignature: result?.bodySignature || null,
+          externalRisk,
+          sourceCount,
           sources: item.sources.map(({ key, fallbackUrls, ...source }) => source),
         };
       })
@@ -2536,6 +2569,131 @@ function classifyExternalLink(urlValue, link, domainRules = EXTERNAL_CATEGORY_RU
   };
 }
 
+function safeUrl(value) {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function evaluateExternalRisk(item, result, { sourceCount = item.sources?.length || 0 } = {}) {
+  const riskReasons = new Set();
+  const matchedRules = [];
+  let riskLevel = "info";
+  let governanceStatus = "unknown";
+  let needsReview = false;
+
+  const addSignal = (reason, level, rule = {}) => {
+    riskReasons.add(reason);
+    if (EXTERNAL_RISK_RANK[level] > EXTERNAL_RISK_RANK[riskLevel]) {
+      riskLevel = level;
+    }
+    matchedRules.push({
+      id: rule.id || reason,
+      source: rule.source || "builtin",
+      riskReason: reason,
+      riskLevel: level,
+      ...rule.details,
+    });
+  };
+
+  for (const category of item.categories || []) {
+    const level = EXTERNAL_RISK_CATEGORY_LEVELS.get(category);
+    if (!level) {
+      continue;
+    }
+    addSignal(category, level, {
+      id: `category:${category}`,
+      source: "category",
+    });
+  }
+
+  const parsed = safeUrl(item.url);
+  if (parsed) {
+    for (const key of parsed.searchParams.keys()) {
+      const normalized = key.toLowerCase();
+      if (normalized.startsWith("utm_") || TRACKING_QUERY_KEYS.has(normalized)) {
+        addSignal("tracking_query", "medium", {
+          id: `query:${normalized}`,
+          source: "url-query",
+          details: { queryKey: key },
+        });
+      }
+    }
+  }
+
+  if (sourceCount > 1) {
+    addSignal("repeated_reference", "info", {
+      id: "source:repeated_reference",
+      source: "inventory",
+      details: { sourceCount },
+    });
+  }
+
+  if (result) {
+    if (result.redirectLabels?.includes("cross_host_redirect")) {
+      addSignal("cross_host_redirect", "medium", { id: "redirect:cross_host_redirect", source: "http" });
+    }
+    if (result.redirectLabels?.includes("long_redirect_chain")) {
+      addSignal("long_redirect_chain", "medium", { id: "redirect:long_redirect_chain", source: "http" });
+    }
+    if (result.redirectLabels?.includes("redirect_to_error") || result.issueType === "redirect_to_error") {
+      addSignal("redirect_to_error", "high", { id: "redirect:redirect_to_error", source: "http" });
+    }
+    if (result.issueType === "too_many_redirects") {
+      addSignal("too_many_redirects", "high", { id: "redirect:too_many_redirects", source: "http" });
+    }
+    if (result.issueType === "redirect_loop") {
+      addSignal("redirect_loop", "high", { id: "redirect:redirect_loop", source: "http" });
+    }
+    if (result.classification === "protected") {
+      addSignal(result.suspectedBot ? "blocked_bot" : "blocked_waf", "medium", {
+        id: result.suspectedBot ? "protection:blocked_bot" : "protection:blocked_waf",
+        source: "http",
+        details: {
+          provider: result.protection?.provider || null,
+          blockedReason: result.blockedReason || null,
+        },
+      });
+    }
+    if (result.status === 429) {
+      addSignal("rate_limited", "medium", { id: "http:rate_limited", source: "http" });
+    }
+    if (result.classification !== "protected"
+        && (result.classification === "access_denied" || result.issueType === "access_denied" || result.status === 403)) {
+      addSignal("access_denied", "medium", { id: "http:access_denied", source: "http" });
+    }
+    if (result.ok && (result.blockedReason || result.suspectedWaf || result.suspectedBot)) {
+      addSignal("suspected_false_positive", "medium", {
+        id: "body:suspected_false_positive",
+        source: "body-signature",
+        details: { blockedReason: result.blockedReason || null },
+      });
+    }
+    if (!result.ok && result.status >= 400 && !["protected", "access_denied", "redirect_error"].includes(result.classification)) {
+      addSignal("external_http_error", "medium", {
+        id: `http:${result.status}`,
+        source: "http",
+        details: { status: result.status },
+      });
+    }
+  }
+
+  if (EXTERNAL_RISK_RANK[riskLevel] >= EXTERNAL_RISK_RANK.medium) {
+    needsReview = true;
+    governanceStatus = "needs_review";
+  }
+
+  return {
+    riskLevel,
+    riskReasons: [...riskReasons],
+    governanceStatus,
+    matchedRules,
+    needsReview,
+  };
+}
+
 function normalizeDomainCategoryRules(rules) {
   if (!Array.isArray(rules)) {
     return [];
@@ -2799,6 +2957,100 @@ function countExternalByCategory(items) {
     }
   }
   return counts;
+}
+
+function countExternalRiskByLevel(items) {
+  const counts = {
+    high: 0,
+    medium: 0,
+    low: 0,
+    info: 0,
+  };
+
+  for (const item of items) {
+    const level = item.externalRisk?.riskLevel || "info";
+    if (Object.prototype.hasOwnProperty.call(counts, level)) {
+      counts[level] += 1;
+    } else {
+      counts.info += 1;
+    }
+  }
+
+  return counts;
+}
+
+function countExternalRiskByGovernanceStatus(items) {
+  const counts = {
+    allowed: 0,
+    blocked: 0,
+    watchlisted: 0,
+    unknown: 0,
+    needs_review: 0,
+  };
+
+  for (const item of items) {
+    const status = item.externalRisk?.governanceStatus || "unknown";
+    if (Object.prototype.hasOwnProperty.call(counts, status)) {
+      counts[status] += 1;
+    } else {
+      counts.unknown += 1;
+    }
+  }
+
+  return counts;
+}
+
+function summarizeExternalRiskDomains(items) {
+  const domains = new Map();
+  for (const item of items) {
+    const domain = item.registrableDomain || item.hostname || "";
+    if (!domain) {
+      continue;
+    }
+    if (!domains.has(domain)) {
+      domains.set(domain, {
+        domain,
+        linkCount: 0,
+        sourceCount: 0,
+        riskLevels: new Set(),
+        governanceStatuses: new Set(),
+        riskReasons: new Set(),
+        highestRiskLevel: "info",
+        needsReview: false,
+      });
+    }
+    const summary = domains.get(domain);
+    const risk = item.externalRisk || {};
+    const riskLevel = risk.riskLevel || "info";
+    summary.linkCount += 1;
+    summary.sourceCount += item.sourceCount || item.sources?.length || 0;
+    summary.riskLevels.add(riskLevel);
+    summary.governanceStatuses.add(risk.governanceStatus || "unknown");
+    summary.needsReview = summary.needsReview || Boolean(risk.needsReview);
+    for (const reason of risk.riskReasons || []) {
+      summary.riskReasons.add(reason);
+    }
+    if (EXTERNAL_RISK_RANK[riskLevel] > EXTERNAL_RISK_RANK[summary.highestRiskLevel]) {
+      summary.highestRiskLevel = riskLevel;
+    }
+  }
+
+  return [...domains.values()]
+    .map((item) => ({
+      domain: item.domain,
+      linkCount: item.linkCount,
+      sourceCount: item.sourceCount,
+      highestRiskLevel: item.highestRiskLevel,
+      riskLevels: [...item.riskLevels].sort((a, b) => EXTERNAL_RISK_RANK[b] - EXTERNAL_RISK_RANK[a]),
+      governanceStatuses: [...item.governanceStatuses].sort(),
+      riskReasons: [...item.riskReasons].sort(),
+      needsReview: item.needsReview,
+    }))
+    .sort((a, b) => (
+      EXTERNAL_RISK_RANK[b.highestRiskLevel] - EXTERNAL_RISK_RANK[a.highestRiskLevel]
+      || b.linkCount - a.linkCount
+      || a.domain.localeCompare(b.domain)
+    ));
 }
 
 function countUnique(items) {

@@ -560,6 +560,12 @@ function makeExternalLinksCsv(items) {
     "registrableDomain",
     "type",
     "categories",
+    "riskLevel",
+    "riskReasons",
+    "governanceStatus",
+    "matchedRules",
+    "needsReview",
+    "sourceCount",
     "checked",
     "ok",
     "status",
@@ -587,6 +593,12 @@ function makeExternalLinksCsv(items) {
         item.registrableDomain || "",
         item.type || "",
         (item.categories || []).join(";"),
+        item.externalRisk?.riskLevel || "",
+        (item.externalRisk?.riskReasons || []).join(";"),
+        item.externalRisk?.governanceStatus || "",
+        formatMatchedRules(item.externalRisk?.matchedRules || []),
+        item.externalRisk?.needsReview ? "yes" : "no",
+        item.sourceCount ?? item.sources?.length ?? "",
         item.checked ? "yes" : "no",
         item.ok === null || item.ok === undefined ? "" : item.ok ? "yes" : "no",
         item.status ?? "",
@@ -617,7 +629,10 @@ function buildExternalSummary(report) {
     totalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
     byType: countByValue(externalLinks.map((item) => item.type || "unknown")),
     byCategory: countCategories(externalLinks),
+    byRiskLevel: countByValue(externalLinks.map((item) => item.externalRisk?.riskLevel || "info")),
+    byGovernanceStatus: countByValue(externalLinks.map((item) => item.externalRisk?.governanceStatus || "unknown")),
     domains: summarizeExternalDomains(externalLinks),
+    riskDomains: summarizeExternalRiskDomains(externalLinks),
   };
 }
 
@@ -654,6 +669,65 @@ function summarizeExternalDomains(items) {
     .sort((a, b) => b.linkCount - a.linkCount || a.domain.localeCompare(b.domain));
 }
 
+function summarizeExternalRiskDomains(items) {
+  const riskRank = {
+    high: 3,
+    medium: 2,
+    low: 1,
+    info: 0,
+  };
+  const domains = new Map();
+  for (const item of items) {
+    const domain = item.registrableDomain || item.hostname || "";
+    if (!domain) {
+      continue;
+    }
+    if (!domains.has(domain)) {
+      domains.set(domain, {
+        domain,
+        linkCount: 0,
+        sourceCount: 0,
+        highestRiskLevel: "info",
+        riskLevels: new Set(),
+        governanceStatuses: new Set(),
+        riskReasons: new Set(),
+        needsReview: false,
+      });
+    }
+    const summary = domains.get(domain);
+    const risk = item.externalRisk || {};
+    const riskLevel = risk.riskLevel || "info";
+    summary.linkCount += 1;
+    summary.sourceCount += item.sourceCount || item.sources?.length || 0;
+    summary.riskLevels.add(riskLevel);
+    summary.governanceStatuses.add(risk.governanceStatus || "unknown");
+    summary.needsReview = summary.needsReview || Boolean(risk.needsReview);
+    for (const reason of risk.riskReasons || []) {
+      summary.riskReasons.add(reason);
+    }
+    if ((riskRank[riskLevel] ?? 0) > (riskRank[summary.highestRiskLevel] ?? 0)) {
+      summary.highestRiskLevel = riskLevel;
+    }
+  }
+
+  return [...domains.values()]
+    .map((item) => ({
+      domain: item.domain,
+      linkCount: item.linkCount,
+      sourceCount: item.sourceCount,
+      highestRiskLevel: item.highestRiskLevel,
+      riskLevels: [...item.riskLevels].sort((a, b) => (riskRank[b] ?? 0) - (riskRank[a] ?? 0)),
+      governanceStatuses: [...item.governanceStatuses].sort(),
+      riskReasons: [...item.riskReasons].sort(),
+      needsReview: item.needsReview,
+    }))
+    .sort((a, b) => (
+      (riskRank[b.highestRiskLevel] ?? 0) - (riskRank[a.highestRiskLevel] ?? 0)
+      || b.linkCount - a.linkCount
+      || a.domain.localeCompare(b.domain)
+    ));
+}
+
 function countByValue(values) {
   const counts = {};
   for (const value of values) {
@@ -680,6 +754,18 @@ function countUnique(items) {
 function csvCell(value) {
   const text = String(value ?? "");
   return `"${text.replace(/"/g, "\"\"")}"`;
+}
+
+function formatMatchedRules(rules) {
+  return rules
+    .map((rule) => {
+      if (typeof rule === "string") {
+        return rule;
+      }
+      return [rule.id, rule.riskReason, rule.riskLevel].filter(Boolean).join(":");
+    })
+    .filter(Boolean)
+    .join(";");
 }
 
 function makeEventsLog(events) {
