@@ -234,6 +234,27 @@ P4-0 是 P4 的前置 gate，不是獨立大型功能。它只處理分類語意
 
 這是降低誤判的第一個 user-facing 功能，應建立在 P1-P3 後實作，讓 confirmation 結果可以乾淨掛到 result model。
 
+狀態：已完成。核心已在主掃描完成後、輸出報告前執行同站 `404 / 410` 集中複查；CLI、GUI、Analyzer 與 CSV/JSON 報告皆已接上最小呈現。
+
+已完成項目：
+
+- result model 新增 `confirmation`，保留初次掃描的 `status`、`method`、`checkedAt`、`finalUrl`、`issueType` 與 `sources`。
+- `confirmation.outcome` 支援 `recovered`、`confirmed_missing`、`needs_review`。
+- 新增 `transientFailure` 與 `needsReview`，供 UI 與後續歷史比對使用。
+- 複查候選限制為同站、初次 `404 / 410`、非外連、非 WAF/Bot challenge。
+- 複查使用 `GET`、來源頁 `Referer`、純瀏覽器相容 User-Agent、低併發與 `1000-3000ms` jitter。
+- 內建全域最多 `100` 筆、每 host 最多 `20` 筆、全域併發 `2`、每 host 併發 `1`。
+- CLI 提供 `--confirm-404` 與 `--no-confirm-404`，預設開啟。
+- GUI 預設開啟二次確認，並顯示候選、已恢復、需複查、確認不存在統計。
+- Analyzer 顯示每筆二次確認狀態，CSV 匯出追加 confirmation 欄位。
+
+驗證紀錄：
+
+- 初次 `404`、二次 `200`，輸出 `confirmation.outcome: "recovered"`。
+- 初次 `410`、二次 `410`，輸出 `confirmation.outcome: "confirmed_missing"`。
+- 初次 `404`、二次 `429`，輸出 `confirmation.outcome: "needs_review"`，並標示 `transientFailure` / `needsReview`。
+- 關閉二次確認時，result 明確輸出 `confirmation.enabled: false`。
+
 優先順序：
 
 1. P4a 資料模型先行。
