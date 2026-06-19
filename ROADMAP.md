@@ -12,6 +12,10 @@
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
 | P4-0 | 已完成 | 404 / 410 分類與 UI 文案一致化。 |
 | P4 | 已完成 | 404 / 410 二次確認 MVP。 |
+| P5 | 下一個主要項目 | 外連風險規則、治理分類與風險摘要。 |
+| P6 | 待規劃 | 兩份 report 歷史比對。 |
+| P7 | 待規劃 | TTL 檢查快取。 |
+| P8 | 待規劃 | 建立在 history/cache 上的增量掃描。 |
 
 近期順序：
 
@@ -19,6 +23,13 @@
 2. P6 歷史比對。
 3. P7 TTL 檢查快取。
 4. P8 增量掃描。
+
+下一個工作包：
+
+1. P5a 建立外連風險 result model：`riskLevel`、`riskReasons`、`governanceStatus`、`externalRisk`。
+2. P5b 建立外連規則引擎：白名單、黑名單、觀察名單、短網址、社群、追蹤分析、下載、嵌入內容、redirect 風險。
+3. P5c 補齊 GUI / Analyzer 最小呈現：外連風險篩選、網域排行、CSV 欄位與治理摘要。
+4. P5 驗收後再進入 P6 report diff；不要先做完整 stateful incremental scan。
 
 ## 開發主軸
 
@@ -255,11 +266,22 @@ P4-0 是 P4 的前置 gate，不是獨立大型功能。它只處理分類語意
 - 初次 `404`、二次 `429`，輸出 `confirmation.outcome: "needs_review"`，並標示 `transientFailure` / `needsReview`。
 - 關閉二次確認時，result 明確輸出 `confirmation.enabled: false`。
 
-優先順序：
+`410 Gone` 應用策略：
+
+- `410` 在 HTTP 語意上比 `404` 更明確，代表伺服器宣告資源已永久移除；但 link checker 仍需二次確認，以降低 User-Agent、Referer、HEAD/GET 差異、CDN cache、路由或防護策略造成的誤判。
+- 初次 `410`、二次仍為 `404 / 410`，可視為高信心 `confirmed_missing`，治理上優先建議更新或移除連結。
+- 初次 `410`、二次為 `2xx / 3xx`，應標示 `recovered`，不可當成確定壞連結。
+- 初次 `410`、二次為 `403 / 429 / timeout / protected / network_error`，應標示 `needs_review`，交由人工或後續掃描確認。
+- GUI / Analyzer 可先維持 `404 / 410` 合併統計；後續 P5/P6 可用初次狀態碼與 `confirmation.outcome` 做信心排序，例如 `410 + confirmed_missing` 高於 `404 + confirmed_missing`。
+- 外連 `410` 在 P4 MVP 先不進入二次確認；後續應等 P5 外連風險規則與 P7 TTL cache 穩定後，再決定是否納入外連複查策略。
+
+原始實作切分：
 
 1. P4a 資料模型先行。
 2. P4b 複查管線。
 3. P4c CLI / GUI / Analyzer 最小呈現。
+
+以下保留 P4 原始規格，作為後續維護與回歸驗證依據。
 
 P4a 資料模型：
 
@@ -320,6 +342,18 @@ P4 驗收矩陣：
 
 建立在既有外連盤點、網域分類與 URL inventory 上，補足治理分析。
 
+狀態：下一個主要項目。P5 應先產生穩定 report schema，再補規則引擎與 UI 呈現；不要先做大型 Analyzer 改版。
+
+P5a 資料模型：
+
+- 在外連項目上新增 `externalRisk`，保留既有 `externalLinks[]` shape 相容。
+- `externalRisk` 建議包含 `riskLevel`、`riskReasons`、`governanceStatus`、`matchedRules`、`needsReview`。
+- `governanceStatus` 第一版收斂為 `allowed`、`blocked`、`watchlisted`、`unknown`、`needs_review`。
+- `riskLevel` 第一版收斂為 `high`、`medium`、`low`、`info`。
+- report summary 新增外連風險統計，例如 by risk level、by governance status、by domain。
+
+P5b 規則引擎：
+
 - 支援白名單、黑名單與觀察名單。
 - 標示短網址、社群、追蹤分析、CDN、下載、嵌入內容等類型。
 - 標示跨 host redirect、長 redirect chain、redirect to error。
@@ -329,7 +363,21 @@ P4 驗收矩陣：
 - 保存 CDN/WAF 診斷證據：provider、matched headers、matched body patterns、blocked reason、body hash。
 - 標示外部連結是否有多頁重複引用。
 - 報告提供 `riskLevel` 與 `riskReasons`。
+
+P5c 呈現：
+
 - GUI / Analyzer 以分類篩選外連風險。
+- Analyzer 顯示高風險外連、需人工確認、重複引用外連與高風險網域排行。
+- CSV 追加 `riskLevel`、`riskReasons`、`governanceStatus`、`matchedRules`、`sourceCount`。
+
+P5 驗收矩陣：
+
+- 白名單網域應標為 `allowed`，不因一般分類規則升為高風險。
+- 黑名單網域應標為 `blocked` 且 `riskLevel: "high"`。
+- 觀察名單網域應標為 `watchlisted` 並進入需檢視摘要。
+- 短網址與追蹤分析 URL 應產生對應 `riskReasons`。
+- 外連 redirect to error 應同時保留 redirect 證據與外連風險原因。
+- WAF/Bot/CDN 類結果應進治理狀態，不直接混入一般 broken link 修復流程。
 
 理由：
 
@@ -341,13 +389,16 @@ P4 驗收矩陣：
 
 先做「兩份 report 比對」，再做完整 stateful incremental scan。
 
-第一階段：
+狀態：P5 後實作。P6 只做 report-to-report diff，不引入常駐資料庫。
+
+P6a report diff：
 
 - 比對兩份 `report.json`。
 - 顯示新增 URL、移除 URL、狀態改變、final URL 改變、redirect chain 改變。
 - 顯示問題是否新發生、已修復、持續存在。
+- 比對 `confirmation.outcome`、`needsReview`、`transientFailure` 與外連風險狀態。
 
-第二階段：
+P6b scan state 草案：
 
 - 保存 scan state：
 
@@ -370,6 +421,14 @@ P4 驗收矩陣：
 }
 ```
 
+P6 驗收矩陣：
+
+- 同一 canonical URL 從 `404` 變 `200` 應標示已修復。
+- 同一 canonical URL 從 `200` 變 `404/410` 應標示新發生問題。
+- `confirmation.outcome` 從 `needs_review` 變 `confirmed_missing` 應標示信心提高。
+- 外連風險從 `low` 變 `high` 應進入治理摘要。
+- 來源頁移除但 URL 仍在其他頁存在時，不應誤判 URL 完全移除。
+
 理由：
 
 - 歷史比對比單次掃描更符合治理需求。
@@ -378,6 +437,8 @@ P4 驗收矩陣：
 ### P7. TTL 檢查快取
 
 在 result model、inventory 與 P2b canonical key integration 穩定後加入持久化快取，避免大型內容庫每次全站重打外部 URL。
+
+狀態：P6 後實作。P7 只處理可驗證的 URL result 快取，不先處理 page HTML cache。
 
 建議 cache file：
 
@@ -418,6 +479,14 @@ CLI 可新增：
 - `--no-cache`
 - `--refresh-cache`
 
+P7 驗收矩陣：
+
+- 相同 canonical key、method policy、UA hash、語言與 referer mode 時可命中 cache。
+- `404/410` 快取 TTL 應短於穩定 `200/204/3xx`。
+- `429/timeout/5xx` 應短 TTL，避免長時間保留暫時性失敗。
+- `blocked_waf/blocked_bot/rate_limited` 應短 TTL 或不快取。
+- `--refresh-cache` 應忽略既有 cache 並回寫新結果。
+
 理由：
 
 - 大型站台與外部連結檢查需要控制頻率。
@@ -426,6 +495,8 @@ CLI 可新增：
 ### P8. 增量掃描
 
 建立在 scan state 與 TTL cache 上，只優先檢查變更範圍。
+
+狀態：P6/P7 後實作。P8 依賴 report diff、scan state 與 TTL cache，不應提前做。
 
 - 優先檢查新頁面。
 - 優先檢查 HTML hash 改變的頁面。
@@ -438,6 +509,13 @@ CLI 可新增：
 - `--incremental`
 - `--state-file <file>`
 - `--changed-only`
+
+P8 驗收矩陣：
+
+- 新頁面與 hash 改變頁面應被優先掃描。
+- 未變更頁面中的穩定 URL 若 TTL 未過期，應可跳過。
+- 上次為 `needs_review`、timeout、redirect error 或 high risk 的 URL 應優先複查。
+- 增量掃描 report 仍需保留完整可讀摘要，不能只輸出 delta。
 
 理由：
 
