@@ -837,7 +837,7 @@ function getIssueType(result) {
   if (result.classification === "access_denied" || result.status === 403) {
     return "access_denied";
   }
-  if (result.status === 404) {
+  if (result.status === 404 || result.status === 410) {
     return "not_found";
   }
   if (result.classification === "network_error") {

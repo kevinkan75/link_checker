@@ -10,19 +10,18 @@
 | P1 | 已完成 | 結果模型、WAF/Bot/CDN 診斷、cache headers。 |
 | P2 | 已完成 | URL canonical strategy 與 canonical key integration。 |
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
-| P4-0 | P4 前置 gate | 404 / 410 分類與 UI 文案一致化，小 commit。 |
+| P4-0 | 已完成 | 404 / 410 分類與 UI 文案一致化。 |
 | P4 | 下一個主要項目 | 404 / 410 二次確認 MVP。 |
 
 近期順序：
 
-1. P4-0 先以小 commit 補齊 410 分類與「不存在」文案一致性。
-2. P4a 建立 confirmation result model 與報告欄位。
-3. P4b 建立主掃描後的 404 / 410 集中複查管線。
-4. P4c 補齊 CLI / GUI / Analyzer 最小呈現。
-5. P5 外連風險規則。
-6. P6 歷史比對。
-7. P7 TTL 檢查快取。
-8. P8 增量掃描。
+1. P4a 建立 confirmation result model 與報告欄位。
+2. P4b 建立主掃描後的 404 / 410 集中複查管線。
+3. P4c 補齊 CLI / GUI / Analyzer 最小呈現。
+4. P5 外連風險規則。
+5. P6 歷史比對。
+6. P7 TTL 檢查快取。
+7. P8 增量掃描。
 
 ## 開發主軸
 
@@ -195,7 +194,9 @@ Inventory metrics：
 - P3 的 queue/backpressure 才是真正改善大型站台效能的主體。
 - inventory 必須保留原始 URL 與所有來源，才能安全支撐後續 moderate/aggressive canonicalization。
 
-### P4-0. 404 / 410 分類與文案一致化
+### P4-0. 404 / 410 分類與文案一致化（已完成）
+
+狀態：已完成。核心 report、GUI server、主 GUI 與 README 已同步將 `404 / 410` 視為「不存在」分類；Analyzer 原本已支援 `404/410` 判讀。
 
 P4-0 是 P4 的前置 gate，不是獨立大型功能。它只處理分類語意與文案一致性，讓後續 P4a/P4b 不必一邊做二次確認、一邊修正 `404/410` 基礎分類。
 

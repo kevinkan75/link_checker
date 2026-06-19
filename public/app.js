@@ -1013,7 +1013,7 @@ function getIssueType(item) {
   if (item.classification === "access_denied" || item.status === 403) {
     return "access_denied";
   }
-  if (item.status === 404) {
+  if (item.status === 404 || item.status === 410) {
     return "not_found";
   }
   if (item.classification === "network_error") {
@@ -1047,7 +1047,7 @@ function formatIssueLabel(item) {
     return "轉址無法到達";
   }
   if ((item.issueType || getIssueType(item)) === "not_found") {
-    return "404";
+    return "404 / 410";
   }
   if ((item.issueType || getIssueType(item)) === "timeout") {
     return "逾時";

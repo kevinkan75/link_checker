@@ -104,7 +104,7 @@
 
               <section class="settings-section" aria-labelledby="reliability-settings-title">
                 <h3 id="reliability-settings-title">請求可靠性</h3>
-                <p>慢站可提高逾時；重試只適合暫時性錯誤，不會修正一般 404 或 403。</p>
+                <p>慢站可提高逾時；重試只適合暫時性錯誤，不會修正一般 404 / 410 或 403。</p>
                 <div class="settings-grid two-column">
                   <label>
                     <span>逾時毫秒</span>
@@ -248,7 +248,7 @@
         </div>
         <h3 class="status-subheading">問題類型</h3>
         <div class="issue-grid">
-          <div><span>404</span><strong id="issue-not-found">0</strong></div>
+          <div><span>404 / 410</span><strong id="issue-not-found">0</strong></div>
           <div><span>防護阻擋</span><strong id="issue-protected">0</strong></div>
           <div><span>存取被拒</span><strong id="issue-access-denied">0</strong></div>
           <div><span>HTTP 錯誤</span><strong id="issue-http">0</strong></div>
@@ -276,7 +276,7 @@
           </div>
           <div id="filter-bar" class="filter-bar" aria-label="問題連結分類篩選">
             <button type="button" class="active" data-filter="all">全部 <span>0</span></button>
-            <button type="button" data-filter="not_found">404 <span>0</span></button>
+            <button type="button" data-filter="not_found">404 / 410 <span>0</span></button>
             <button type="button" data-filter="protected">防護阻擋 <span>0</span></button>
             <button type="button" data-filter="access_denied">存取被拒 <span>0</span></button>
             <button type="button" data-filter="http_error">HTTP 錯誤 <span>0</span></button>

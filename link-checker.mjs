@@ -360,7 +360,7 @@ class ProgressReporter {
       `Active ${this.checker.fetchLimiter.active}`,
       `Host queues ${this.checker.hostScheduler.pendingCount()}`,
       `Broken ${broken}`,
-      `404 ${brokenByType.not_found}`,
+      `404/410 ${brokenByType.not_found}`,
       `Blocked ${brokenByType.protected}`,
       `Denied ${brokenByType.access_denied}`,
       `Skipped external ${this.checker.skippedExternal}`,
@@ -2476,7 +2476,7 @@ function getIssueType(result) {
   if (result.classification === "access_denied" || result.status === 403) {
     return "access_denied";
   }
-  if (result.status === 404) {
+  if (result.status === 404 || result.status === 410) {
     return "not_found";
   }
   if (result.classification === "network_error") {
@@ -2576,7 +2576,7 @@ function addUnique(items, value) {
 
 function getIssueTypeLabel(issueType) {
   const labels = {
-    not_found: "404 not found",
+    not_found: "404/410 not found",
     protected: "Blocked by protection layer",
     access_denied: "Access denied / needs review",
     http_error: "Other HTTP errors",
