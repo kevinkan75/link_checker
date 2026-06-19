@@ -2,7 +2,7 @@
 
 ## 狀態總覽
 
-目前基礎資料模型已穩定，下一階段應進入降低誤判與治理分析功能。
+目前 404 / 410 二次確認 MVP 已落地，下一階段應進入外連風險規則與治理分析功能。
 
 | 階段 | 狀態 | 重點 |
 | --- | --- | --- |
@@ -11,17 +11,14 @@
 | P2 | 已完成 | URL canonical strategy 與 canonical key integration。 |
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
 | P4-0 | 已完成 | 404 / 410 分類與 UI 文案一致化。 |
-| P4 | 下一個主要項目 | 404 / 410 二次確認 MVP。 |
+| P4 | 已完成 | 404 / 410 二次確認 MVP。 |
 
 近期順序：
 
-1. P4a 建立 confirmation result model 與報告欄位。
-2. P4b 建立主掃描後的 404 / 410 集中複查管線。
-3. P4c 補齊 CLI / GUI / Analyzer 最小呈現。
-4. P5 外連風險規則。
-5. P6 歷史比對。
-6. P7 TTL 檢查快取。
-7. P8 增量掃描。
+1. P5 外連風險規則。
+2. P6 歷史比對。
+3. P7 TTL 檢查快取。
+4. P8 增量掃描。
 
 ## 開發主軸
 

@@ -149,6 +149,11 @@
                   </label>
 
                   <label class="toggle-field option-toggle">
+                    <input id="confirm-404" name="confirm404" type="checkbox" checked>
+                    <span>404 / 410 二次確認</span>
+                  </label>
+
+                  <label class="toggle-field option-toggle">
                     <input id="legacy-tls" name="legacyTls" type="checkbox">
                     <span>Legacy TLS</span>
                   </label>
@@ -264,6 +269,13 @@
           <div><span>跨 host</span><strong id="redirect-cross-host">0</strong></div>
           <div><span>轉址過長</span><strong id="redirect-long">0</strong></div>
           <div><span>未完成轉址</span><strong id="redirect-unresolved">0</strong></div>
+        </div>
+        <h3 class="status-subheading">二次確認</h3>
+        <div class="confirmation-grid">
+          <div><span>候選</span><strong id="confirmation-candidates">0</strong></div>
+          <div><span>已恢復</span><strong id="confirmation-recovered">0</strong></div>
+          <div><span>需複查</span><strong id="confirmation-needs-review">0</strong></div>
+          <div><span>確認不存在</span><strong id="confirmation-missing">0</strong></div>
         </div>
         <p id="log-location" class="log-location" hidden></p>
       </section>

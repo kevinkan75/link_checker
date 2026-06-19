@@ -166,6 +166,9 @@ function normalizeBrokenItems(items) {
       bodySignature: item.bodySignature && typeof item.bodySignature === "object" ? item.bodySignature : null,
       suspectedWaf: Boolean(item.suspectedWaf),
       suspectedBot: Boolean(item.suspectedBot),
+      confirmation: normalizeConfirmation(item.confirmation),
+      needsReview: Boolean(item.needsReview),
+      transientFailure: Boolean(item.transientFailure),
       elapsedMs: item.elapsedMs ?? "",
       error: item.error || "",
       diagnosis: item.diagnosis || "",
@@ -173,6 +176,34 @@ function normalizeBrokenItems(items) {
       sources,
     };
   }).filter((item) => item.url);
+}
+
+function normalizeConfirmation(value) {
+  if (!value || typeof value !== "object") {
+    return {
+      enabled: false,
+      candidate: false,
+      checked: false,
+      outcome: "",
+      status: "",
+      finalUrl: "",
+      checkedAt: "",
+      referer: "",
+      reason: "",
+    };
+  }
+
+  return {
+    enabled: Boolean(value.enabled),
+    candidate: Boolean(value.candidate),
+    checked: Boolean(value.checked),
+    outcome: value.outcome || "",
+    status: value.status ?? "",
+    finalUrl: value.finalUrl || "",
+    checkedAt: value.checkedAt || "",
+    referer: value.referer || "",
+    reason: value.reason || "",
+  };
 }
 
 function inferIssueType(item) {
@@ -390,6 +421,9 @@ function renderIssueItem(item) {
   if (hasIssueStatusMismatch(item)) {
     header.append(metaBadge("分類與狀態需確認", "impact"));
   }
+  if (item.confirmation.enabled && item.confirmation.candidate) {
+    header.append(metaBadge(getConfirmationLabel(item.confirmation), "impact"));
+  }
   if (sourceCount > 1) {
     header.append(metaBadge(`${formatNumber(sourceCount)} 個來源`, "impact"));
   }
@@ -411,6 +445,9 @@ function renderIssueItem(item) {
   }
   if (item.blockedReason || item.suspectedWaf || item.suspectedBot) {
     row.append(detailLine("防護診斷", formatProtectionDiagnostics(item)));
+  }
+  if (item.confirmation.enabled) {
+    row.append(detailLine("二次確認", formatConfirmationStatus(item.confirmation)));
   }
   return row;
 }
@@ -453,6 +490,55 @@ function formatProtectionDiagnostics(item) {
     parts.push(`patterns: ${item.bodySignature.matchedPatterns.join(", ")}`);
   }
   return parts.join("；") || "無";
+}
+
+function getConfirmationLabel(confirmation) {
+  const labels = {
+    recovered: "二次確認已恢復",
+    needs_review: "二次確認需複查",
+    confirmed_missing: "二次確認不存在",
+  };
+  if (!confirmation.checked) {
+    return "二次確認未複查";
+  }
+  return labels[confirmation.outcome] || "二次確認";
+}
+
+function formatConfirmationStatus(confirmation) {
+  if (!confirmation.enabled) {
+    return "未啟用";
+  }
+  if (!confirmation.candidate) {
+    return "非二次確認候選";
+  }
+  if (!confirmation.checked) {
+    return `未複查${confirmation.reason ? `（${formatConfirmationReason(confirmation.reason)}）` : ""}`;
+  }
+
+  const status = confirmation.status ? `HTTP ${confirmation.status}` : "未取得 HTTP 狀態";
+  const checkedAt = confirmation.checkedAt ? `，${confirmation.checkedAt}` : "";
+  return `${getConfirmationLabel(confirmation)}（${status}${checkedAt}）`;
+}
+
+function formatConfirmationReason(reason) {
+  const labels = {
+    disabled: "未啟用",
+    not_candidate: "非候選",
+    queued: "已排入複查",
+    per_host_limit: "超過每 host 上限",
+    global_limit: "超過全域上限",
+    stopped: "已停止",
+    ok: "可正常開啟",
+    still_not_found: "仍為 404 / 410",
+    blocked_waf: "疑似 WAF 阻擋",
+    blocked_bot: "疑似 Bot challenge",
+    rate_limited: "被限流",
+    access_denied: "存取被拒",
+    timeout: "逾時",
+    network_error: "網路錯誤",
+    unknown: "結果不明",
+  };
+  return labels[reason] || reason;
 }
 
 function detailLine(label, value) {
@@ -624,6 +710,17 @@ function makeBrokenCsv(items) {
     "suspectedWaf",
     "suspectedBot",
     "blockedReason",
+    "confirmationEnabled",
+    "confirmationCandidate",
+    "confirmationChecked",
+    "confirmationOutcome",
+    "confirmationStatus",
+    "confirmationFinalUrl",
+    "confirmationCheckedAt",
+    "confirmationReferer",
+    "confirmationReason",
+    "needsReview",
+    "transientFailure",
     "sourcePage",
     "tag",
     "attribute",
@@ -649,6 +746,17 @@ function makeBrokenCsv(items) {
         item.suspectedWaf ? "yes" : "no",
         item.suspectedBot ? "yes" : "no",
         item.blockedReason,
+        item.confirmation.enabled ? "yes" : "no",
+        item.confirmation.candidate ? "yes" : "no",
+        item.confirmation.checked ? "yes" : "no",
+        item.confirmation.outcome,
+        item.confirmation.status,
+        item.confirmation.finalUrl,
+        item.confirmation.checkedAt,
+        item.confirmation.referer,
+        item.confirmation.reason,
+        item.needsReview ? "yes" : "no",
+        item.transientFailure ? "yes" : "no",
         source.page || "",
         source.tag || "",
         source.attribute || "",

@@ -77,6 +77,13 @@ const DEFAULTS = {
   canonicalStrategy: "safe",
   legacyTls: false,
   systemCa: false,
+  confirm404: true,
+  confirmationMaxUrls: 100,
+  confirmationMaxPerHost: 20,
+  confirmationConcurrency: 2,
+  confirmationPerHostConcurrency: 1,
+  confirmationDelayMinMs: 1000,
+  confirmationDelayMaxMs: 3000,
   userAgent: `${BROWSER_USER_AGENT} LocalLinkChecker/1.0`,
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
 };
@@ -413,6 +420,13 @@ class LinkChecker {
       requestDelayMaxMs: this.options.requestDelayMaxMs,
       globalLimiter: this.fetchLimiter,
     });
+    this.confirmationScheduler = new HostScheduler({
+      perHostConcurrency: this.options.confirmationPerHostConcurrency,
+      requestDelayMs: 0,
+      requestDelayMinMs: this.options.confirmationDelayMinMs,
+      requestDelayMaxMs: this.options.confirmationDelayMaxMs,
+      globalLimiter: new Limiter(this.options.confirmationConcurrency),
+    });
     this.pageQueue = [{ url: this.startUrl, depth: 0 }];
     this.queuedPages = new Set([this.startUrl]);
     this.crawledPages = new Set();
@@ -449,6 +463,7 @@ class LinkChecker {
     );
     try {
       await Promise.all(workers);
+      await this.confirmNotFoundResults();
       return this.buildReport();
     } finally {
       this.reporter?.stop();
@@ -998,6 +1013,144 @@ class LinkChecker {
     return this.options.externalReferer ? source : null;
   }
 
+  async confirmNotFoundResults() {
+    if (!this.options.confirm404) {
+      this.applyConfirmationDefaults(false);
+      return;
+    }
+
+    this.applyConfirmationDefaults(true);
+    const candidates = this.getNotFoundConfirmationCandidates();
+    await Promise.all(candidates.map((result) => this.confirmNotFoundResult(result)));
+  }
+
+  applyConfirmationDefaults(enabled) {
+    for (const result of this.results.values()) {
+      result.confirmation = {
+        enabled,
+        candidate: false,
+        checked: false,
+        status: null,
+        ok: null,
+        finalUrl: null,
+        checkedAt: null,
+        method: null,
+        referer: null,
+        elapsedMs: null,
+        outcome: null,
+        reason: enabled ? "not_candidate" : "disabled",
+      };
+      result.transientFailure = false;
+      result.needsReview = false;
+    }
+  }
+
+  getNotFoundConfirmationCandidates() {
+    const hostCounts = new Map();
+    const candidates = [];
+
+    for (const result of this.results.values()) {
+      if (!this.isNotFoundConfirmationCandidate(result)) {
+        continue;
+      }
+
+      const host = new URL(result.url).hostname;
+      const hostCount = hostCounts.get(host) || 0;
+      if (hostCount >= this.options.confirmationMaxPerHost) {
+        result.confirmation = {
+          ...result.confirmation,
+          candidate: true,
+          reason: "per_host_limit",
+        };
+        result.needsReview = true;
+        continue;
+      }
+      if (candidates.length >= this.options.confirmationMaxUrls) {
+        result.confirmation = {
+          ...result.confirmation,
+          candidate: true,
+          reason: "global_limit",
+        };
+        result.needsReview = true;
+        continue;
+      }
+
+      hostCounts.set(host, hostCount + 1);
+      result.confirmation = {
+        ...result.confirmation,
+        candidate: true,
+        reason: "queued",
+      };
+      candidates.push(result);
+    }
+
+    return candidates;
+  }
+
+  isNotFoundConfirmationCandidate(result) {
+    return !this.stopped
+      && !result.ok
+      && result.issueType === "not_found"
+      && (result.status === 404 || result.status === 410)
+      && this.isCrawlOrigin(result.url)
+      && result.classification !== "protected"
+      && !result.suspectedWaf
+      && !result.suspectedBot;
+  }
+
+  async confirmNotFoundResult(result) {
+    if (this.stopped) {
+      result.confirmation = {
+        ...result.confirmation,
+        checked: false,
+        outcome: "needs_review",
+        reason: "stopped",
+      };
+      result.needsReview = true;
+      return;
+    }
+
+    const referer = this.getConfirmationReferer(result.url);
+    const confirmed = await fetchUrl(result.url, {
+      requireBody: false,
+      forceGet: true,
+      timeoutMs: this.options.timeoutMs,
+      retryCount: 0,
+      maxRedirects: this.options.maxRedirects,
+      longRedirectThreshold: this.options.longRedirectThreshold,
+      userAgent: BROWSER_USER_AGENT,
+      acceptLanguage: this.options.acceptLanguage,
+      referer,
+      preferGet: true,
+      canonicalStrategy: this.options.canonicalStrategy,
+      legacyTls: this.options.legacyTls,
+      scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
+    });
+
+    const outcome = getConfirmationOutcome(confirmed);
+    result.confirmation = {
+      enabled: true,
+      candidate: true,
+      checked: true,
+      status: confirmed.status ?? null,
+      ok: confirmed.ok ?? null,
+      finalUrl: confirmed.finalUrl || null,
+      checkedAt: confirmed.checkedAt || null,
+      method: confirmed.method || "GET",
+      referer,
+      elapsedMs: confirmed.elapsedMs ?? null,
+      outcome,
+      reason: getConfirmationReason(confirmed),
+    };
+    result.transientFailure = outcome === "needs_review" && isTransientConfirmationResult(confirmed);
+    result.needsReview = outcome === "needs_review";
+  }
+
+  getConfirmationReferer(url) {
+    const source = this.getSourcesForUrl(url).find((item) => sameOrigin(item.page, url));
+    return source?.page || null;
+  }
+
   buildReport() {
     const checked = [...this.results.values()];
     const externalLinks = this.buildExternalLinks(checked);
@@ -1034,6 +1187,13 @@ class LinkChecker {
         canonicalStrategy: this.options.canonicalStrategy,
         legacyTls: this.options.legacyTls,
         systemCa: this.options.systemCa,
+        confirm404: this.options.confirm404,
+        confirmationMaxUrls: this.options.confirmationMaxUrls,
+        confirmationMaxPerHost: this.options.confirmationMaxPerHost,
+        confirmationConcurrency: this.options.confirmationConcurrency,
+        confirmationPerHostConcurrency: this.options.confirmationPerHostConcurrency,
+        confirmationDelayMinMs: this.options.confirmationDelayMinMs,
+        confirmationDelayMaxMs: this.options.confirmationDelayMaxMs,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
       },
       summary: {
@@ -1048,6 +1208,7 @@ class LinkChecker {
         externalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
         externalByType: countExternalByType(externalLinks),
         externalByCategory: countExternalByCategory(externalLinks),
+        confirmation: countConfirmationByOutcome(checked),
         inventorySummary,
       },
       broken,
@@ -2490,6 +2651,48 @@ function getIssueType(result) {
   return "unknown_error";
 }
 
+function getConfirmationOutcome(result) {
+  if (result.ok) {
+    return "recovered";
+  }
+  if (result.status === 404 || result.status === 410) {
+    return "confirmed_missing";
+  }
+  return "needs_review";
+}
+
+function getConfirmationReason(result) {
+  if (result.ok) {
+    return "ok";
+  }
+  if (result.status === 404 || result.status === 410) {
+    return "still_not_found";
+  }
+  if (result.classification === "protected" || result.suspectedWaf || result.suspectedBot) {
+    return result.suspectedBot ? "blocked_bot" : "blocked_waf";
+  }
+  if (result.status === 429) {
+    return "rate_limited";
+  }
+  if (result.status === 403 || result.issueType === "access_denied") {
+    return "access_denied";
+  }
+  if (result.issueType === "timeout") {
+    return "timeout";
+  }
+  if (result.classification === "network_error" || result.issueType === "network_error") {
+    return "network_error";
+  }
+  return result.status ? `http_${result.status}` : "unknown";
+}
+
+function isTransientConfirmationResult(result) {
+  return result.status === 429
+    || result.issueType === "timeout"
+    || result.issueType === "network_error"
+    || result.classification === "network_error";
+}
+
 function countBrokenByType(items) {
   const counts = {
     not_found: 0,
@@ -2510,6 +2713,40 @@ function countBrokenByType(items) {
       counts[issueType] += 1;
     } else {
       counts.unknown_error += 1;
+    }
+  }
+
+  return counts;
+}
+
+function countConfirmationByOutcome(items) {
+  const counts = {
+    enabled: false,
+    candidates: 0,
+    checked: 0,
+    confirmed_missing: 0,
+    recovered: 0,
+    needs_review: 0,
+    skipped: 0,
+  };
+
+  for (const item of items) {
+    const confirmation = item.confirmation;
+    if (!confirmation?.enabled) {
+      continue;
+    }
+    counts.enabled = true;
+    if (!confirmation.candidate) {
+      continue;
+    }
+    counts.candidates += 1;
+    if (!confirmation.checked) {
+      counts.skipped += 1;
+      continue;
+    }
+    counts.checked += 1;
+    if (Object.prototype.hasOwnProperty.call(counts, confirmation.outcome)) {
+      counts[confirmation.outcome] += 1;
     }
   }
 
@@ -2714,6 +2951,16 @@ function parseArgs(argv) {
       explicitOptions.add("systemCa");
       continue;
     }
+    if (arg === "--confirm-404") {
+      options.confirm404 = true;
+      explicitOptions.add("confirm404");
+      continue;
+    }
+    if (arg === "--no-confirm-404") {
+      options.confirm404 = false;
+      explicitOptions.add("confirm404");
+      continue;
+    }
     if (arg === "--json") {
       json = true;
       continue;
@@ -2872,6 +3119,12 @@ function parseArgs(argv) {
   options.retryCount = Math.max(0, Math.min(options.retryCount, 5));
   options.maxRedirects = Math.max(0, Math.min(options.maxRedirects, 20));
   options.longRedirectThreshold = Math.max(0, Math.min(options.longRedirectThreshold, options.maxRedirects));
+  options.confirmationMaxUrls = Math.max(0, Math.min(options.confirmationMaxUrls, 1000));
+  options.confirmationMaxPerHost = Math.max(0, Math.min(options.confirmationMaxPerHost, 1000));
+  options.confirmationConcurrency = Math.max(1, Math.min(options.confirmationConcurrency, 10));
+  options.confirmationPerHostConcurrency = Math.max(1, Math.min(options.confirmationPerHostConcurrency, 5));
+  options.confirmationDelayMinMs = Math.max(0, Math.min(options.confirmationDelayMinMs, 60000));
+  options.confirmationDelayMaxMs = Math.max(0, Math.min(options.confirmationDelayMaxMs, 60000));
   options.canonicalStrategy = normalizeCanonicalStrategy(options.canonicalStrategy);
   return { startUrl, options, output, json, progress, verbose, domainRulesSource };
 }
@@ -2995,6 +3248,8 @@ Options:
   --external-referer  Send the source page as Referer for external link checks.
   --legacy-tls        Allow legacy TLS ciphers for sites with weak DH parameters.
   --system-ca         Restart Node with --use-system-ca for OS/browser-trusted roots.
+  --confirm-404       Re-check same-site 404/410 results after the main scan. Default: on.
+  --no-confirm-404    Disable the post-scan 404/410 confirmation stage.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -3036,6 +3291,12 @@ function printSummary(report) {
         console.log(`  ${getRedirectTypeLabel(redirectType)}: ${count}`);
       }
     }
+  }
+  if (summary.confirmation?.enabled) {
+    console.log(`404/410 confirmation: ${summary.confirmation.checked}/${summary.confirmation.candidates} checked`);
+    console.log(`  recovered: ${summary.confirmation.recovered || 0}`);
+    console.log(`  needs review: ${summary.confirmation.needs_review || 0}`);
+    console.log(`  confirmed missing: ${summary.confirmation.confirmed_missing || 0}`);
   }
 
   if (report.broken.length === 0) {

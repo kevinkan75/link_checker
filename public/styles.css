@@ -598,7 +598,8 @@ input:focus {
 }
 
 .issue-grid,
-.redirect-grid {
+.redirect-grid,
+.confirmation-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
   gap: 8px;
@@ -606,7 +607,8 @@ input:focus {
 }
 
 .issue-grid div,
-.redirect-grid div {
+.redirect-grid div,
+.confirmation-grid div {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -615,7 +617,8 @@ input:focus {
 }
 
 .issue-grid span,
-.redirect-grid span {
+.redirect-grid span,
+.confirmation-grid span {
   display: block;
   color: var(--muted);
   font-size: 12px;
@@ -623,7 +626,8 @@ input:focus {
 }
 
 .issue-grid strong,
-.redirect-grid strong {
+.redirect-grid strong,
+.confirmation-grid strong {
   font-size: 18px;
 }
 
@@ -872,7 +876,8 @@ tr:last-child td {
   .headers-grid,
   .metric-grid,
   .issue-grid,
-  .redirect-grid {
+  .redirect-grid,
+  .confirmation-grid {
     grid-template-columns: 1fr 1fr;
     max-width: none;
   }
@@ -919,7 +924,8 @@ tr:last-child td {
   .quick-check,
   .metric-grid,
   .issue-grid,
-  .redirect-grid {
+  .redirect-grid,
+  .confirmation-grid {
     grid-template-columns: 1fr;
   }
 

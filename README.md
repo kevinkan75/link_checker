@@ -102,6 +102,7 @@ dist\LinkChecker-portable.zip
 .\check-links.cmd https://example.com --per-host-concurrency 3 --request-delay-min 0.3 --request-delay-max 1
 .\check-links.cmd https://example.com --max-redirects 10 --long-redirect-threshold 3
 .\check-links.cmd https://example.com --external
+.\check-links.cmd https://example.com --no-confirm-404
 .\check-links.cmd https://example.com --progress
 .\check-links.cmd https://example.com --verbose
 .\check-links.cmd https://example.com --output report.json
@@ -127,6 +128,7 @@ dist\LinkChecker-portable.zip
 - `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
 - `--canonical-strategy <safe|moderate|aggressive>`：設定報告中 `canonicalUrl` 的正規化策略，預設 `safe`；此設定不改變實際請求 URL。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
+- `--confirm-404` / `--no-confirm-404`：是否在主掃描後集中複查同站 `404 / 410`。預設開啟；關閉時 report 仍會標示 confirmation 未啟用。
 - `--conservative`：套用低併發、隨機延遲、偏好 `GET` 與外部連結 `Referer` 的保守檢查設定。
 - `--prefer-get`：使用輕量 `GET` 檢查，不先嘗試 `HEAD`。
 - `--external-referer`：檢查外部連結時也送出來源頁作為 `Referer`。
@@ -242,6 +244,8 @@ dist\LinkChecker-portable.zip
 
 若同站資源的 `HEAD` 回 `404`，工具會用帶 `Referer` 的 `GET` 再確認一次。JSON 報告中的 `requestReferer` 可用來確認該次檢查實際送出的來源頁。
 
+主掃描完成後，工具預設會集中複查同站 `404 / 410`。這個階段使用純瀏覽器相容 User-Agent、`GET`、來源頁 `Referer`、低併發與隨機延遲；外部連結不納入第一版二次確認。二次確認結果會寫入每筆 result 的 `confirmation`，不會覆蓋初次掃描的 `status`、`method`、`checkedAt`、`finalUrl`、`issueType` 與 `sources`。
+
 工具會尊重 HTML 的 `<base href="...">`。若頁面是無副檔名的路由，例如 `/About/FormerMinisters`，且相對資源用 `img/file.jpg` 這類寫法，工具在標準 URL 解析得到 `404` 時，會再依序嘗試站台根目錄 `/img/file.jpg` 與路由目錄 `/About/FormerMinisters/img/file.jpg`，避免因 URL 正規化差異誤判。
 
 ## Redirect 判讀
@@ -279,6 +283,7 @@ dist\LinkChecker-portable.zip
 - 每個問題連結的 HTTP 狀態或錯誤訊息
 - 問題連結是在哪些頁面與標籤屬性中發現
 - 若網站回應像 Cloudflare、Akamai、Imperva、Sucuri 等防護頁，會標示為被防護層阻擋
+- 同站 `404 / 410` 的二次確認統計：已恢復、需複查、確認不存在
 
 問題連結分類包含：
 
@@ -289,6 +294,12 @@ dist\LinkChecker-portable.zip
 - `逾時`：請求超過設定時間沒有完成。
 - `網路錯誤`：DNS、連線拒絕、權限阻擋等未取得 HTTP 回應的錯誤。
 - `其他`：無法歸入上述類型的錯誤。
+
+`confirmation.outcome` 代表二次確認結論：
+
+- `recovered`：初次為 `404 / 410`，二次確認轉為可正常開啟的 `2xx / 3xx`。
+- `confirmed_missing`：二次確認仍為 `404 / 410`。
+- `needs_review`：二次確認遇到逾時、`403`、`429`、防護阻擋、網路錯誤或不明結果，建議人工複查。
 
 程式結束代碼：
 

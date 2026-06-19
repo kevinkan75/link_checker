@@ -16,6 +16,7 @@ const userAgentInput = document.querySelector("#user-agent");
 const externalInput = document.querySelector("#external");
 const preferGetInput = document.querySelector("#prefer-get");
 const externalRefererInput = document.querySelector("#external-referer");
+const confirm404Input = document.querySelector("#confirm-404");
 const legacyTlsInput = document.querySelector("#legacy-tls");
 const systemCaInput = document.querySelector("#system-ca");
 const presetButtons = document.querySelectorAll("[data-preset]");
@@ -64,6 +65,10 @@ const redirectTemporary = document.querySelector("#redirect-temporary");
 const redirectCrossHost = document.querySelector("#redirect-cross-host");
 const redirectLong = document.querySelector("#redirect-long");
 const redirectUnresolved = document.querySelector("#redirect-unresolved");
+const confirmationCandidates = document.querySelector("#confirmation-candidates");
+const confirmationRecovered = document.querySelector("#confirmation-recovered");
+const confirmationNeedsReview = document.querySelector("#confirmation-needs-review");
+const confirmationMissing = document.querySelector("#confirmation-missing");
 const filterBar = document.querySelector("#filter-bar");
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const defaultUserAgent = `${browserUserAgent} LocalLinkChecker/1.0`;
@@ -84,6 +89,7 @@ const defaultSettings = {
   checkExternal: false,
   preferGet: false,
   externalReferer: false,
+  confirm404: true,
   legacyTls: false,
   systemCa: false,
 };
@@ -311,6 +317,7 @@ function applySettings(settings) {
   externalInput.checked = settings.checkExternal;
   preferGetInput.checked = settings.preferGet;
   externalRefererInput.checked = settings.externalReferer;
+  confirm404Input.checked = settings.confirm404;
   legacyTlsInput.checked = settings.legacyTls;
   systemCaInput.checked = settings.systemCa;
 }
@@ -433,6 +440,7 @@ function getCheckOptions() {
     conservativeMode: activePreset === "conservative",
     preferGet: preferGetInput.checked,
     externalReferer: externalRefererInput.checked,
+    confirm404: confirm404Input.checked,
     legacyTls: legacyTlsInput.checked,
     systemCa: systemCaInput.checked,
   };
@@ -760,6 +768,7 @@ function updateStatus(status) {
   updateIssueBreakdown(status.brokenByType || emptyBreakdown(), status.brokenLinks || 0);
   updateFilterCounts(status.brokenByType || emptyBreakdown(), status.brokenLinks || 0);
   updateRedirectBreakdown(status.redirectByType || emptyRedirectBreakdown(), status.redirects || 0);
+  updateConfirmationBreakdown(emptyConfirmationBreakdown());
 
   const maxPages = Number(status.maxPages || maxPagesInput.value || 1);
   const crawled = Number(status.pagesCrawled || 0);
@@ -827,6 +836,7 @@ function renderReport(report) {
   updateIssueBreakdown(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateFilterCounts(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateRedirectBreakdown(report.summary.redirectByType || emptyRedirectBreakdown(), report.summary.redirects || 0);
+  updateConfirmationBreakdown(report.summary.confirmation || buildConfirmationBreakdown(report.checked || broken));
   updateActiveFilter();
 
   renderBrokenTable(broken);
@@ -883,6 +893,9 @@ function renderBrokenItem(item) {
   }
   if (item.classification === "protected" || issueType === "access_denied" || item.diagnosis || item.error) {
     row.append(detailLine("診斷", formatDiagnosis(item)));
+  }
+  if (item.confirmation?.enabled) {
+    row.append(detailLine("二次確認", formatConfirmationStatus(item.confirmation)));
   }
 
   const sources = (item.sources || []).slice(0, 4);
@@ -954,6 +967,18 @@ function emptyRedirectBreakdown() {
   };
 }
 
+function emptyConfirmationBreakdown() {
+  return {
+    enabled: false,
+    candidates: 0,
+    checked: 0,
+    confirmed_missing: 0,
+    recovered: 0,
+    needs_review: 0,
+    skipped: 0,
+  };
+}
+
 function buildBreakdown(items) {
   const counts = emptyBreakdown();
   for (const item of items) {
@@ -962,6 +987,30 @@ function buildBreakdown(items) {
       counts[issueType] += 1;
     } else {
       counts.unknown_error += 1;
+    }
+  }
+  return counts;
+}
+
+function buildConfirmationBreakdown(items) {
+  const counts = emptyConfirmationBreakdown();
+  for (const item of items) {
+    const confirmation = item.confirmation;
+    if (!confirmation?.enabled) {
+      continue;
+    }
+    counts.enabled = true;
+    if (!confirmation.candidate) {
+      continue;
+    }
+    counts.candidates += 1;
+    if (!confirmation.checked) {
+      counts.skipped += 1;
+      continue;
+    }
+    counts.checked += 1;
+    if (Object.prototype.hasOwnProperty.call(counts, confirmation.outcome)) {
+      counts[confirmation.outcome] += 1;
     }
   }
   return counts;
@@ -995,6 +1044,13 @@ function updateRedirectBreakdown(counts, total) {
   redirectUnresolved.textContent = (counts.redirect_to_error || 0)
     + (counts.too_many_redirects || 0)
     + (counts.redirect_loop || 0);
+}
+
+function updateConfirmationBreakdown(counts) {
+  confirmationCandidates.textContent = counts.enabled ? counts.candidates || 0 : 0;
+  confirmationRecovered.textContent = counts.enabled ? counts.recovered || 0 : 0;
+  confirmationNeedsReview.textContent = counts.enabled ? counts.needs_review || 0 : 0;
+  confirmationMissing.textContent = counts.enabled ? counts.confirmed_missing || 0 : 0;
 }
 
 function updateActiveFilter() {
@@ -1071,4 +1127,47 @@ function formatDiagnosis(item) {
     item.suspectedBot ? "疑似 Bot challenge" : "",
   ].filter(Boolean).join("，");
   return diagnostics ? `${status}，${diagnostics}` : status;
+}
+
+function formatConfirmationStatus(confirmation) {
+  if (!confirmation.enabled) {
+    return "未啟用";
+  }
+  if (!confirmation.candidate) {
+    return "非二次確認候選";
+  }
+  if (!confirmation.checked) {
+    return `未複查${confirmation.reason ? `（${formatConfirmationReason(confirmation.reason)}）` : ""}`;
+  }
+
+  const labels = {
+    recovered: "已恢復",
+    needs_review: "需複查",
+    confirmed_missing: "確認不存在",
+  };
+  const label = labels[confirmation.outcome] || confirmation.outcome || "未知";
+  const status = confirmation.status ? `HTTP ${confirmation.status}` : "未取得 HTTP 狀態";
+  const checkedAt = confirmation.checkedAt ? `，${confirmation.checkedAt}` : "";
+  return `${label}（${status}${checkedAt}）`;
+}
+
+function formatConfirmationReason(reason) {
+  const labels = {
+    disabled: "未啟用",
+    not_candidate: "非候選",
+    queued: "已排入複查",
+    per_host_limit: "超過每 host 上限",
+    global_limit: "超過全域上限",
+    stopped: "已停止",
+    ok: "可正常開啟",
+    still_not_found: "仍為 404 / 410",
+    blocked_waf: "疑似 WAF 阻擋",
+    blocked_bot: "疑似 Bot challenge",
+    rate_limited: "被限流",
+    access_denied: "存取被拒",
+    timeout: "逾時",
+    network_error: "網路錯誤",
+    unknown: "結果不明",
+  };
+  return labels[reason] || reason;
 }
