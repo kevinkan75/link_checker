@@ -392,6 +392,7 @@ dist\LinkChecker-portable.zip
 
 - [ROADMAP.md](ROADMAP.md)：目前開發主線；下一個主要項目是 P6 report-to-report diff。
 - [docs/README.md](docs/README.md)：文件目錄索引。
+- [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
 - [docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)：CEC / Nuxt 掃描問題分析與 P5.5 改善來源。
 - [docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)：SPA payload extraction 設計筆記。
