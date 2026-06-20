@@ -81,6 +81,8 @@ Copy-Item -LiteralPath (Join-Path $root "check-links.cmd") -Destination $package
 Copy-Item -LiteralPath (Join-Path $root "gui.cmd") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "analyzer.cmd") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $root "ROADMAP.md") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $root "docs") -Destination $packageDir -Recurse
 Copy-Item -LiteralPath (Join-Path $root "public") -Destination $packageDir -Recurse
 Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $runtimeDir "node.exe")
 
