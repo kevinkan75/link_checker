@@ -362,3 +362,53 @@ P5 驗收矩陣：
 - 政府或大型內容站不只需要 broken link，也需要外連治理。
 - 這可以重用現有 domain rules 與 external link inventory。
 - WAF/Bot/CDN 分類應走掃描策略調整、白名單協調或人工確認流程，不應直接列為 broken。
+
+### P5.5. SPA / Nuxt 站台抽取前置改善
+
+狀態：已完成。P5.5a SPA detection、P5.5b site link rules 與 P5.5c asset/content split + simple priority 已落地；下一步進 P6 report diff。
+
+背景：
+
+- `www.cec.gov.tw` 會轉址到 `https://web.cec.gov.tw/central`，其導覽、文章、YouTube 與外部政府網站連結大量藏在 Nuxt / SPA script payload。
+- 傳統 HTML attribute extractor 容易抓到 `_nuxt/*.css`、`_nuxt/*.js`、SVG 與 metadata，卻漏掉真正有治理價值的內容頁與外連。
+- 這不是 WAF、深度或頁數設定問題；正確修法是改善抽取模型與 report 診斷。
+
+P5.5a 已完成能力：
+
+- 新增 `--spa-links auto|off|strict`，預設 `auto`。
+- 新增 `spaDetection`，偵測 `_nuxt/`、`__NUXT_DATA__`、`window.__NUXT__`、低 `<a href>` 數等訊號。
+- 新增 `scanQuality`，在 build report 階段判斷 `_nuxt` asset 佔比過高、`pagesCrawled` 過低但 URL literal 很多等掃描品質風險。
+- 新增 framework link extraction，抽 inline script / payload 中的完整 URL literal 與明確 `/` path。
+- 每筆 link source 新增 `sourceType`，例如 `html_attribute`、`script_literal`、`spa_payload`。
+- `strict` 模式只抽完整 URL 與明確 `/` path，不做站台特定欄位推論。
+
+P5.5b 已完成能力：
+
+- 新增 `--site-link-rules <file-or-url>`。
+- 支援 `externalUrl` 欄位、`youtubeId` 欄位、明確 route path 與簡單 template mapping。
+- 建立 `docs/rules/cec-site-link-rules.json`，處理 `linkUrl`、YouTube ID、`directType` / `directPath` 與 `articleId`。
+- site rules 產生的 URL 標記 `sourceType: "site_rule_derived"`。
+- 修正 `strict + site rules` 語意：strict 不套用站台規則推論。
+- route template 保留 `directPath` 中的 `/`，避免錯誤產生 `%2F`。
+- 支援非純 JSON script 中的 JSON object fragment 與唯一 field-pair fallback，讓 `window.__NUXT__={data:[{...}]}` 這類 payload 也能套 route mappings。
+
+P5.5c 已完成能力：
+
+- 將內容頁、外連、文件、媒體、asset、`_nuxt` asset 分開統計。
+- summary 新增 `pagesChecked`、`contentLinksChecked`、`externalLinksChecked`、`documentsChecked`、`mediaLinksChecked`、`assetsChecked`、`nuxtAssetsChecked` 與 `checkedByKind`。
+- `scanQuality` 改用同一套 checked kind 統計計算 asset ratio 與 Nuxt asset ratio。
+- validation queue 新增簡易 priority，外連與內容頁優先，文件其次，media / immutable asset 降權。
+
+P5.5 驗收紀錄：
+
+- 本機 smoke test 驗證 `--site-link-rules` 可從 script payload 產出 `db.cec.gov.tw`、YouTube、`gov.tw` 外連與站內 CMS route。
+- 本機 smoke test 驗證 `--spa-links strict` 不產生 `site_rule_derived`。
+- 本機 smoke test 驗證 `directPath: "election/list"` 產生 `/central/menu/election/list`，不再產生 `/central/menu/election%2Flist`。
+- 本機 smoke test 驗證 summary 可分流內容、外連、PDF、圖片與 `_nuxt` asset。
+- 本機 smoke test 驗證 validation priority 順序為外連、內容、文件、媒體、`_nuxt` asset。
+
+理由：
+
+- P6 report diff 必須建立在足夠完整且可診斷的 report 上，否則 diff 只會比較不完整掃描結果。
+- 站台特定 CMS 欄位透過規則檔處理，比硬寫在核心 crawler 更安全。
+- 第一版 priority 用排序即可，不先引入 binary heap；後續掃描量變大再評估資料結構。

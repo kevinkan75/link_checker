@@ -4,16 +4,29 @@
 
 ## 目錄
 
+- [功能摘要](#功能摘要)
 - [使用方式](#使用方式)
 - [快速選擇](#快速選擇)
 - [圖形介面](#圖形介面)
-- [建立可攜版](#建立可攜版)
 - [常用參數](#常用參數)
+- [SPA / Nuxt 與 CMS payload](#spa--nuxt-與-cms-payload)
+- [執行狀態](#執行狀態)
 - [相容性模式](#相容性模式)
 - [友善檢查設定](#友善檢查設定)
 - [Redirect 判讀](#redirect-判讀)
 - [結果判讀](#結果判讀)
+- [建立可攜版](#建立可攜版)
+- [專案文件](#專案文件)
 - [注意事項](#注意事項)
+
+## 功能摘要
+
+- 同網域爬行、URL inventory 去重、來源頁合併與 canonical key。
+- HTTP 狀態、redirect chain、WAF/Bot/CDN 診斷、cache headers 與錯誤分類。
+- 同站 `404 / 410` 二次確認，降低暫時性誤判。
+- 外連 inventory、網域分類、外連治理風險摘要與 CSV / JSON 輸出。
+- SPA / Nuxt payload literal 抽取、站台規則推導與 `scanQuality` 診斷。
+- 內容頁、外連、文件、媒體、asset、`_nuxt` asset 分流統計與簡易 validation priority。
 
 ## 使用方式
 
@@ -76,22 +89,6 @@ GUI 可以輸入網站 URL、設定檢查頁數、深度、全域併發、每 ho
 多網站併行檢查時，佇列表格中的執行中網站會提供「監看」按鈕。GUI 會先自動監看第一個執行中的網站；手動點選「監看」後，即時進度、事件紀錄與問題連結表會切換到該網站，後續輪詢不會自動切回其他網站。
 
 GUI 每次檢查結束後會自動保存記錄檔到 `logs/` 目錄，資料夾命名格式為 `YYYYMMDD-HHMMSS--host--status`。內容包含完整 `report.json`、摘要 `summary.json`、可用 Excel 開啟的 `broken.csv`，以及檢查過程 `events.log`。
-
-## 建立可攜版
-
-產生 Windows 可攜版 zip：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
-```
-
-輸出檔案會放在：
-
-```text
-dist\LinkChecker-portable.zip
-```
-
-可攜版內含 `runtime\node.exe`，使用者解壓縮後不需要另外安裝 Node.js。
 
 ## 常用參數
 
@@ -208,6 +205,18 @@ dist\LinkChecker-portable.zip
 ```
 
 `fields.externalUrl` 會把欄位值視為完整 URL，`fields.youtubeId` 會轉成 YouTube watch URL，`fields.routePath` 會把 `/` 開頭路徑轉成站內 URL。`routeMappings` 可依 payload 欄位條件產生站台路由，`when` 支援精確比對與 `"*"` 非空值比對。
+
+## SPA / Nuxt 與 CMS payload
+
+`--spa-links` 預設為 `auto`，偵測到 SPA / Nuxt 訊號或載入 site link rules 時，會從 inline script / payload 抽取明確 URL 與 `/` 開頭 path。`--spa-links off` 可回到舊行為；`--spa-links strict` 只抽 literal URL/path，不套用站台特定規則推導。
+
+針對 `directType`、`directPath`、`articleId`、`youtubeId` 這類站台或 CMS 欄位，使用 `--site-link-rules` 載入規則檔，不把站台邏輯硬寫進 crawler。CEC 範例規則位於：
+
+```text
+docs\rules\cec-site-link-rules.json
+```
+
+JSON report 會保留來源類型，例如 `html_attribute`、`script_literal`、`spa_payload`、`site_rule_derived`。summary 也會輸出 `spaDetection`、`scanQuality` 與 `checkedByKind`，用來判斷這次掃描是否被 `_nuxt` asset 或其他靜態資源主導。
 
 ## 執行狀態
 
@@ -362,6 +371,31 @@ dist\LinkChecker-portable.zip
 - `0`：沒有發現失效連結
 - `1`：執行參數或程式錯誤
 - `2`：有發現失效連結
+
+## 建立可攜版
+
+產生 Windows 可攜版 zip：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
+```
+
+輸出檔案會放在：
+
+```text
+dist\LinkChecker-portable.zip
+```
+
+可攜版內含 `runtime\node.exe`，使用者解壓縮後不需要另外安裝 Node.js。
+
+## 專案文件
+
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；下一個主要項目是 P6 report-to-report diff。
+- [docs/README.md](docs/README.md)：文件目錄索引。
+- [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
+- [docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)：CEC / Nuxt 掃描問題分析與 P5.5 改善來源。
+- [docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)：SPA payload extraction 設計筆記。
+- [docs/rules/cec-site-link-rules.json](docs/rules/cec-site-link-rules.json)：CEC site link rules 範例。
 
 ## 注意事項
 

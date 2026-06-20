@@ -1,5 +1,7 @@
 # SPA Link Extraction Implementation Notes
 
+狀態：歷史實作筆記。P5.5a / P5.5b / P5.5c 已依本文件完成；現行開發主線請看 [../ROADMAP.md](../ROADMAP.md)，完成紀錄請看 [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)。
+
 ## 1. 需求目標
 
 本文件整理針對 Nuxt / SPA 類型網站的下一步改善需求，重點包含：
@@ -419,23 +421,23 @@ const job = this.validationQueue.shift();
 
 Headless render 成本高，建議預設關閉，只作為 fallback。
 
-## 7. 現階段建議優先順序
+## 7. P5.5 實作順序紀錄
 
-採納外部建議後，ROADMAP 已將本工作拆成 P5.5a / P5.5b / P5.5c：
+採納外部建議後，ROADMAP 曾將本工作拆成 P5.5a / P5.5b / P5.5c，並已依序完成：
 
 1. P5.5a：SPA 偵測 + strict payload literals。
 2. P5.5b：site link rules + CEC rules。
 3. P5.5c：asset/content split + simple priority。
 4. P6：report-to-report diff。
 
-理由：
+當時排序理由：
 
 - SPA 偵測風險最低，能先讓 report 正確指出「這次掃描可能漏內容」。
 - strict payload literal 抽取可先改善明確 URL / path 的覆蓋率，並維持低誤抽風險。
-- CEC 的站內內容頁多來自 `directType`、`directPath`、`articleId` 等 CMS 欄位；若不做 site link rules，`pagesCrawled` 不一定會增加，所以 P5.5b 應排在 P6 前。
-- Queue 優先順序有價值，但如果還抽不到內容頁，只會更有效率地檢查 `_nuxt` asset，因此排在 P5.5c。
+- CEC 的站內內容頁多來自 `directType`、`directPath`、`articleId` 等 CMS 欄位；若不做 site link rules，`pagesCrawled` 不一定會增加，所以 P5.5b 已排在 P6 前完成。
+- Queue 優先順序有價值，但如果還抽不到內容頁，只會更有效率地檢查 `_nuxt` asset，因此已排在 P5.5c。
 
-建議第一個可落地工作包：
+第一個已落地工作包：
 
 1. 新增 `--spa-links auto|off|strict` option，預設 `auto`。
 2. 新增 `detectSpaFramework()` 並寫入 report summary；`asset_dominant_scan` 這類掃描品質訊號應在 build report 階段判斷。
@@ -444,14 +446,14 @@ Headless render 成本高，建議預設關閉，只作為 fallback。
 5. 保持原本 `extractLinks()` 行為不變，降低回歸風險。
 6. 避免 payload link 因 `tag: "script"` 被誤分類為 asset；分類應參考 `sourceType` 或 derived link type。
 
-第二個工作包：
+第二個已落地工作包：
 
 1. 新增 `--site-link-rules <file>`。
 2. 支援 `linkUrl`、`youtubeId`、明確 route path 與簡單 template mapping。
 3. 建立 `www.cec.gov.tw` 規則範例，處理 `directType`、`directPath`、`articleId`。
 4. site rules 產生的 URL 標記 `sourceType: "site_rule_derived"`。
 
-第三個工作包：
+第三個已落地工作包：
 
 1. 將 asset/content/external/document/media 分開統計。
 2. 新增簡易 priority，內容頁與外連優先，media / immutable asset 降權。

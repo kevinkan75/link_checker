@@ -1,5 +1,7 @@
 # www.cec.gov.tw 檢測落差改善分析報告
 
+狀態：歷史分析紀錄。P5.5a / P5.5b / P5.5c 已依本報告完成；現行開發主線請看 [../ROADMAP.md](../ROADMAP.md)，完成紀錄請看 [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)。
+
 ## 1. 事件摘要
 
 本次檢測目標為 `https://www.cec.gov.tw/`。檢測結果顯示任務成功完成，但實際輸出不符合預期：工具只爬取 1 個頁面，檢查 37 個 URL，壞連結與外部連結皆為 0。進一步分析後確認，這並不代表網站沒有內容頁或外部連結，而是目前連結抽取策略不適合 Nuxt / SPA 類型網站。
@@ -296,13 +298,13 @@ https://web.cec.gov.tw/_nuxt/builds/meta/*.json
 
 理由：高成本、高依賴、高風險，應作為 fallback，不作為預設行為。
 
-## 7. 建議實作順序
+## 7. 實作順序紀錄
 
-### P6 前可先做的低風險改善
+### P6 前已完成的低風險改善
 
-這次問題會影響 report diff 的資料品質，因此建議在 P6 report diff 前，先補最小 SPA 診斷與 payload 抽取。
+這次問題會影響 report diff 的資料品質，因此已在 P6 report diff 前補上最小 SPA 診斷與 payload 抽取。
 
-建議順序已整理為 P5.5a / P5.5b / P5.5c，並全部排在 P6 report diff 前：
+完成順序已整理為 P5.5a / P5.5b / P5.5c，並全部排在 P6 report diff 前：
 
 1. P5.5a：新增 SPA / Nuxt 偵測、`--spa-links auto|off|strict`、strict payload URL/path literal extraction、`sourceType`。
 2. P5.5b：新增 `--site-link-rules <file>`，並針對 `www.cec.gov.tw` 補一份規則範例，處理 `linkUrl`、`youtubeId`、`directType`、`directPath`、`articleId`。
@@ -311,14 +313,14 @@ https://web.cec.gov.tw/_nuxt/builds/meta/*.json
 
 ### 後續強化
 
-1. 新增 URL priority queue。
+1. 視掃描量將目前簡易 priority 排序升級為更完整的 priority queue。
 2. 新增 asset skip / asset defer 策略。
 3. 支援更多 framework payload，例如 Next.js `__NEXT_DATA__`。
 4. 視需要加入 `--render` fallback。
 
-## 8. 驗收標準
+## 8. 驗收紀錄
 
-針對 `www.cec.gov.tw`，分階段驗收：
+針對 `www.cec.gov.tw`，P5.5 分階段驗收重點：
 
 - P5.5a 後，report 能輸出 `spaDetection` 與 `scanQuality`，指出 Nuxt / SPA 訊號與 asset-dominant 掃描風險。
 - P5.5a 後，`--spa-links off` 可回到舊行為；`--spa-links strict` 不做站台特定推論，只抽明確 URL/path。
@@ -328,15 +330,15 @@ https://web.cec.gov.tw/_nuxt/builds/meta/*.json
 - P5.5c 後，`_nuxt` asset 不再佔 checked URL 的絕大多數，或至少在 summary 中被獨立標示。
 - P5.5c 後，summary 能分開呈現內容頁、外連、文件、媒體與靜態資源。
 
-## 9. 建議結論
+## 9. 結論紀錄
 
 本次 `www.cec.gov.tw` 檢測不如預期的主要原因是網站型態已從傳統 HTML 轉為 Nuxt / SPA，而目前工具仍以 HTML tag attribute 抽取為主。這造成工具大量檢查 `_nuxt` 靜態資源，卻漏掉 payload 中真正的站內頁面與外部連結。
 
-建議不要直接導入預設 headless render，而是先採取低成本、可控的改善：
+已採取低成本、可控的改善，並保留 headless render 作為後續 fallback：
 
 1. 預設啟用 SPA 偵測。
 2. 以 `--spa-links auto|off|strict` 控制 strict payload literal 抽取。
-3. 用 `--site-link-rules` 處理站台特定欄位，且排在 P6 前。
+3. 用 `--site-link-rules` 處理站台特定欄位，且已排在 P6 前完成。
 4. 將 asset 與內容/外連分流統計，並補簡易 priority。
 5. 將 headless render 保留為明確 opt-in fallback。
 

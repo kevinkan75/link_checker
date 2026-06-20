@@ -6,13 +6,10 @@
 
 核心順序：
 
-1. P5.5a：SPA detection + strict payload literals。
-2. P5.5b：site link rules + CEC rules。
-3. P5.5c：asset/content split + simple priority。
-4. P6：report-to-report diff。
-5. P7：TTL cache。
-6. P8：incremental scan。
-7. P9/P10：Analyzer 與分級排程強化。
+1. P6：report-to-report diff。
+2. P7：TTL cache。
+3. P8：incremental scan。
+4. P9/P10：Analyzer 與分級排程強化。
 
 | 階段 | 狀態 | 目的 |
 | --- | --- | --- |
@@ -31,7 +28,7 @@
 
 ## 開發主軸
 
-下一階段應優先提升 report 覆蓋率與資料品質，再做歷史比對、快取與增量掃描。不要先擴大爬取範圍，也不要先導入大型基礎設施。
+下一階段應優先做歷史比對，再做快取與增量掃描。不要先擴大爬取範圍，也不要先導入大型基礎設施。
 
 ```text
 HTML 抽取
@@ -52,13 +49,14 @@ HTML 抽取
 
 參考文件：
 
+- [docs/README.md](docs/README.md)
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)
 - [docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)
 - [docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)
 
 ## 已完成基線
 
-P0-P3 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)。
+P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)。
 
 已完成能力摘要：
 
@@ -68,78 +66,28 @@ P0-P3 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROADMA
 - P3：URL inventory、來源合併、validation intent、validation queue。
 - P4：同站 `404 / 410` 二次確認，輸出 `confirmation`、`transientFailure`、`needsReview`。
 - P5：`externalRisk`、治理規則、CSV / summary 與 Analyzer 最小呈現。
+- P5.5a：SPA / Nuxt 偵測、`scanQuality`、strict payload URL/path literal 抽取與 `sourceType`。
+- P5.5b：`--site-link-rules`、CEC 規則範例、CMS 欄位推導與 `site_rule_derived`。
+- P5.5c：內容/外連/文件/媒體/asset 分流統計與簡易 validation priority。
 
-## P5.5 Active Work：SPA / Nuxt 站台抽取
+## 前序遺留追蹤
 
-### 背景
+以下是不阻塞 P6 的前序遺留項，避免後續忘記。除非使用者明確要求，P6 應先照主線做 report-to-report diff。
 
-`www.cec.gov.tw` 會轉址到 `https://web.cec.gov.tw/central`。這類 Nuxt / SPA 站台的導覽、文章、YouTube 與外部政府網站連結大量藏在 script payload，不是完整 `<a href>`。目前工具會抽到大量 `_nuxt/*.css`、`_nuxt/*.js`、SVG 與 metadata，卻漏掉真正有治理價值的內容頁與外連。
-
-這不是 WAF、深度或頁數設定問題。正確修法是改善抽取模型與 report 診斷。
-
-### P5.5a：SPA Detection + Strict Payload Literals
-
-目的：先讓 report 能辨識「這次掃描可能漏掉 SPA payload 連結」，並抽取明確 URL / path literal。
-
-交付項：
-
-1. 新增 `--spa-links auto|off|strict`，預設 `auto`。
-2. 新增頁面層 `spaDetection`，偵測 `_nuxt/`、`__NUXT_DATA__`、`window.__NUXT__`、低 `<a href>` 數等訊號。
-3. 在 build report 階段新增 `scanQuality`，判斷 `_nuxt` asset 佔比過高、`pagesCrawled` 過低但 URL literal 很多等掃描品質風險。
-4. 新增 `extractFrameworkLinks()`，第一版只抽 inline script / payload 中的完整 URL literal 與明確 `/` 開頭 path。
-5. 每筆 link source 新增 `sourceType`，例如 `html_attribute`、`script_literal`、`spa_payload`。
-6. `strict` 模式只抽完整 URL 與明確 `/` path，不做站台特定欄位推論。
-
-實作注意：
-
-- 外部建議的 payload pseudo-code 不可照貼，需修正 `match[0]` / `match[2]` 等細節。
-- payload 抽出的業務連結不能只因 `tag: "script"` 被分類為 asset；`classifyLinkType()` 與 external summary 應優先參考 `sourceType` 或 derived link type。
-- `asset_dominant_scan` 需等 checked results 完成後才可靠，應放在 build report 階段。
-
-驗收：
-
-- report 能輸出 `spaDetection` 與 `scanQuality`。
-- `--spa-links off` 可回到舊行為。
-- `--spa-links strict` 只抽完整 URL / 明確 `/` path。
-- source 可看出 `html_attribute`、`script_literal` 或 `spa_payload`。
-
-### P5.5b：Site Link Rules + CEC Rules
-
-目的：處理 CEC 這類 CMS payload 欄位。只做 literal extraction 不一定能讓 `pagesCrawled` 增加，因為站內頁常由 `directType`、`directPath`、`articleId` 等欄位推導。
-
-交付項：
-
-1. 新增 `--site-link-rules <file>`。
-2. 第一版支援 `externalUrl` 欄位、`youtubeId` 欄位、明確 route path 與簡單 template mapping。
-3. 建立 `www.cec.gov.tw` 規則範例，處理 `linkUrl`、YouTube ID、`directType` / `directPath` 與 `articleId`。
-4. site rules 產生的 URL 標記 `sourceType: "site_rule_derived"`。
-
-驗收：
-
-- 對 `www.cec.gov.tw`，`externalLinks` 不應為 0。
-- report 能列出 payload / site rules 中的 `https://db.cec.gov.tw`、YouTube、`gov.tw` 與其他政府外站。
-- 站內 CMS route 能透過 site rules 轉成可爬 URL，`pagesCrawled` 不應停在 1。
-
-### P5.5c：Asset/Content Split + Simple Priority
-
-目的：避免 `_nuxt` asset 佔滿檢查預算與 summary 解讀空間。
-
-交付項：
-
-1. 將 `_nuxt` asset 與內容頁、外連、文件、媒體分開統計。
-2. summary / report 可新增 `pagesChecked`、`contentLinksChecked`、`externalLinksChecked`、`documentsChecked`、`assetsChecked`。
-3. 新增簡易 validation priority：內容頁與外連優先，文件其次，media / immutable asset 降權。
-4. 第一版用 priority 欄位與排序即可，後續掃描量變大再評估 binary heap。
-
-驗收：
-
-- `_nuxt` asset 不再佔 checked URL 的絕大多數，或至少在 summary 中被獨立標示。
-- summary 能分開呈現內容頁、外連、文件、媒體與靜態資源。
-- priority 不得影響內容頁與外連治理結果。
+| 項目 | 建議時機 | 備註 |
+| --- | --- | --- |
+| GUI 增加 `--external-risk-rules` 輸入欄位 | P6 前後皆可，小修 | CLI / API 已可用；GUI 使用者目前不方便套治理規則。 |
+| 外連治理規則支援 URL pattern、path、tag/source 條件 | P9 或治理規則強化 | 目前主要是 domain-based matching。 |
+| 外連 `410` 是否納入二次確認 | P7 後評估 | 等外連風險與 TTL cache 穩定後再決定，避免拖慢掃描。 |
+| CDN/WAF body hash 診斷 | P9 或診斷強化 | MVP 已有 provider、headers、body signature 等證據；body hash 可後補。 |
+| Asset skip / asset defer 策略 | P7/P8 後 | P5.5c 已有分流統計與簡易 priority，是否跳過需結合 cache / incremental scan。 |
+| 更多 framework payload，例如 Next.js `__NEXT_DATA__` | 後續站台需求驅動 | 目前 P5.5 先覆蓋 Nuxt / SPA 與 strict literals。 |
+| `--render` headless fallback | 明確 opt-in 後續功能 | 高成本、高依賴，不預設啟用。 |
+| 完整 priority queue / binary heap | 掃描量變大時 | 目前簡易排序已滿足 P5.5c。 |
 
 ## P6：Report-to-Report Diff
 
-狀態：下一個主要項目，但排在 P5.5 之後。P6 不重新掃描網站、不重新判斷風險、不引入資料庫、不導入 cache 或 incremental scan。
+狀態：下一個主要項目。P6 不重新掃描網站、不重新判斷風險、不引入資料庫、不導入 cache 或 incremental scan。
 
 P6a 交付項：
 
@@ -147,7 +95,8 @@ P6a 交付項：
 2. 實作 report normalization：新 report 優先 `checked[]`，舊 report fallback `broken[]`，外連獨立使用 `externalLinks[]`。
 3. 實作 URL diff summary：新增、移除、變更、新發生問題、已修復、持續存在。
 4. 實作 P4/P5 欄位 diff：`confirmation.outcome`、`transientFailure`、`confirmationNeedsReview`、`externalRisk`、`externalRiskNeedsReview`。
-5. 先輸出 JSON 與簡短 console summary；GUI / Analyzer 呈現放到後續強化。
+5. 實作 P5.5 report diagnostics diff：`scanQuality`、`spaDetection` 與 `checkedByKind` 摘要變化。
+6. 先輸出 JSON 與簡短 console summary；GUI / Analyzer 呈現放到後續強化。
 
 比對 key：
 
@@ -173,6 +122,17 @@ P6a 交付項：
 - `externalRisk.governanceStatus`
 - `externalRisk.riskReasons`
 
+第一版 summary diagnostics：
+
+- `summary.scanQuality.status`
+- `summary.scanQuality.warnings`
+- `summary.scanQuality.assetRatio`
+- `summary.scanQuality.nuxtAssetRatio`
+- `summary.checkedByKind`
+- `summary.spaDetection.detected`
+- `summary.spaDetection.framework`
+- `summary.spaDetection.signals`
+
 狀態判定：
 
 - `newIssue`
@@ -190,6 +150,7 @@ P6a 交付項：
 - 同一 canonical URL 從 `200` 變 `404/410` 應標示新發生問題。
 - `confirmation.outcome` 從 `needs_review` 變 `confirmed_missing` 應標示信心提高。
 - 外連風險從 `low` 變 `high` 應進入治理摘要。
+- `scanQuality` 從 `suspicious` 變 `ok` 或 warning 消失時，應在 diagnostics summary 顯示掃描品質改善。
 - 來源頁移除但 URL 仍在其他頁存在時，不應誤判 URL 完全移除。
 
 ## P7：TTL 檢查快取
@@ -291,7 +252,7 @@ CLI 可新增：
 
 ## P9：Analyzer 後續強化
 
-P5 已完成二次確認與外連風險最小呈現；P9 只做 P6/P7/P8 之後的 Analyzer 強化，避免先做空 UI。
+P5.5 已完成二次確認、外連風險與 SPA/Nuxt 抽取前置改善；P9 只做 P6/P7/P8 之後的 Analyzer 強化，避免先做空 UI。
 
 後續強化：
 
