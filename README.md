@@ -333,6 +333,7 @@ dist\LinkChecker-portable.zip
 
 - 爬行頁面數
 - 檢查 URL 數
+- 檢查 URL 分流統計：內容頁、外連、文件、媒體與靜態資源；JSON summary 會包含 `pagesChecked`、`contentLinksChecked`、`externalLinksChecked`、`documentsChecked`、`mediaLinksChecked`、`assetsChecked`、`nuxtAssetsChecked` 與 `checkedByKind`
 - 問題連結數
 - 問題連結分類統計
 - 每個問題連結的 HTTP 狀態或錯誤訊息

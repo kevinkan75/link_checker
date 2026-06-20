@@ -179,6 +179,17 @@ const EXTERNAL_RISK_RULE_ACTIONS = new Map([
   ["watchlist", "watchlisted"],
 ]);
 
+const VALIDATION_PRIORITIES = {
+  external: 120,
+  content: 100,
+  page: 90,
+  document: 70,
+  unknown: 50,
+  media: 30,
+  asset: 10,
+  immutableAsset: 0,
+};
+
 const DOWNLOAD_EXTENSIONS = new Set([
   ".7z", ".csv", ".doc", ".docx", ".gz", ".pdf", ".ppt", ".pptx",
   ".rar", ".tar", ".txt", ".xls", ".xlsx", ".zip",
@@ -618,7 +629,7 @@ class LinkChecker {
         }
 
         if (shouldCheck && this.scheduleInventoryValidation(inventoryEntry, { requireBody: false })) {
-          this.enqueueValidation(inventoryEntry, resolved, { requireBody: false });
+          this.enqueueValidation(inventoryEntry, resolved, { requireBody: false }, { deferPump: true });
         } else if (shouldCheck) {
           this.inventoryMetrics.validationSkippedByInventory += 1;
         } else {
@@ -630,6 +641,7 @@ class LinkChecker {
           this.enqueuePage(resolved, depth + 1);
         }
       }
+      this.pumpValidationQueue();
     } finally {
       this.currentPages.delete(url);
     }
@@ -768,6 +780,7 @@ class LinkChecker {
       const classification = intent.isExternal
         ? classifyExternalLink(resolvedUrl, link, this.domainCategoryRules)
         : null;
+      const linkType = classification?.type || classifyLinkType(link, getPathExtension(new URL(resolvedUrl).pathname));
       this.inventory.set(canonicalUrl, {
         canonicalUrl,
         originalUrls: [],
@@ -775,7 +788,7 @@ class LinkChecker {
         representativeUrl: resolvedUrl,
         sources: [],
         isExternal: intent.isExternal,
-        linkType: classification?.type || null,
+        linkType,
         categories: classification?.categories || [],
         categorySources: classification?.categorySources || [],
         shouldCheck: Boolean(intent.shouldCheck),
@@ -852,9 +865,13 @@ class LinkChecker {
     return result;
   }
 
-  enqueueValidation(inventoryEntry, url, options) {
-    this.validationQueue.push({ inventoryEntry, url, options });
-    this.pumpValidationQueue();
+  enqueueValidation(inventoryEntry, url, options, { deferPump = false } = {}) {
+    const priority = getValidationPriority(inventoryEntry.item, url);
+    this.validationQueue.push({ inventoryEntry, url, options, priority });
+    this.validationQueue.sort((left, right) => right.priority - left.priority);
+    if (!deferPump) {
+      this.pumpValidationQueue();
+    }
   }
 
   pumpValidationQueue() {
@@ -1226,8 +1243,9 @@ class LinkChecker {
     const checked = [...this.results.values()];
     const externalLinks = this.buildExternalLinks(checked);
     const inventorySummary = this.buildInventorySummary();
+    const checkedByKind = this.buildCheckedByKind(checked);
     const spaDetection = this.buildSpaDetectionSummary();
-    const scanQuality = this.buildScanQuality(checked, spaDetection);
+    const scanQuality = this.buildScanQuality(checked, spaDetection, checkedByKind);
     const broken = checked
       .filter((result) => !result.ok)
       .map((result) => ({
@@ -1288,6 +1306,14 @@ class LinkChecker {
         externalRiskByGovernanceStatus: countExternalRiskByGovernanceStatus(externalLinks),
         externalRiskByDomain: summarizeExternalRiskDomains(externalLinks),
         confirmation: countConfirmationByOutcome(checked),
+        pagesChecked: checkedByKind.pages,
+        contentLinksChecked: checkedByKind.content,
+        externalLinksChecked: checkedByKind.external,
+        documentsChecked: checkedByKind.documents,
+        mediaLinksChecked: checkedByKind.media,
+        assetsChecked: checkedByKind.assets,
+        nuxtAssetsChecked: checkedByKind.nuxtAssets,
+        checkedByKind,
         inventorySummary,
         spaDetection,
         scanQuality,
@@ -1337,12 +1363,21 @@ class LinkChecker {
     };
   }
 
-  buildScanQuality(checked, spaDetection) {
+  buildCheckedByKind(checked) {
+    const counts = createCheckedKindCounts();
+    for (const result of checked) {
+      const kind = classifyCheckedResultKind(result, this.getSourcesForResult(result));
+      incrementCheckedKindCounts(counts, kind);
+    }
+    return counts;
+  }
+
+  buildScanQuality(checked, spaDetection, checkedByKind = this.buildCheckedByKind(checked)) {
     const checkedUrls = checked.map((result) => result.url || "");
-    const assetUrls = checkedUrls.filter((url) => isAssetUrl(url));
-    const nuxtAssetUrls = checkedUrls.filter((url) => url.includes("/_nuxt/"));
-    const assetRatio = checkedUrls.length > 0 ? assetUrls.length / checkedUrls.length : 0;
-    const nuxtAssetRatio = checkedUrls.length > 0 ? nuxtAssetUrls.length / checkedUrls.length : 0;
+    const assetUrls = checkedByKind.assets;
+    const nuxtAssetUrls = checkedByKind.nuxtAssets;
+    const assetRatio = checkedUrls.length > 0 ? assetUrls / checkedUrls.length : 0;
+    const nuxtAssetRatio = checkedUrls.length > 0 ? nuxtAssetUrls / checkedUrls.length : 0;
     const warnings = [];
 
     if (nuxtAssetRatio > 0.7) {
@@ -1361,9 +1396,9 @@ class LinkChecker {
       status: warnings.length > 0 ? "suspicious" : "ok",
       warnings,
       checkedUrls: checkedUrls.length,
-      assetUrls: assetUrls.length,
+      assetUrls,
       assetRatio: Number(assetRatio.toFixed(4)),
-      nuxtAssetUrls: nuxtAssetUrls.length,
+      nuxtAssetUrls,
       nuxtAssetRatio: Number(nuxtAssetRatio.toFixed(4)),
     };
   }
@@ -3200,6 +3235,147 @@ function isAssetUrl(urlValue) {
   }
 }
 
+function getValidationPriority(item, urlValue) {
+  const kind = classifyUrlKind(urlValue, {
+    isExternal: item?.isExternal,
+    linkType: item?.linkType,
+  });
+  if (kind.immutableAsset) {
+    return VALIDATION_PRIORITIES.immutableAsset;
+  }
+  if (kind.external) {
+    return VALIDATION_PRIORITIES.external;
+  }
+  if (kind.document) {
+    return VALIDATION_PRIORITIES.document;
+  }
+  if (kind.media) {
+    return VALIDATION_PRIORITIES.media;
+  }
+  if (kind.asset) {
+    return VALIDATION_PRIORITIES.asset;
+  }
+  if (kind.content) {
+    return VALIDATION_PRIORITIES.content;
+  }
+  if (kind.page) {
+    return VALIDATION_PRIORITIES.page;
+  }
+  return VALIDATION_PRIORITIES.unknown;
+}
+
+function createCheckedKindCounts() {
+  return {
+    total: 0,
+    pages: 0,
+    content: 0,
+    external: 0,
+    documents: 0,
+    media: 0,
+    assets: 0,
+    nuxtAssets: 0,
+    immutableAssets: 0,
+    unknown: 0,
+  };
+}
+
+function incrementCheckedKindCounts(counts, kind) {
+  counts.total += 1;
+  if (kind.page) {
+    counts.pages += 1;
+  }
+  if (kind.content) {
+    counts.content += 1;
+  }
+  if (kind.external) {
+    counts.external += 1;
+  }
+  if (kind.document) {
+    counts.documents += 1;
+  }
+  if (kind.media) {
+    counts.media += 1;
+  }
+  if (kind.asset) {
+    counts.assets += 1;
+  }
+  if (kind.nuxtAsset) {
+    counts.nuxtAssets += 1;
+  }
+  if (kind.immutableAsset) {
+    counts.immutableAssets += 1;
+  }
+  if (kind.unknown) {
+    counts.unknown += 1;
+  }
+}
+
+function classifyCheckedResultKind(result, sources = []) {
+  return classifyUrlKind(result?.url || "", {
+    isExternal: isExternalCheckedResult(result, sources),
+  });
+}
+
+function classifyUrlKind(urlValue, { isExternal = false, linkType = null } = {}) {
+  try {
+    const parsed = new URL(urlValue);
+    const extension = getPathExtension(parsed.pathname);
+    const document = linkType === "download" || DOWNLOAD_EXTENSIONS.has(extension);
+    const media = linkType === "media" || MEDIA_EXTENSIONS.has(extension);
+    const nuxtAsset = parsed.pathname.includes("/_nuxt/");
+    const extensionAsset = ASSET_EXTENSIONS.has(extension);
+    const asset = linkType === "asset" || nuxtAsset || (extensionAsset && !document && !media);
+    const immutableAsset = asset && isLikelyImmutableAssetUrl(parsed);
+    const page = !document && !media && !asset && looksLikePage(urlValue);
+    const content = page && !isExternal;
+
+    return {
+      page,
+      content,
+      external: Boolean(isExternal),
+      document,
+      media,
+      asset,
+      nuxtAsset,
+      immutableAsset,
+      unknown: !page && !document && !media && !asset,
+    };
+  } catch {
+    return {
+      page: false,
+      content: false,
+      external: Boolean(isExternal),
+      document: false,
+      media: false,
+      asset: false,
+      nuxtAsset: false,
+      immutableAsset: false,
+      unknown: true,
+    };
+  }
+}
+
+function isExternalCheckedResult(result, sources = []) {
+  if (!result?.url || sources.length === 0) {
+    return false;
+  }
+  return sources.some((source) => {
+    try {
+      return source.page && !sameOrigin(result.url, source.page);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function isLikelyImmutableAssetUrl(parsed) {
+  if (parsed.pathname.includes("/_nuxt/")) {
+    return true;
+  }
+  const lastSegment = parsed.pathname.split("/").pop() || "";
+  return /(?:^|[-_.])[a-f0-9]{8,}(?:[-_.]|$)/i.test(lastSegment);
+}
+
 function isPayloadLink(link) {
   return link?.sourceType === "script_literal"
     || link?.sourceType === "spa_payload"
@@ -4473,6 +4649,14 @@ function printSummary(report) {
   console.log(`Start URL: ${report.startUrl}`);
   console.log(`Pages crawled: ${summary.pagesCrawled}`);
   console.log(`URLs checked: ${summary.urlsChecked}`);
+  if (summary.checkedByKind) {
+    console.log(
+      `Checked by kind: content ${summary.contentLinksChecked || 0}, external ${summary.externalLinksChecked || 0}, documents ${summary.documentsChecked || 0}, media ${summary.mediaLinksChecked || 0}, assets ${summary.assetsChecked || 0}`,
+    );
+    if ((summary.nuxtAssetsChecked || 0) > 0) {
+      console.log(`  Nuxt assets: ${summary.nuxtAssetsChecked}`);
+    }
+  }
   console.log(`Broken links: ${summary.brokenLinks}`);
   console.log(`External links found: ${summary.externalLinks || 0}`);
   console.log(`External domains found: ${summary.externalDomains || 0}`);

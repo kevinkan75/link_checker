@@ -2,7 +2,7 @@
 
 ## 狀態總覽
 
-目前 P0-P5 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認與外連風險治理 MVP。下一步不是直接進 P6 diff，而是先完成 P5.5 SPA / Nuxt 站台抽取前置改善，避免 P6 report diff 建立在不完整 report 上。
+目前 P0-P5.5 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP，以及 SPA / Nuxt 站台抽取前置改善。下一步進 P6 report diff。
 
 核心順序：
 
@@ -22,9 +22,9 @@
 | P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
 | P4 | 已完成 | 404 / 410 二次確認 MVP。 |
 | P5 | 已完成 | 外連風險規則、治理分類與風險摘要 MVP。 |
-| P5.5a | 下一個工作包 | 偵測 SPA / Nuxt，抽 strict payload URL/path literals。 |
-| P5.5b | 待 P5.5a 後 | 用 site rules 處理 CEC CMS 欄位與站台特定連結。 |
-| P5.5c | 待 P5.5b 後 | 分流 asset/content/external，加入簡易 priority。 |
+| P5.5a | 已完成 | 偵測 SPA / Nuxt，抽 strict payload URL/path literals。 |
+| P5.5b | 已完成 | 用 site rules 處理 CEC CMS 欄位與站台特定連結。 |
+| P5.5c | 已完成 | 分流 asset/content/external，加入簡易 priority。 |
 | P6 | 下一個主要項目 | 兩份 report 歷史比對，只做 report-to-report diff。 |
 | P7 | 待規劃 | TTL 檢查快取，晚於 P6。 |
 | P8 | 待規劃 | 建立在 history/cache 上的增量掃描，晚於 P6/P7。 |
