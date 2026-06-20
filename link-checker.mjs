@@ -486,6 +486,7 @@ class LinkChecker {
       ...normalizeDomainCategoryRules(options.domainCategoryRules || []),
     ];
     this.externalRiskRules = normalizeExternalRiskRules(options.externalRiskRules || []);
+    this.siteLinkRules = normalizeSiteLinkRules(options.siteLinkRules || {});
     this.skippedExternal = 0;
     this.reporter = options.reporter || null;
     this.currentPages = new Map();
@@ -573,7 +574,9 @@ class LinkChecker {
       this.recordSpaDetection(url, pageResult.finalUrl || url, spaDetection);
       const htmlLinks = extractLinks(pageResult.body, pageBaseUrl);
       const frameworkLinks = this.shouldExtractFrameworkLinks(spaDetection)
-        ? extractFrameworkLinks(pageResult.body, pageBaseUrl)
+        ? extractFrameworkLinks(pageResult.body, pageBaseUrl, {
+            siteLinkRules: this.options.spaLinks === "strict" ? {} : this.siteLinkRules,
+          })
         : [];
       const links = [...htmlLinks, ...frameworkLinks];
       this.reporter?.pageLinksFound(url, links.length);
@@ -663,7 +666,7 @@ class LinkChecker {
     if (this.options.spaLinks === "strict") {
       return true;
     }
-    return Boolean(spaDetection?.detected);
+    return Boolean(spaDetection?.detected || hasSiteLinkRules(this.siteLinkRules));
   }
 
   recordSpaDetection(pageUrl, finalUrl, detection) {
@@ -1267,6 +1270,7 @@ class LinkChecker {
         spaLinks: this.options.spaLinks,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
         externalRiskRulesSource: this.options.externalRiskRulesSource || null,
+        siteLinkRulesSource: this.options.siteLinkRulesSource || null,
       },
       summary: {
         pagesCrawled: this.crawledPages.size,
@@ -2455,10 +2459,11 @@ function countRegexMatches(text, regex) {
   return [...text.matchAll(regex)].length;
 }
 
-function extractFrameworkLinks(html, pageUrl) {
+function extractFrameworkLinks(html, pageUrl, { siteLinkRules = {} } = {}) {
   return dedupeExtractedLinks([
     ...extractUrlLiteralsFromScripts(html),
     ...extractPathLiteralsFromScripts(html, pageUrl),
+    ...extractSiteRuleLinks(html, pageUrl, siteLinkRules),
   ]);
 }
 
@@ -2504,6 +2509,366 @@ function extractPathLiteralsFromScripts(html, pageUrl) {
   }
 
   return links;
+}
+
+function extractSiteRuleLinks(html, pageUrl, siteLinkRules = {}) {
+  if (!hasSiteLinkRules(siteLinkRules)) {
+    return [];
+  }
+
+  const links = [];
+  for (const scriptText of extractInlineScriptTexts(html)) {
+    const records = [
+      ...extractPayloadRecords(scriptText),
+      ...extractJsonObjectPayloadRecords(scriptText),
+    ];
+    for (const record of records) {
+      links.push(...extractSiteRuleLinksFromRecord(record, pageUrl, siteLinkRules));
+    }
+    links.push(...extractSiteRuleLinksFromFieldPairs(scriptText, pageUrl, siteLinkRules));
+    links.push(...extractSiteRuleRouteMappingsFromFieldPairs(scriptText, pageUrl, siteLinkRules));
+  }
+
+  return links;
+}
+
+function extractSiteRuleLinksFromRecord(record, pageUrl, siteLinkRules) {
+  const links = [];
+
+  for (const field of siteLinkRules.fields.externalUrl) {
+    const value = getRecordString(record, field);
+    if (!value || !safeUrl(value)) {
+      continue;
+    }
+    links.push(makeSiteRuleLink(value, `site-rule:externalUrl:${field}`));
+  }
+
+  for (const field of siteLinkRules.fields.youtubeId) {
+    const value = getRecordString(record, field);
+    if (!isLikelyYoutubeId(value)) {
+      continue;
+    }
+    links.push(makeSiteRuleLink(`https://www.youtube.com/watch?v=${value}`, `site-rule:youtubeId:${field}`));
+  }
+
+  for (const field of siteLinkRules.fields.routePath) {
+    const value = getRecordString(record, field);
+    if (!value || !value.startsWith("/") || shouldIgnorePayloadPath(value)) {
+      continue;
+    }
+    links.push(makeSiteRuleLink(new URL(value, pageUrl).toString(), `site-rule:routePath:${field}`));
+  }
+
+  for (const mapping of siteLinkRules.routeMappings) {
+    if (!recordMatchesWhen(record, mapping.when)) {
+      continue;
+    }
+    const rendered = renderTemplate(mapping.template, record);
+    if (!rendered) {
+      continue;
+    }
+    const value = safeUrl(rendered) ? rendered : new URL(rendered, pageUrl).toString();
+    links.push(makeSiteRuleLink(value, `site-rule:routeMapping:${mapping.name || mapping.template}`));
+  }
+
+  return links;
+}
+
+function extractSiteRuleLinksFromFieldPairs(scriptText, pageUrl, siteLinkRules) {
+  const links = [];
+  const stringFields = [
+    ...siteLinkRules.fields.externalUrl.map((field) => ({ field, kind: "externalUrl" })),
+    ...siteLinkRules.fields.youtubeId.map((field) => ({ field, kind: "youtubeId" })),
+    ...siteLinkRules.fields.routePath.map((field) => ({ field, kind: "routePath" })),
+  ];
+
+  for (const { field, kind } of stringFields) {
+    const regex = new RegExp(`["']${escapeRegExp(field)}["']\\s*:\\s*["']([^"']+)["']`, "g");
+    for (const match of scriptText.matchAll(regex)) {
+      const raw = decodeJavaScriptString(match[1]);
+      if (kind === "externalUrl" && safeUrl(raw)) {
+        links.push(makeSiteRuleLink(raw, `site-rule:${kind}:${field}`));
+      } else if (kind === "youtubeId" && isLikelyYoutubeId(raw)) {
+        links.push(makeSiteRuleLink(`https://www.youtube.com/watch?v=${raw}`, `site-rule:${kind}:${field}`));
+      } else if (kind === "routePath" && raw.startsWith("/") && !shouldIgnorePayloadPath(raw)) {
+        links.push(makeSiteRuleLink(new URL(raw, pageUrl).toString(), `site-rule:${kind}:${field}`));
+      }
+    }
+  }
+
+  return links;
+}
+
+function extractSiteRuleRouteMappingsFromFieldPairs(scriptText, pageUrl, siteLinkRules) {
+  if (!siteLinkRules.routeMappings.length) {
+    return [];
+  }
+
+  const fields = [...new Set(siteLinkRules.routeMappings.flatMap(getRouteMappingFields))];
+  const record = extractUniqueFieldPairRecord(scriptText, fields);
+  if (!record) {
+    return [];
+  }
+
+  const links = [];
+  for (const mapping of siteLinkRules.routeMappings) {
+    if (!recordMatchesWhen(record, mapping.when)) {
+      continue;
+    }
+    const rendered = renderTemplate(mapping.template, record);
+    if (!rendered) {
+      continue;
+    }
+    const value = safeUrl(rendered) ? rendered : new URL(rendered, pageUrl).toString();
+    links.push(makeSiteRuleLink(value, `site-rule:routeMapping:${mapping.name || mapping.template}`));
+  }
+  return links;
+}
+
+function makeSiteRuleLink(value, attribute) {
+  return {
+    tag: "payload",
+    attribute,
+    value,
+    sourceType: "site_rule_derived",
+  };
+}
+
+function extractPayloadRecords(scriptText) {
+  const records = [];
+  const parsed = parseStructuredPayload(scriptText);
+  if (!parsed) {
+    return records;
+  }
+
+  const root = parsed.root;
+  const table = parsed.table;
+  const seen = new Set();
+
+  const visit = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        visit(item);
+      }
+      return;
+    }
+    if (!isPlainObject(value) || seen.has(value)) {
+      return;
+    }
+    seen.add(value);
+    const resolved = resolvePayloadValue(value, table);
+    if (isPlainObject(resolved)) {
+      Object.defineProperty(resolved, "__raw", {
+        value,
+        enumerable: false,
+      });
+      records.push(resolved);
+    }
+    for (const item of Object.values(value)) {
+      visit(item);
+    }
+  };
+
+  visit(root);
+  return records;
+}
+
+function extractJsonObjectPayloadRecords(scriptText) {
+  const records = [];
+  const seen = new Set();
+
+  for (const fragment of extractJsonObjectFragments(scriptText)) {
+    if (seen.has(fragment)) {
+      continue;
+    }
+    seen.add(fragment);
+    try {
+      const parsed = JSON.parse(fragment);
+      collectPlainObjectRecords(parsed, records);
+    } catch {
+      // Ignore JavaScript object literals; site rules only derive from JSON-like records.
+    }
+  }
+
+  return records;
+}
+
+function collectPlainObjectRecords(value, records, seen = new Set()) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectPlainObjectRecords(item, records, seen);
+    }
+    return;
+  }
+  if (!isPlainObject(value) || seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  records.push(value);
+  for (const item of Object.values(value)) {
+    collectPlainObjectRecords(item, records, seen);
+  }
+}
+
+function extractJsonObjectFragments(text) {
+  const fragments = [];
+  const starts = [];
+  let quote = null;
+  let escaped = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "\"" || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "{") {
+      starts.push(index);
+    } else if (char === "}" && starts.length > 0) {
+      const start = starts.pop();
+      fragments.push(text.slice(start, index + 1));
+    }
+  }
+
+  return fragments;
+}
+
+function parseStructuredPayload(scriptText) {
+  const trimmed = scriptText.trim();
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+    return null;
+  }
+
+  try {
+    const root = JSON.parse(trimmed);
+    return {
+      root,
+      table: Array.isArray(root) ? root : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function resolvePayloadValue(value, table, depth = 0) {
+  if (depth > 5 || !table) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value < table.length) {
+    return resolvePayloadValue(table[value], table, depth + 1);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => resolvePayloadValue(item, table, depth + 1));
+  }
+  if (isPlainObject(value)) {
+    const resolved = {};
+    for (const [key, item] of Object.entries(value)) {
+      resolved[key] = resolvePayloadValue(item, table, depth + 1);
+    }
+    return resolved;
+  }
+  return value;
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getRecordString(record, field) {
+  const value = record?.[field];
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return String(value).trim();
+}
+
+function recordMatchesWhen(record, when = {}) {
+  for (const [field, expected] of Object.entries(when)) {
+    const actual = record?.[field];
+    const raw = record?.__raw?.[field];
+    if (expected === "*") {
+      const hasActual = actual !== null && actual !== undefined && String(actual).trim() !== "";
+      const hasRaw = raw !== null && raw !== undefined && String(raw).trim() !== "";
+      if (!hasActual && !hasRaw) {
+        return false;
+      }
+      continue;
+    }
+    if (String(actual) !== String(expected) && String(raw) !== String(expected)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function renderTemplate(template, record) {
+  let missing = false;
+  const rendered = String(template || "").replace(/\{([a-zA-Z0-9_.-]+)\}/g, (_, field) => {
+    const value = getRecordString(record, field);
+    if (!value) {
+      missing = true;
+      return "";
+    }
+    return encodePathTemplateValue(value);
+  });
+
+  return missing ? null : rendered;
+}
+
+function encodePathTemplateValue(value) {
+  return String(value)
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function getRouteMappingFields(mapping) {
+  return [
+    ...Object.keys(mapping.when || {}),
+    ...getTemplateFields(mapping.template),
+  ];
+}
+
+function getTemplateFields(template) {
+  const fields = [];
+  const regex = /\{([a-zA-Z0-9_.-]+)\}/g;
+  for (const match of String(template || "").matchAll(regex)) {
+    fields.push(match[1]);
+  }
+  return fields;
+}
+
+function extractUniqueFieldPairRecord(scriptText, fields) {
+  const record = {};
+  let found = false;
+
+  for (const field of fields) {
+    const regex = new RegExp(`["']${escapeRegExp(field)}["']\\s*:\\s*["']([^"']+)["']`, "g");
+    const values = new Set();
+    for (const match of scriptText.matchAll(regex)) {
+      values.add(decodeJavaScriptString(match[1]));
+    }
+    if (values.size === 1) {
+      [record[field]] = values;
+      found = true;
+    }
+  }
+
+  return found ? record : null;
+}
+
+function isLikelyYoutubeId(value) {
+  return /^[a-zA-Z0-9_-]{8,32}$/.test(String(value || ""));
 }
 
 function extractInlineScriptTexts(html) {
@@ -3158,6 +3523,58 @@ function normalizeDomainCategoryRules(rules) {
     .filter((rule) => rule.category && rule.domains.length > 0);
 }
 
+function normalizeSiteLinkRules(value = {}, source = "site-link-rules") {
+  const fields = value.fields && typeof value.fields === "object" ? value.fields : {};
+  const routeMappings = Array.isArray(value.routeMappings) ? value.routeMappings : [];
+
+  return {
+    source,
+    fields: {
+      externalUrl: normalizeStringList(fields.externalUrl),
+      youtubeId: normalizeStringList(fields.youtubeId),
+      routePath: normalizeStringList(fields.routePath),
+    },
+    routeMappings: routeMappings
+      .map((mapping) => ({
+        name: String(mapping.name || "").trim(),
+        template: String(mapping.template || "").trim(),
+        when: normalizeWhenClause(mapping.when),
+      }))
+      .filter((mapping) => mapping.template && Object.keys(mapping.when).length > 0),
+  };
+}
+
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [...new Set(value.map((item) => String(item || "").trim()).filter(Boolean))];
+}
+
+function normalizeWhenClause(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const normalized = {};
+  for (const [key, item] of Object.entries(value)) {
+    const field = String(key || "").trim();
+    if (!field || item === null || item === undefined) {
+      continue;
+    }
+    normalized[field] = String(item).trim();
+  }
+  return normalized;
+}
+
+function hasSiteLinkRules(value = {}) {
+  return Boolean(
+    value.fields?.externalUrl?.length
+    || value.fields?.youtubeId?.length
+    || value.fields?.routePath?.length
+    || value.routeMappings?.length
+  );
+}
+
 function classifyLinkType(link, extension) {
   if (isPayloadLink(link)) {
     if (DOWNLOAD_EXTENSIONS.has(extension)) {
@@ -3598,6 +4015,19 @@ function decodeHtmlEntities(value) {
     .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)));
 }
 
+function decodeJavaScriptString(value) {
+  const text = decodeHtmlEntities(String(value || ""));
+  try {
+    return JSON.parse(`"${text.replace(/"/g, '\\"')}"`);
+  } catch {
+    return text;
+  }
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -3623,6 +4053,7 @@ function parseArgs(argv) {
   let verbose = false;
   let domainRulesSource = null;
   let externalRiskRulesSource = null;
+  let siteLinkRulesSource = null;
   let conservativeMode = false;
   const explicitOptions = new Set();
 
@@ -3790,6 +4221,13 @@ function parseArgs(argv) {
       }
       continue;
     }
+    if (arg === "--site-link-rules") {
+      siteLinkRulesSource = args.shift();
+      if (!siteLinkRulesSource) {
+        throw new Error("--site-link-rules requires a file path or URL");
+      }
+      continue;
+    }
     if (arg === "--spa-links") {
       const value = args.shift();
       if (!value || value.startsWith("-")) {
@@ -3852,7 +4290,7 @@ function parseArgs(argv) {
   options.confirmationDelayMaxMs = Math.max(0, Math.min(options.confirmationDelayMaxMs, 60000));
   options.canonicalStrategy = normalizeCanonicalStrategy(options.canonicalStrategy);
   options.spaLinks = normalizeSpaLinkMode(options.spaLinks);
-  return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource };
+  return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource, siteLinkRulesSource };
 }
 
 async function loadDomainCategoryRules(source) {
@@ -3895,6 +4333,26 @@ async function loadExternalRiskRules(source) {
   const normalized = normalizeExternalRiskRules(parsed, source);
   if (normalized.length === 0) {
     throw new Error("--external-risk-rules did not contain any valid rules");
+  }
+  return normalized;
+}
+
+async function loadSiteLinkRules(source) {
+  if (!source) {
+    return normalizeSiteLinkRules({});
+  }
+
+  const text = await readRulesText(source, "--site-link-rules");
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("--site-link-rules must point to JSON");
+  }
+
+  const normalized = normalizeSiteLinkRules(parsed, source);
+  if (!hasSiteLinkRules(normalized)) {
+    throw new Error("--site-link-rules did not contain any valid rules");
   }
   return normalized;
 }
@@ -3987,6 +4445,8 @@ Options:
                        JSON domain category rules: [{ "category": "...", "domains": ["example.com"] }].
   --external-risk-rules <file-or-url>
                        JSON external governance rules with allowlist, blocklist, and watchlist domains.
+  --site-link-rules <file-or-url>
+                       JSON rules for deriving links from SPA/CMS payload fields.
   --canonical-strategy <safe|moderate|aggressive>
                        Canonical URL strategy for report keys. Default: ${DEFAULTS.canonicalStrategy}
   --spa-links <auto|off|strict>
@@ -4097,6 +4557,7 @@ async function main() {
 
   const domainCategoryRules = await loadDomainCategoryRules(parsed.domainRulesSource);
   const externalRiskRules = await loadExternalRiskRules(parsed.externalRiskRulesSource);
+  const siteLinkRules = await loadSiteLinkRules(parsed.siteLinkRulesSource);
 
   const reporter = parsed.json
     ? null
@@ -4111,6 +4572,8 @@ async function main() {
     domainCategoryRulesSource: parsed.domainRulesSource,
     externalRiskRules,
     externalRiskRulesSource: parsed.externalRiskRulesSource,
+    siteLinkRules,
+    siteLinkRulesSource: parsed.siteLinkRulesSource,
     reporter,
   });
   const report = await checker.run();

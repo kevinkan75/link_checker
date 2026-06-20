@@ -1,0 +1,30 @@
+{
+  "fields": {
+    "externalUrl": ["linkUrl", "url", "directPath"],
+    "youtubeId": ["youtubeId"],
+    "routePath": ["routePath", "path"]
+  },
+  "routeMappings": [
+    {
+      "name": "cec-menu",
+      "when": {
+        "directType": "101"
+      },
+      "template": "/central/menu/{directPath}"
+    },
+    {
+      "name": "cec-article-by-direct-path",
+      "when": {
+        "directType": "132"
+      },
+      "template": "/central/article/{directPath}"
+    },
+    {
+      "name": "cec-article-by-id",
+      "when": {
+        "articleId": "*"
+      },
+      "template": "/central/article/{articleId}"
+    }
+  ]
+}

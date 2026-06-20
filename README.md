@@ -104,6 +104,7 @@ dist\LinkChecker-portable.zip
 .\check-links.cmd https://example.com --external
 .\check-links.cmd https://example.com --no-confirm-404
 .\check-links.cmd https://example.com --spa-links strict
+.\check-links.cmd https://www.cec.gov.tw --site-link-rules docs\rules\cec-site-link-rules.json
 .\check-links.cmd https://example.com --progress
 .\check-links.cmd https://example.com --verbose
 .\check-links.cmd https://example.com --output report.json
@@ -128,6 +129,7 @@ dist\LinkChecker-portable.zip
 - `--user-agent <value>`：送出的 User-Agent。預設使用瀏覽器相容字串並包含 `LocalLinkChecker/1.0` 識別。
 - `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
 - `--external-risk-rules <file-or-url>`：載入外連治理規則 JSON，可用白名單、黑名單與觀察名單調整 `externalRisk`。
+- `--site-link-rules <file-or-url>`：載入 SPA/CMS payload 欄位推導規則，例如從 `linkUrl`、`youtubeId` 或站台 route 欄位產生可檢查 URL。
 - `--canonical-strategy <safe|moderate|aggressive>`：設定報告中 `canonicalUrl` 的正規化策略，預設 `safe`；此設定不改變實際請求 URL。
 - `--spa-links <auto|off|strict>`：從 SPA / Nuxt inline payload 抽取明確 URL 與 `/` 開頭 path，預設 `auto`；`off` 可回到舊行為，`strict` 只做 literal 抽取。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
@@ -185,6 +187,27 @@ dist\LinkChecker-portable.zip
   ]
 }
 ```
+
+`--site-link-rules` 的 JSON 格式如下：
+
+```json
+{
+  "fields": {
+    "externalUrl": ["linkUrl", "url"],
+    "youtubeId": ["youtubeId"],
+    "routePath": ["routePath", "path"]
+  },
+  "routeMappings": [
+    {
+      "name": "article",
+      "when": { "articleId": "*" },
+      "template": "/central/article/{articleId}"
+    }
+  ]
+}
+```
+
+`fields.externalUrl` 會把欄位值視為完整 URL，`fields.youtubeId` 會轉成 YouTube watch URL，`fields.routePath` 會把 `/` 開頭路徑轉成站內 URL。`routeMappings` 可依 payload 欄位條件產生站台路由，`when` 支援精確比對與 `"*"` 非空值比對。
 
 ## 執行狀態
 
