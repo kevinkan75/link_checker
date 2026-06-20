@@ -1,64 +1,33 @@
 # 開發路線紀錄
 
-## 狀態總覽
+## 目前判斷
 
-目前 P0-P5.5 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP，以及 SPA / Nuxt 站台抽取前置改善。下一步進 P6 report diff。
+P0-P5.5 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP，以及 SPA / Nuxt 站台抽取前置改善。
 
-核心順序：
+下一個主線仍是 **P6 report-to-report diff**。Stage 0 小修可穿插，但不得拖住 P6，也不得改變掃描語意或 report 主契約。
 
-1. P6：report-to-report diff。
-2. P7：TTL cache。
-3. P8：incremental scan。
-4. P9/P10：Analyzer 與分級排程強化。
+目前 Roadmap 採納兩份分析文件：
 
-| 階段 | 狀態 | 目的 |
-| --- | --- | --- |
-| P0 | 已完成 | 單機版服務生命週期、idle shutdown、heartbeat。 |
-| P1 | 已完成 | 結果模型、WAF/Bot/CDN 診斷、cache headers。 |
-| P2 | 已完成 | URL canonical strategy 與 canonical key integration。 |
-| P3 | 已完成 | URL inventory、來源合併、validation intent、validation queue。 |
-| P4 | 已完成 | 404 / 410 二次確認 MVP。 |
-| P5 | 已完成 | 外連風險規則、治理分類與風險摘要 MVP。 |
-| P5.5a | 已完成 | 偵測 SPA / Nuxt，抽 strict payload URL/path literals。 |
-| P5.5b | 已完成 | 用 site rules 處理 CEC CMS 欄位與站台特定連結。 |
-| P5.5c | 已完成 | 分流 asset/content/external，加入簡易 priority。 |
-| P6 | 下一個主要項目 | 兩份 report 歷史比對，只做 report-to-report diff。 |
-| P7 | 待規劃 | TTL 檢查快取，晚於 P6。 |
-| P8 | 待規劃 | 建立在 history/cache 上的增量掃描，晚於 P6/P7。 |
+- `Local_Link_Checker_分析文件_v5.1.md`：作為架構決策與 Roadmap 邊界。
+- `Local_Link_Checker_分析文件_v5.2.md`：作為工程落地補充，補安全、測試、schema、response limit、partial report、profile 與規則治理。
 
-## 開發主軸
+## 主線順序
 
-下一階段應優先做歷史比對，再做快取與增量掃描。不要先擴大爬取範圍，也不要先導入大型基礎設施。
-
-```text
-HTML 抽取
-  -> SPA / Nuxt payload 抽取與來源標記
-  -> URL resolve / canonicalize
-  -> URL inventory 去重與來源合併
-  -> HTTP validator 批次檢查
-  -> 結果判讀、快取、歷史比對與報告呈現
-```
-
-已確認的工程邊界：
-
-- 保留現有 `extractLinks()`，不要重寫成完整 DOM parser。
-- SPA payload extraction 以低成本、可回退為原則。
-- 站台特定欄位透過 `--site-link-rules`，不硬寫在核心 crawler。
-- Headless render 只作 opt-in fallback，不預設啟用。
-- CDN/WAF/Bot 處理定位是辨識、降誤報、節流、保存證據與提示人工協調，不做繞過防護。
-
-參考文件：
-
-- [docs/README.md](docs/README.md)
-- [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)
-- [docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)
-- [docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)
+| 順序 | 階段 | 狀態 | 目的 |
+| ---: | --- | --- | --- |
+| 0 | Stage 0 | 可先做的小修 | 文件、CSV BOM、GUI/CLI 落差提示、sources 顯示；不改掃描語意。 |
+| 1 | P6 | 下一個主要項目 | 兩份 report 歷史比對，只做 report-to-report diff。 |
+| 2 | P6.5a | P6 後 | schemaVersion / generator、JSON Schema、redaction、response size limit、Accept header 分流、CSV BOM、sources 上限、Keep-Alive。 |
+| 3 | P6.5b | P6.5a 後 | SSRF 防護、WAF signature、Retry-After、partial report、robots.txt summary、compliance、授權掃描宣告。 |
+| 4 | P7 | 待規劃 | TTL 檢查快取，晚於 P6/P6.5。 |
+| 5 | P8 | 待規劃 | 建立在 history/cache 上的增量掃描，晚於 P6/P7。 |
+| 6 | P9 | 待規劃 | Analyzer / GUI 大型報告、profile、規則治理與 Next.js 支援。 |
+| 7 | P10 | 待規劃 | 治理與分級排程，含 WAF 協調建議與 `--respect-robots`。 |
+| 8 | P11 | 待規劃 | 輔助輸出、進階格式、release / packaging governance。 |
 
 ## 已完成基線
 
 P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)。
-
-已完成能力摘要：
 
 - P0：portable / exe 模式 idle shutdown、browser heartbeat、手動 shutdown。
 - P1：`checkedAt`、`canonicalUrl`、cache headers、CDN/WAF/Bot 診斷欄位。
@@ -70,33 +39,87 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 - P5.5b：`--site-link-rules`、CEC 規則範例、CMS 欄位推導與 `site_rule_derived`。
 - P5.5c：內容/外連/文件/媒體/asset 分流統計與簡易 validation priority。
 
-## 前序遺留追蹤
+## 工程邊界
 
-以下是不阻塞 P6 的前序遺留項，避免後續忘記。除非使用者明確要求，P6 應先照主線做 report-to-report diff。
+這些規則跨所有階段適用：
 
-| 項目 | 建議時機 | 備註 |
+- 保留現有 `extractLinks()`，不要重寫成完整 DOM parser。
+- SPA payload extraction 以低成本、可回退為原則。
+- 站台特定欄位透過 `--site-link-rules`，不硬寫在核心 crawler。
+- Headless render 只作 opt-in fallback，不預設啟用。
+- CDN/WAF/Bot 處理定位是辨識、降誤報、節流、保存證據與提示人工協調，不做繞過防護。
+- `report.json` 是正式主契約；NDJSON 只能作大型報告輔助輸出，不取代主格式。
+- robots.txt、授權掃描與 compliance 只能記錄工具行為與使用者宣告，不代表工具驗證授權。
+- P6 不混入 TTL cache、incremental scan、robots path enforcement、adaptive backoff、sitemap lastmod 或 headless render。
+- 本機工具也需有安全邊界；預設不得請求 localhost、metadata IP、private IP 或 blocked scheme，除非明確開啟相容模式。
+- report、CSV 與 logs 應避免輸出敏感 query value；實際 request 與 canonical key 的處理需和顯示遮罩分層。
+
+## 採納決策
+
+### v5.1
+
+| 建議 | 決策 | 落點 |
 | --- | --- | --- |
-| GUI 增加 `--external-risk-rules` 輸入欄位 | P6 前後皆可，小修 | CLI / API 已可用；GUI 使用者目前不方便套治理規則。 |
-| 外連治理規則支援 URL pattern、path、tag/source 條件 | P9 或治理規則強化 | 目前主要是 domain-based matching。 |
-| 外連 `410` 是否納入二次確認 | P7 後評估 | 等外連風險與 TTL cache 穩定後再決定，避免拖慢掃描。 |
-| CDN/WAF body hash 診斷 | P9 或診斷強化 | MVP 已有 provider、headers、body signature 等證據；body hash 可後補。 |
-| Asset skip / asset defer 策略 | P7/P8 後 | P5.5c 已有分流統計與簡易 priority，是否跳過需結合 cache / incremental scan。 |
-| 更多 framework payload，例如 Next.js `__NEXT_DATA__` | 後續站台需求驅動 | 目前 P5.5 先覆蓋 Nuxt / SPA 與 strict literals。 |
-| `--render` headless fallback | 明確 opt-in 後續功能 | 高成本、高依賴，不預設啟用。 |
-| 完整 priority queue / binary heap | 掃描量變大時 | 目前簡易排序已滿足 P5.5c。 |
+| P6 純 report diff | 採納 | P6 只讀兩份既有 report 並輸出 diff，不改掃描行為。 |
+| P6.5 拆成 P6.5a / P6.5b | 採納 | 低風險穩定性與語意性改動分開。 |
+| Stage 0 小修 | 採納但不得拖住 P6 | 只限文件、CSV BOM、GUI/CLI 落差提示、sources 顯示。 |
+| `schemaVersion` / `generator` | 採納 | P6.5a；`report-diff.mjs` 必須能讀沒有 schemaVersion 的舊 report。 |
+| robots.txt 與 `--authorized-scan` | 採納但保守 | P6.5b；只記錄宣告與工具策略，不替使用者斷言授權。 |
+| Keep-Alive | 採納但需驗證 | P6.5a；不得突破 global / per-host concurrency。 |
+| Accept / Accept-Encoding 分流 | 採納 | P6.5a；`br` 需確認 client 支援後再啟用。 |
+| bodyHash diagnostics opt-in | 需調整現況 | P6.5b；避免正式 report 預設保存內容指紋。 |
+| Bloom Filter、NDJSON 主格式、自動 adaptive backoff | 暫不採用 | 只能作後續 opt-in 或輔助功能。 |
+
+### v5.2
+
+| 建議 | 決策 | 落點 |
+| --- | --- | --- |
+| SSRF / private IP / metadata IP 防護 | 採納，高優先 | P6.5b；request 前 DNS resolve 後檢查，redirect 後也套用。 |
+| URL query redaction | 採納，高優先 | P6.5a；report、CSV、logs 預設遮罩高風險 query value。 |
+| Response size / body preview / download probe limit | 採納，高優先 | P6.5a；避免大型 response 完整讀入記憶體。 |
+| Partial report / runStatus | 採納，中高優先 | P6.5b；停止、中斷、錯誤都需明確標記 partial。 |
+| Golden fixtures 與 regression tests | 採納，高優先 | P6 前置；支援 diff 開發，不改掃描行為。 |
+| JSON Schema / TypeScript 型別 | 採納，高優先 | P6 前置與 P6.5a；先建立 report / diff schema 草案。 |
+| Retry-After / host cooldown | 採納但保持基礎版 | P6.5b 或 P7 前置；不等同完整 adaptive backoff。 |
+| Rules schema / rulesVersion / 載入安全 | 採納，中優先 | P9；HTTP 載入規則檔同樣套 SSRF 防護。 |
+| Profile 與 configured/effective values | 採納，中優先 | P9；profile 展開結果寫入 `report.options`。 |
+| SBOM、dependency audit、code signing | 後續評估 | P11 release / packaging。 |
+
+v5.2 需修正套用位置：文件提到 Stage 0 可含 Header、Keep-Alive、sources 上限、body 釋放；本專案仍維持 Stage 0 只放文件與輸出相容性小修。Header、Keep-Alive、response size limit、redaction、source truncate 放 P6.5a；SSRF、Retry-After、partial report、robots / compliance 放 P6.5b。
+
+## 立即工作
+
+### Stage 0
+
+可插隊處理，但不得改變掃描語意、report 主契約或 P6 範圍。
+
+1. README 補 GUI/CLI 功能落差、WAF/robots/人工確認限制與多網站監看提示。
+2. `broken.csv`、`external-links.csv` 加 UTF-8 BOM，確保 Excel 直接開啟中文不亂碼。
+3. GUI/CLI 落差表：標示 CLI 已有但 GUI 尚未提供的選項，例如 `--external-risk-rules`。
+4. 文件說明 `sourceCount` 語意；`sourcesTruncated` 機制留到 P6.5a。
+
+Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、cache、incremental scan，也不得改變 `checked[]`、`broken[]`、`externalLinks[]` 既有欄位語意。
+
+### P6 前置
+
+這些項目支援 P6 開發，不改掃描行為：
+
+1. 建立 `fixtures/reports/` golden cases：`404 -> 200`、`200 -> 404`、`needs_review -> confirmed_missing`、`externalRisk low -> high`。
+2. 建立 `schemas/diff.schema.json` 草案，約束 P6 diff 輸出必要欄位。
+3. 建立 report normalization 原則：優先 `checked[]`，舊 report fallback `broken[]`，外連使用 `externalLinks[]`。
 
 ## P6：Report-to-Report Diff
 
 狀態：下一個主要項目。P6 不重新掃描網站、不重新判斷風險、不引入資料庫、不導入 cache 或 incremental scan。
 
-P6a 交付項：
+交付項：
 
-1. 建立 `report-diff.mjs` CLI：`old-report.json` + `new-report.json` -> `diff.json`。
-2. 實作 report normalization：新 report 優先 `checked[]`，舊 report fallback `broken[]`，外連獨立使用 `externalLinks[]`。
-3. 實作 URL diff summary：新增、移除、變更、新發生問題、已修復、持續存在。
-4. 實作 P4/P5 欄位 diff：`confirmation.outcome`、`transientFailure`、`confirmationNeedsReview`、`externalRisk`、`externalRiskNeedsReview`。
-5. 實作 P5.5 report diagnostics diff：`scanQuality`、`spaDetection` 與 `checkedByKind` 摘要變化。
-6. 先輸出 JSON 與簡短 console summary；GUI / Analyzer 呈現放到後續強化。
+1. `report-diff.mjs` CLI：`old-report.json` + `new-report.json` -> `diff.json`。
+2. Report normalization：新 report 優先 `checked[]`，舊 report fallback `broken[]`，外連獨立使用 `externalLinks[]`。
+3. URL diff summary：新增、移除、變更、新發生問題、已修復、持續存在。
+4. P4/P5 欄位 diff：`confirmation.outcome`、`transientFailure`、`confirmationNeedsReview`、`externalRisk`、`externalRiskNeedsReview`。
+5. P5.5 diagnostics diff：`scanQuality`、`spaDetection` 與 `checkedByKind` 摘要變化。
+6. JSON 輸出與簡短 console summary；GUI / Analyzer 呈現放 P9。
 
 比對 key：
 
@@ -152,10 +175,76 @@ P6a 交付項：
 - 外連風險從 `low` 變 `high` 應進入治理摘要。
 - `scanQuality` 從 `suspicious` 變 `ok` 或 warning 消失時，應在 diagnostics summary 顯示掃描品質改善。
 - 來源頁移除但 URL 仍在其他頁存在時，不應誤判 URL 完全移除。
+- 讀到 partial report 時，diff 應顯示 warning；P6 不需產生 partial report，但需能辨識後續 schema。
+
+不納入 P6：
+
+- TTL cache、incremental scan、sitemap lastmod。
+- robots path enforcement、`--authorized-scan`、`--respect-robots`。
+- NDJSON 主格式、Bloom Filter、headless render。
+- 自動 adaptive backoff 或任何會改變掃描結果來源的策略。
+
+## P6.5a：低風險穩定性修補
+
+狀態：P6 後實作。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
+
+交付項：
+
+1. `schemaVersion` / `generator`：新增 report root 欄位；舊 report 視為 legacy / `1.0.0`。
+2. `schemas/report.schema.json` 草案：約束 root、options、summary、checked、broken、externalLinks 的最低契約。
+3. URL query redaction：預設遮罩 token、session、auth、password、email、jwt、signature、api_key 等 query value。
+4. Response size limit：加入 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`，並輸出 `bodyTruncated` / `bodyBytesRead`。
+5. CSV BOM：若 Stage 0 尚未完成，於此階段補齊。
+6. `maxSourcesPerUrl`：預設保存有限來源，輸出 `sourceCount` 與 `sourcesTruncated`。
+7. response body 及早釋放：抽取或診斷完成後不保留完整 body。
+8. Accept header 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
+9. Accept-Encoding 實測：先確認 `gzip` / `deflate`，`br` 必須確認 client 支援後才啟用。
+10. Keep-Alive connection pool：受 global concurrency 與 per-host concurrency 約束，提供 `--no-keep-alive` 回退。
+
+驗收：
+
+- 加入 `schemaVersion` 後，舊 report 仍可被 P6 diff normalization 讀取。
+- report、CSV、events log 不輸出未遮罩的高風險 query value；實際 request 不受遮罩影響。
+- 大型 HTML / PDF / media 不會被完整讀入記憶體；超過上限時 report 標記 truncated。
+- 同一 URL 來源超過上限時，`sourceCount` 正確且 `sourcesTruncated=true`。
+- 啟用 Accept-Encoding 後，壓縮 HTML 仍可正常抽取連結。
+- 啟用 Keep-Alive 後，同一 host in-flight request 不超過 `perHostConcurrency`。
+
+## P6.5b：稽查語意與誤判降低
+
+狀態：P6.5a 後實作。此階段會新增 report 語意，需同步更新 CLI、GUI 顯示與 Analyzer fallback。
+
+交付項：
+
+1. WAF signature detection：保存 provider、header evidence、body signature rule id，不保存完整 body。
+2. confirmation WAF 感知：二次確認遇 suspected WAF / bot 時標示 `needs_review`。
+3. SSRF / URL security policy：預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與 blocked scheme。
+4. DNS resolve 後檢查：public hostname 若解析到 private / metadata IP，預設不請求；redirect 後也需重新檢查。
+5. Retry-After / host cooldown：尊重 429 / 503 的 `Retry-After`，但設定等待上限，且不阻塞其他 host。
+6. Partial report `runStatus`：GUI stop、queue stop、執行期錯誤需標記 `partial`、`stoppedByUser` 或 `failed`。
+7. `summary.robotsTxt`：記錄 start origin robots.txt、Crawl-delay、全站 Disallow、effective delay / concurrency。
+8. `compliance` root 欄位：記錄 purpose、scope、authorizedScanDeclared、robotsTxtPolicy、responseBodyStored、bodyHashEnabled。
+9. `--authorized-scan` / `--authorization-note` / `--no-robots`：只記錄使用者宣告與工具策略，不驗證授權。
+10. bodyHash 策略調整：預設正式 report 不保存內容指紋，僅 diagnostics opt-in 可啟用。
+11. host block-rate diagnostics：提供高 403 / 429 / suspected WAF 比例提示，但不自動 aggressive retry。
+
+驗收：
+
+- robots.txt 不存在或讀取失敗時，掃描不中斷且 report 有明確 `scanPolicy`。
+- `http://127.0.0.1`、`http://localhost`、`http://169.254.169.254` 預設不請求。
+- public hostname 解析到 private IP 時預設不請求；`--allow-localhost` 不得自動允許所有 private IP。
+- redirect 到 private IP、metadata IP 或 blocked scheme 時停止 follow 並標記 security issue。
+- 429 / 503 的 `Retry-After` 不得讓掃描長時間卡住，也不得阻塞其他 host。
+- GUI stop 後保存 partial report，且不得被 Analyzer / diff 誤判為完整結果。
+- 全站 Disallow 且無 Crawl-delay 時，最低降頻為 `effectiveDelayMs >= 2000`、`effectivePerHostConcurrency <= 1`。
+- 未帶 `--authorized-scan` 時，report 不得宣稱已授權。
+- external host 不套用同站授權 override 語意。
+- WAF body signature 命中時，不應被歸入一般 404。
+- `bodyHashEnabled=false` 必須是預設。
 
 ## P7：TTL 檢查快取
 
-狀態：P6 後實作。P7 只處理可驗證的 URL result 快取，不先處理 page HTML cache。
+狀態：P6 與必要的 P6.5 穩定性修補後實作。P7 只處理可驗證的 URL result 快取，不先處理 page HTML cache。
 
 建議 cache file：
 
@@ -170,6 +259,7 @@ cache key 應包含：
 - userAgent hash
 - accept language
 - referer mode
+- robots policy
 
 cache value 應包含：
 
@@ -180,7 +270,7 @@ cache value 應包含：
 - lastStatus
 - lastFinalUrl
 
-建議 TTL：
+TTL 原則：
 
 - 穩定 `200/204/3xx`：24 小時到 7 天。
 - `404/410`：6 到 24 小時。
@@ -201,8 +291,8 @@ CLI 可新增：
 - 相同 canonical key、method policy、UA hash、語言與 referer mode 時可命中 cache。
 - `404/410` 快取 TTL 應短於穩定 `200/204/3xx`。
 - `429/timeout/5xx` 應短 TTL，避免長時間保留暫時性失敗。
-- `blocked_waf/blocked_bot/rate_limited` 應短 TTL 或不快取。
 - `--refresh-cache` 應忽略既有 cache 並回寫新結果。
+- report summary 顯示 cache hit / miss / expired / refreshed。
 
 ## P8：增量掃描
 
@@ -221,6 +311,7 @@ scan state 草案：
   urls: {
     canonicalUrl: {
       sources,
+      sourceCount,
       firstSeenAt,
       lastSeenAt,
       lastCheckedAt
@@ -236,32 +327,39 @@ scan state 草案：
 - 優先檢查新出現的 URL。
 - 優先檢查上次錯誤或 retryable 的 URL。
 - 跳過 TTL 未過期且穩定的 URL。
+- sitemap lastmod 只影響排序，不排除 HTML inventory 發現的 URL。
 
 CLI 可新增：
 
 - `--incremental`
 - `--state-file <file>`
 - `--changed-only`
+- `--sitemap <url-or-file>`
 
 驗收：
 
 - 新頁面與 hash 改變頁面應被優先掃描。
 - 未變更頁面中的穩定 URL 若 TTL 未過期，應可跳過。
 - 上次為 `needs_review`、timeout、redirect error 或 high risk 的 URL 應優先複查。
-- 增量掃描 report 仍需保留完整可讀摘要，不能只輸出 delta。
+- changed-only 模式仍保留完整 summary，不只輸出 delta。
 
-## P9：Analyzer 後續強化
+## P9：Analyzer / GUI 大型報告
 
-P5.5 已完成二次確認、外連風險與 SPA/Nuxt 抽取前置改善；P9 只做 P6/P7/P8 之後的 Analyzer 強化，避免先做空 UI。
-
-後續強化：
+P9 只做 P6/P7/P8 之後的 Analyzer / GUI 強化，避免先做空 UI。
 
 - 顯示歷史比對：新增、移除、修復、惡化、持續存在。
 - 顯示 cache 命中、TTL、上次檢查時間。
 - 顯示高重複引用 URL 與影響頁面數。
 - 顯示 redirect chain 詳細資訊。
+- 大型 report 讀取：Analyzer 改用 stream-json 類策略逐筆處理 `checked[]`，避免全量載入。
+- NDJSON 輔助輸出：可新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，但不得取代 `report.json`。
+- GUI 分頁：大型 report 不一次載入所有 rows。
+- GUI profile：`normal`、`government-conservative`、`large-site`、`spa`、`external-governance`。
+- 顯示 configured values 與 robots / Retry-After 後的 effective values。
+- 規則檔驗證：`domain-rules`、`external-risk-rules`、`site-link-rules` 加入 schema 與 `rulesVersion`。
+- 更多 framework payload：補 Next.js `__NEXT_DATA__` 抽取。
 
-## P10：分級排程
+## P10：治理與分級排程
 
 先設計排程建議，不急著做完整常駐 scheduler。
 
@@ -282,18 +380,50 @@ P5.5 已完成二次確認、外連風險與 SPA/Nuxt 抽取前置改善；P9 �
 - 外部連結：低頻。
 - 上次錯誤、redirect error、timeout：高頻複查。
 - `429` 或疑似 WAF/Bot 擋下：降低併發、延長 delay，避免密集重試。
+- WAF 白名單建議：依 suspectedWaf host 產生需協調清單，不自動繞過。
+- `--respect-robots` path enforcement：嚴格遵守 Disallow 的模式放在 P10 或後續，不混入 P6.5 預設策略。
 - 外部站可加入每網域每分鐘與每路徑每分鐘限制；這應建立在 P7/P8 的快取與狀態資料後。
 - 穩定 200 多次：降低頻率。
 
-## P11：輔助功能
+## P11：輔助功能與 Release
 
 這些功能有價值，但優先度低於誤判降低、資料模型、外連治理、歷史比對與快取。
 
-- sitemap 支援。
-- robots.txt 讀取與尊重策略。
 - HTML / Excel 報表輸出。
 - 環境變數設定。
 - 更多匯入/匯出格式。
+- Portable package manifest。
+- Node runtime version 記錄。
+- Package smoke test。
+- Dependency audit。
+- License summary。
+- SBOM。
+- 簽章與 checksum 評估。
+
+## 細部規格索引
+
+以下項目已採納但不在 Roadmap 主文展開成完整規格。實作前需回填到 [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)、schema 或專門設計文件。
+
+| 類別 | 細項 | 落點 |
+| --- | --- | --- |
+| schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / `sourcesTruncated`、`1.2.0` 新增 robots / compliance / protection 結構 | P6.5a / P6.5b |
+| normalization | `load report -> detect schemaVersion -> normalize to internal ReportModel`，避免 GUI / Analyzer 散落 fallback 邏輯 | P6 / P9 |
+| robots schema | `summary.robotsTxt` 保留 start origin 語意；未來擴充 `externalRobotsTxt` 或 `robotsTxtByScope` | P6.5b |
+| scanPolicy | `robots_compliant`、`robots_not_found`、`robots_fetch_error`、`robots_override_authorized`、`robots_disallow_override_without_declaration`、`robots_respected_path_skip`、`robots_disabled` | P6.5b |
+| compliance scope | `same_origin`、`same_site`、`same_origin_with_external_validation`、`mixed`、`unknown` | P6.5b |
+| security CLI | `--block-private-ip` 預設開啟、`--allow-private-ip`、`--allow-localhost`、metadata IP 永遠阻擋 | P6.5b |
+| redaction CLI | `--redact-sensitive-query` 預設開啟、`--no-redact-sensitive-query`、`--redact-query-keys <list>` | P6.5a |
+| body limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes` | P6.5a |
+| keep-alive CLI | `--no-keep-alive`，並記錄 `keepAlive`、`maxSockets`、`maxFreeSockets`、`keepAliveMsecs` | P6.5a |
+| report fields | `securityPolicy`、`redaction`、`bodyLimits`、`runStatus`、`hostDiagnostics`、`rulesVersion`、`profileExpandedOptions` | P6.5 / P9 |
+| redirect security labels | `scheme_downgrade_redirect`、`redirect_to_private_ip`、`redirect_to_blocked_scheme`、`redirect_to_metadata_ip` | P6.5b |
+| DNS / TLS issue types | `dns_not_found`、`connection_refused`、`timeout`、`tls_error`、`tls_cert_expired` | P6.5b |
+| IDN / IPv6 | canonical 比對使用 normalized hostname；security policy 需支援 punycode、`[::1]`、IPv6 unique local / link-local 判斷 | P6.5b |
+| fixtures | `fixtures/reports`、`fixtures/robots`、`fixtures/waf`、`fixtures/html`、`fixtures/csv`；避免只用 snapshot，重要欄位逐欄 assertion | P6 前置 / P6.5 |
+| types | `types/report.d.ts`、`types/diff.d.ts`、`types/rules.d.ts` 與 JSON Schema 同步維護 | P6.5a / P9 |
+| rules governance | `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`；支援 `rulesVersion`、`name`、`updatedAt` | P9 |
+| profiles | `normal`、`government-conservative`、`large-site`、`spa`、`external-governance`；CLI explicit option 可覆蓋 profile default | P9 |
+| release | portable package manifest、Node runtime version、package smoke test、dependency audit、license summary、SBOM、checksum / signing 評估 | P11 |
 
 ## 暫不納入近期主線
 
@@ -307,3 +437,4 @@ P5.5 已完成二次確認、外連風險與 SPA/Nuxt 抽取前置改善；P9 �
 - 不把 `200` 且 body 過短單獨判定為 `suspected_false_positive`；必須搭配 content-type、標頭、title 或 challenge pattern。
 - 不對明確 WAF/Bot challenge 做多次 aggressive retry；這類結果應保存證據並提示調整掃描策略或與站方協調。
 - 不保存完整 response body 作為診斷欄位，避免報告包含登入頁、錯誤頁或防護頁中的敏感內容。
+- Bloom Filter 不作為預設去重；如未來支援，只能在大型站 opt-in 並標明 false positive risk。
