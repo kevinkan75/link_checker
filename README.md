@@ -5,9 +5,12 @@
 ## 目錄
 
 - [功能摘要](#功能摘要)
+- [目前狀態與邊界](#目前狀態與邊界)
 - [使用方式](#使用方式)
 - [快速選擇](#快速選擇)
 - [圖形介面](#圖形介面)
+- [輸出檔案](#輸出檔案)
+- [CLI / GUI 功能差異](#cli--gui-功能差異)
 - [常用參數](#常用參數)
 - [SPA / Nuxt 與 CMS payload](#spa--nuxt-與-cms-payload)
 - [執行狀態](#執行狀態)
@@ -27,6 +30,14 @@
 - 外連 inventory、網域分類、外連治理風險摘要與 CSV / JSON 輸出。
 - SPA / Nuxt payload literal 抽取、站台規則推導與 `scanQuality` 診斷。
 - 內容頁、外連、文件、媒體、asset、`_nuxt` asset 分流統計與簡易 validation priority。
+
+## 目前狀態與邊界
+
+目前已完成 P0-P5.5 的功能基線。下一個主要開發項目是 P6 report-to-report diff，尚未提供正式的 `report-diff.mjs`、TTL cache、incremental scan、robots path enforcement、partial report schema、`manifest.json` 或 report `schemaVersion`。
+
+現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。後續版本資訊會依 [ROADMAP.md](ROADMAP.md) 放入 JSON 內容與每次輸出的 manifest；一般日常輸出不預設在檔名加版本號。
+
+工具會嘗試降低誤判並保存防護層診斷，但不繞過 WAF/Bot 防護，也不驗證使用者是否取得掃描授權。若網站政策、robots.txt、登入權限或防護服務限制自動化請求，結果仍需人工判讀。
 
 ## 使用方式
 
@@ -88,7 +99,40 @@ GUI 可以輸入網站 URL、設定檢查頁數、深度、全域併發、每 ho
 
 多網站併行檢查時，佇列表格中的執行中網站會提供「監看」按鈕。GUI 會先自動監看第一個執行中的網站；手動點選「監看」後，即時進度、事件紀錄與問題連結表會切換到該網站，後續輪詢不會自動切回其他網站。
 
-GUI 每次檢查結束後會自動保存記錄檔到 `logs/` 目錄，資料夾命名格式為 `YYYYMMDD-HHMMSS--host--status`。內容包含完整 `report.json`、摘要 `summary.json`、可用 Excel 開啟的 `broken.csv`，以及檢查過程 `events.log`。
+GUI 每次檢查結束後會自動保存記錄檔到 `logs/` 目錄，資料夾命名格式為 `YYYYMMDD-HHMMSS--host--status`。
+
+## 輸出檔案
+
+GUI 自動保存的資料夾通常包含：
+
+- `report.json`：完整掃描報告，包含 options、summary、checked、broken、externalLinks 等資料。
+- `summary.json`：摘要與主要統計。
+- `broken.csv`：問題連結清單，可用 Excel 開啟。
+- `external-links.csv`：外連 inventory、分類、風險與來源頁。
+- `external-summary.json`：外連網域、類型、分類與治理風險摘要。
+- `events.log`：檢查過程事件紀錄。
+
+CLI 使用 `--output <file>` 時只輸出指定的完整 JSON report；目前沒有獨立的 CSV / summary 轉換指令，需要這些檔案時請使用 GUI 自動保存。
+
+## CLI / GUI 功能差異
+
+CLI 是完整參數介面，適合自動化、規則檔與進階診斷。GUI 適合一般檢查、佇列批次、即時進度與下載報告。
+
+目前 GUI 已提供常用掃描設定，例如頁數、深度、併發、延遲、逾時、重試、外連檢查、保守模式、System CA、Legacy TLS、canonical strategy、User-Agent 與 Accept-Language。
+
+目前僅 CLI 提供下列進階選項：
+
+| 功能 | CLI | GUI |
+| --- | --- | --- |
+| 網域分類規則 | `--domain-rules` | 尚未提供規則檔欄位 |
+| 外連治理規則 | `--external-risk-rules` | 尚未提供規則檔欄位 |
+| SPA / CMS 站台規則 | `--site-link-rules` | 尚未提供規則檔欄位 |
+| SPA payload 模式 | `--spa-links auto|off|strict` | 使用預設 `auto` |
+| 即時 CLI 進度 | `--progress` | GUI 內建即時進度 |
+| 詳細事件輸出 | `--verbose` | GUI 內建事件紀錄 |
+| stdout JSON | `--json` | 下載或自動保存 `report.json` |
+
+GUI 尚未提供規則檔輸入欄位；若需要外連治理規則或站台特定 CMS payload 推導，請先使用 CLI。
 
 ## 常用參數
 
@@ -347,6 +391,7 @@ JSON report 會保留來源類型，例如 `html_attribute`、`script_literal`�
 - 問題連結分類統計
 - 每個問題連結的 HTTP 狀態或錯誤訊息
 - 問題連結是在哪些頁面與標籤屬性中發現
+- 外連的 `sourceCount` 代表同一 canonical URL 被多少來源引用；目前保存完整 `sources`，後續若加入 `sourcesTruncated` 會依 roadmap 放在 P6.5a。
 - 若網站回應像 Cloudflare、Akamai、Imperva、Sucuri 等防護頁，會標示為被防護層阻擋
 - 同站 `404 / 410` 的二次確認統計：已恢復、需複查、確認不存在
 
@@ -390,12 +435,12 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；下一個主要項目是 P6 report-to-report diff。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；下一個主要項目是 P6 report-to-report diff，並規劃 P6.5a 的 schema / generator / manifest 版本策略。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
-- [docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)：CEC / Nuxt 掃描問題分析與 P5.5 改善來源。
-- [docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)：SPA payload extraction 設計筆記。
+- [docs/archive/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/archive/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)：CEC / Nuxt 掃描問題分析與 P5.5 改善來源。
+- [docs/archive/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/archive/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)：SPA payload extraction 設計筆記。
 - [docs/rules/cec-site-link-rules.json](docs/rules/cec-site-link-rules.json)：CEC site link rules 範例。
 
 ## 注意事項
@@ -403,3 +448,5 @@ dist\LinkChecker-portable.zip
 部分網站會阻擋自動化請求，可能導致 `403` 或逾時。這種情況不一定代表網站真的有壞連結，需要再用瀏覽器確認。
 
 當結果顯示「Blocked by protection layer」或 GUI 顯示「防護阻擋」時，通常代表網站前方的防護服務拒絕程式化請求。這不一定是連結失效，建議用一般瀏覽器人工確認，或請網站管理方允許檢查來源。
+
+目前版本不會執行 robots.txt path enforcement，也沒有 `--authorized-scan` 宣告欄位；相關合規紀錄與掃描策略會依 roadmap 放在 P6.5b 後續處理。

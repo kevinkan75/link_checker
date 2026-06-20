@@ -1,29 +1,30 @@
 # 開發路線紀錄
 
-## 目前判斷
+## 一致性結論
 
 P0-P5.5 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP，以及 SPA / Nuxt 站台抽取前置改善。
 
-下一個主線仍是 **P6 report-to-report diff**。Stage 0 小修可穿插，但不得拖住 P6，也不得改變掃描語意或 report 主契約。
+下一個主線維持 **P6 report-to-report diff**。Stage 0 可穿插處理，但只做文件與輸出相容性小修，不改掃描語意、不改既有 report 主契約，也不得拖住 P6。
 
 目前 Roadmap 採納兩份分析文件：
 
 - `Local_Link_Checker_分析文件_v5.1.md`：作為架構決策與 Roadmap 邊界。
 - `Local_Link_Checker_分析文件_v5.2.md`：作為工程落地補充，補安全、測試、schema、response limit、partial report、profile 與規則治理。
 
-## 主線順序
+## 階段總覽
 
-| 順序 | 階段 | 狀態 | 目的 |
-| ---: | --- | --- | --- |
-| 0 | Stage 0 | 可先做的小修 | 文件、CSV BOM、GUI/CLI 落差提示、sources 顯示；不改掃描語意。 |
-| 1 | P6 | 下一個主要項目 | 兩份 report 歷史比對，只做 report-to-report diff。 |
-| 2 | P6.5a | P6 後 | schemaVersion / generator、JSON Schema、redaction、response size limit、Accept header 分流、CSV BOM、sources 上限、Keep-Alive。 |
-| 3 | P6.5b | P6.5a 後 | SSRF 防護、WAF signature、Retry-After、partial report、robots.txt summary、compliance、授權掃描宣告。 |
-| 4 | P7 | 待規劃 | TTL 檢查快取，晚於 P6/P6.5。 |
-| 5 | P8 | 待規劃 | 建立在 history/cache 上的增量掃描，晚於 P6/P7。 |
-| 6 | P9 | 待規劃 | Analyzer / GUI 大型報告、profile、規則治理與 Next.js 支援。 |
-| 7 | P10 | 待規劃 | 治理與分級排程，含 WAF 協調建議與 `--respect-robots`。 |
-| 8 | P11 | 待規劃 | 輔助輸出、進階格式、release / packaging governance。 |
+| 順序 | 階段 | 狀態 | 主要交付 | 不得混入 |
+| ---: | --- | --- | --- | --- |
+| 0 | Stage 0 | 已收斂 | README、CSV BOM、GUI/CLI 落差提示、`sourceCount` 說明 | schema、robots、cache、incremental scan、Keep-Alive |
+| 1 | P6 前置 | 可先做 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
+| 2 | P6 | 下一個主線 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
+| 3 | P6.5a | P6 後 | schema/generator、manifest、redaction、response limit、sources 上限、Header/Keep-Alive | robots / compliance 語意 |
+| 4 | P6.5b | P6.5a 後 | SSRF、WAF signature、Retry-After、partial report、robots summary、compliance | WAF/Bot 繞過 |
+| 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
+| 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
+| 7 | P9 | 待規劃 | Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 空 UI 或未落地的展示層 |
+| 8 | P10 | 待規劃 | 治理與分級排程、WAF 協調建議、`--respect-robots` | 常駐 scheduler 優先化 |
+| 9 | P11 | 待規劃 | 輔助格式、release / packaging governance | 早於核心契約與誤判降低 |
 
 ## 已完成基線
 
@@ -39,24 +40,34 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 - P5.5b：`--site-link-rules`、CEC 規則範例、CMS 欄位推導與 `site_rule_derived`。
 - P5.5c：內容/外連/文件/媒體/asset 分流統計與簡易 validation priority。
 
-## 工程邊界
+## 全域原則
 
-這些規則跨所有階段適用：
+### 掃描邊界
 
 - 保留現有 `extractLinks()`，不要重寫成完整 DOM parser。
 - SPA payload extraction 以低成本、可回退為原則。
 - 站台特定欄位透過 `--site-link-rules`，不硬寫在核心 crawler。
 - Headless render 只作 opt-in fallback，不預設啟用。
-- CDN/WAF/Bot 處理定位是辨識、降誤報、節流、保存證據與提示人工協調，不做繞過防護。
 - `report.json` 是正式主契約；NDJSON 只能作大型報告輔助輸出，不取代主格式。
+- P6 只讀既有 report，不重新掃描、不重新判斷風險、不引入資料庫、不導入 cache 或 incremental scan。
+
+### 安全與合規
+
+- CDN/WAF/Bot 處理定位是辨識、降誤報、節流、保存證據與提示人工協調，不做繞過防護。
 - robots.txt、授權掃描與 compliance 只能記錄工具行為與使用者宣告，不代表工具驗證授權。
-- P6 不混入 TTL cache、incremental scan、robots path enforcement、adaptive backoff、sitemap lastmod 或 headless render。
 - 本機工具也需有安全邊界；預設不得請求 localhost、metadata IP、private IP 或 blocked scheme，除非明確開啟相容模式。
 - report、CSV 與 logs 應避免輸出敏感 query value；實際 request 與 canonical key 的處理需和顯示遮罩分層。
 
-## 採納決策
+### 輸出與版本
 
-### v5.1
+- 日常輸出檔名保持穩定，避免腳本、GUI 與使用者流程每次都要追新檔名。
+- 版本資訊放在 JSON 內容與每次輸出的 `manifest.json`。只有 release / package 產物才採檔名版本化。
+- CSV 不新增每列版本欄位；需要追溯工具、schema、runtime 與輸出清單時，以同目錄 manifest 為準。
+- P6 可先替新產出的 `diff.json` 加 `schemaVersion` / `generator`；既有掃描 report 的版本化與 manifest 統一放 P6.5a。
+
+## 採納決策與落點
+
+### v5.1 採納
 
 | 建議 | 決策 | 落點 |
 | --- | --- | --- |
@@ -70,7 +81,7 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 | bodyHash diagnostics opt-in | 需調整現況 | P6.5b；避免正式 report 預設保存內容指紋。 |
 | Bloom Filter、NDJSON 主格式、自動 adaptive backoff | 暫不採用 | 只能作後續 opt-in 或輔助功能。 |
 
-### v5.2
+### v5.2 採納
 
 | 建議 | 決策 | 落點 |
 | --- | --- | --- |
@@ -83,20 +94,25 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 | Retry-After / host cooldown | 採納但保持基礎版 | P6.5b 或 P7 前置；不等同完整 adaptive backoff。 |
 | Rules schema / rulesVersion / 載入安全 | 採納，中優先 | P9；HTTP 載入規則檔同樣套 SSRF 防護。 |
 | Profile 與 configured/effective values | 採納，中優先 | P9；profile 展開結果寫入 `report.options`。 |
+| 產出檔版本策略 | 採納，高優先 | P6.5a；穩定檔名、內容版本化、每次輸出建立 manifest。 |
 | SBOM、dependency audit、code signing | 後續評估 | P11 release / packaging。 |
 
-v5.2 需修正套用位置：文件提到 Stage 0 可含 Header、Keep-Alive、sources 上限、body 釋放；本專案仍維持 Stage 0 只放文件與輸出相容性小修。Header、Keep-Alive、response size limit、redaction、source truncate 放 P6.5a；SSRF、Retry-After、partial report、robots / compliance 放 P6.5b。
+### 落點修正
 
-## 立即工作
+v5.2 提到 Stage 0 可含 Header、Keep-Alive、sources 上限、body 釋放；本專案維持 Stage 0 只放文件與輸出相容性小修。Header、Keep-Alive、response size limit、redaction、source truncate 放 P6.5a；SSRF、Retry-After、partial report、robots / compliance 放 P6.5b。
+
+## 近期工作
 
 ### Stage 0
 
-可插隊處理，但不得改變掃描語意、report 主契約或 P6 範圍。
+狀態：文件與輸出相容性小修已收斂；後續若發現新的 GUI/CLI 落差，再以小修補齊。Stage 0 不得改變掃描語意、report 主契約或 P6 範圍。
 
-1. README 補 GUI/CLI 功能落差、WAF/robots/人工確認限制與多網站監看提示。
-2. `broken.csv`、`external-links.csv` 加 UTF-8 BOM，確保 Excel 直接開啟中文不亂碼。
-3. GUI/CLI 落差表：標示 CLI 已有但 GUI 尚未提供的選項，例如 `--external-risk-rules`。
-4. 文件說明 `sourceCount` 語意；`sourcesTruncated` 機制留到 P6.5a。
+已處理：
+
+1. README 已補 GUI/CLI 功能差異、WAF/robots/人工確認限制與多網站監看提示。
+2. GUI 自動輸出的 `broken.csv`、`external-links.csv` 已包含 UTF-8 BOM，方便 Excel 直接開啟中文。
+3. README 已用 GUI/CLI 差異表標示 CLI 已有但 GUI 尚未提供的選項，例如 `--external-risk-rules`、`--site-link-rules`、`--spa-links`。
+4. README 已說明 `sourceCount` 語意；`sourcesTruncated` 機制留到 P6.5a。
 
 Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、cache、incremental scan，也不得改變 `checked[]`、`broken[]`、`externalLinks[]` 既有欄位語意。
 
@@ -110,7 +126,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6：Report-to-Report Diff
 
-狀態：下一個主要項目。P6 不重新掃描網站、不重新判斷風險、不引入資料庫、不導入 cache 或 incremental scan。
+狀態：下一個主要項目。
 
 交付項：
 
@@ -192,18 +208,22 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 1. `schemaVersion` / `generator`：新增 report root 欄位；舊 report 視為 legacy / `1.0.0`。
 2. `schemas/report.schema.json` 草案：約束 root、options、summary、checked、broken、externalLinks 的最低契約。
-3. URL query redaction：預設遮罩 token、session、auth、password、email、jwt、signature、api_key 等 query value。
-4. Response size limit：加入 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`，並輸出 `bodyTruncated` / `bodyBytesRead`。
-5. CSV BOM：若 Stage 0 尚未完成，於此階段補齊。
-6. `maxSourcesPerUrl`：預設保存有限來源，輸出 `sourceCount` 與 `sourcesTruncated`。
-7. response body 及早釋放：抽取或診斷完成後不保留完整 body。
-8. Accept header 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
-9. Accept-Encoding 實測：先確認 `gzip` / `deflate`，`br` 必須確認 client 支援後才啟用。
-10. Keep-Alive connection pool：受 global concurrency 與 per-host concurrency 約束，提供 `--no-keep-alive` 回退。
+3. 產出檔版本策略：`report.json`、`summary.json`、`external-summary.json`、`diff.json` 以內容欄位記錄 schema / generator；日常檔名不加版本號。
+4. 每次輸出建立 `manifest.json`：記錄 `toolVersion`、`schemaVersions`、`generatedAt`、`startUrl`、`optionsProfile`、`runtimeVersion` 與 generated files。
+5. URL query redaction：預設遮罩 token、session、auth、password、email、jwt、signature、api_key 等 query value。
+6. Response size limit：加入 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`，並輸出 `bodyTruncated` / `bodyBytesRead`。
+7. CSV BOM 回歸測試：維持 `broken.csv`、`external-links.csv` 可用 Excel 直接開啟中文。
+8. `maxSourcesPerUrl`：預設保存有限來源，輸出 `sourceCount` 與 `sourcesTruncated`。
+9. response body 及早釋放：抽取或診斷完成後不保留完整 body。
+10. Accept header 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
+11. Accept-Encoding 實測：先確認 `gzip` / `deflate`，`br` 必須確認 client 支援後才啟用。
+12. Keep-Alive connection pool：受 global concurrency 與 per-host concurrency 約束，提供 `--no-keep-alive` 回退。
 
 驗收：
 
 - 加入 `schemaVersion` 後，舊 report 仍可被 P6 diff normalization 讀取。
+- `report.json`、`summary.json`、`external-summary.json` 與 `diff.json` 檔名保持穩定，版本差異可由內容欄位與 `manifest.json` 追溯。
+- `manifest.json` 需能列出同一次輸出的檔案、schema version、工具版本與 runtime version。
 - report、CSV、events log 不輸出未遮罩的高風險 query value；實際 request 不受遮罩影響。
 - 大型 HTML / PDF / media 不會被完整讀入記憶體；超過上限時 report 標記 truncated。
 - 同一 URL 來源超過上限時，`sourceCount` 正確且 `sourcesTruncated=true`。
@@ -345,7 +365,9 @@ CLI 可新增：
 
 ## P9：Analyzer / GUI 大型報告
 
-P9 只做 P6/P7/P8 之後的 Analyzer / GUI 強化，避免先做空 UI。
+狀態：P6/P7/P8 後實作。P9 強化呈現、profile 與規則治理，不先做空 UI。
+
+交付項：
 
 - 顯示歷史比對：新增、移除、修復、惡化、持續存在。
 - 顯示 cache 命中、TTL、上次檢查時間。
@@ -361,7 +383,7 @@ P9 只做 P6/P7/P8 之後的 Analyzer / GUI 強化，避免先做空 UI。
 
 ## P10：治理與分級排程
 
-先設計排程建議，不急著做完整常駐 scheduler。
+狀態：P9 後設計。先做排程建議，不急著做完整常駐 scheduler。
 
 每個 URL 或 page 可計算：
 
@@ -387,13 +409,16 @@ P9 只做 P6/P7/P8 之後的 Analyzer / GUI 強化，避免先做空 UI。
 
 ## P11：輔助功能與 Release
 
-這些功能有價值，但優先度低於誤判降低、資料模型、外連治理、歷史比對與快取。
+狀態：P10 後評估。這些功能有價值，但優先度低於誤判降低、資料模型、外連治理、歷史比對與快取。
+
+交付項：
 
 - HTML / Excel 報表輸出。
 - 環境變數設定。
 - 更多匯入/匯出格式。
 - Portable package manifest。
 - Node runtime version 記錄。
+- Release / portable package 檔名可帶版本號，並在 package manifest 記錄工具版本、Node runtime version、checksum 與 build metadata。
 - Package smoke test。
 - Dependency audit。
 - License summary。
@@ -407,6 +432,8 @@ P9 只做 P6/P7/P8 之後的 Analyzer / GUI 強化，避免先做空 UI。
 | 類別 | 細項 | 落點 |
 | --- | --- | --- |
 | schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / `sourcesTruncated`、`1.2.0` 新增 robots / compliance / protection 結構 | P6.5a / P6.5b |
+| output versioning | 日常輸出檔名穩定；`report.json`、`summary.json`、`external-summary.json`、`diff.json` 使用內容版本欄位；CSV 不新增版本欄位 | P6.5a |
+| output manifest | 每次輸出建立 `manifest.json`，記錄 `toolVersion`、`schemaVersions`、`generatedAt`、`startUrl`、`optionsProfile`、`runtimeVersion`、generated files | P6.5a |
 | normalization | `load report -> detect schemaVersion -> normalize to internal ReportModel`，避免 GUI / Analyzer 散落 fallback 邏輯 | P6 / P9 |
 | robots schema | `summary.robotsTxt` 保留 start origin 語意；未來擴充 `externalRobotsTxt` 或 `robotsTxtByScope` | P6.5b |
 | scanPolicy | `robots_compliant`、`robots_not_found`、`robots_fetch_error`、`robots_override_authorized`、`robots_disallow_override_without_declaration`、`robots_respected_path_skip`、`robots_disabled` | P6.5b |
@@ -438,3 +465,5 @@ P9 只做 P6/P7/P8 之後的 Analyzer / GUI 強化，避免先做空 UI。
 - 不對明確 WAF/Bot challenge 做多次 aggressive retry；這類結果應保存證據並提示調整掃描策略或與站方協調。
 - 不保存完整 response body 作為診斷欄位，避免報告包含登入頁、錯誤頁或防護頁中的敏感內容。
 - Bloom Filter 不作為預設去重；如未來支援，只能在大型站 opt-in 並標明 false positive risk。
+- 不預設替日常輸出檔名加版本號，避免腳本、GUI 與使用者流程每次都要追新檔名。
+- 不在 CSV 每列加入 schema / app version；CSV 維持資料交換用途，版本追溯交給 manifest。
