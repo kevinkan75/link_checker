@@ -2,7 +2,7 @@
 
 ## 狀態總覽
 
-目前 P0-P5 已完成，包含 URL inventory、404 / 410 二次確認與外連風險治理 MVP。下一階段進入 P6 report diff；P7 cache、P8 incremental scan 與後續 Analyzer 強化都應建立在 P6 之後。
+目前 P0-P5 已完成，包含 URL inventory、404 / 410 二次確認與外連風險治理 MVP。下一階段先補 P5.5 SPA / Nuxt 站台抽取前置改善，避免 P6 report diff 建立在不完整 report 上；P6 仍是下一個主要項目。P7 cache、P8 incremental scan 與後續 Analyzer 強化都應建立在 P6 之後。
 
 | 階段 | 狀態 | 重點 |
 | --- | --- | --- |
@@ -13,6 +13,7 @@
 | P4-0 | 已完成 | 404 / 410 分類與 UI 文案一致化。 |
 | P4 | 已完成 | 404 / 410 二次確認 MVP。 |
 | P5 | 已完成 | 外連風險規則、治理分類與風險摘要 MVP；CLI/report、GUI 匯出與 Analyzer 驗收通過。 |
+| P5.5 | 下一個前置工作 | SPA / Nuxt 偵測、payload link extraction、asset/content 分流；先改善 report 覆蓋率。 |
 | P6 | 下一個主要項目 | 兩份 report 歷史比對；只做 report-to-report diff。 |
 | P7 | 待規劃 | TTL 檢查快取；晚於 P6。 |
 | P8 | 待規劃 | 建立在 history/cache 上的增量掃描；晚於 P6/P7。 |
@@ -25,12 +26,36 @@
 
 近期順序：
 
-1. P6 report-to-report diff。
-2. P7 TTL 檢查快取。
-3. P8 增量掃描。
-4. P9/P10 Analyzer 與分級排程強化。
+1. P5.5 SPA / Nuxt 站台抽取前置改善。
+2. P6 report-to-report diff。
+3. P7 TTL 檢查快取。
+4. P8 增量掃描。
+5. P9/P10 Analyzer 與分級排程強化。
 
-下一個工作包：P6a report diff
+下一個工作包：P5.5a SPA detection + strict payload literals
+
+1. 新增 `--spa-links auto|off|strict`，預設 `auto`。
+2. 新增 SPA / Nuxt 偵測並寫入 report summary；另在 build report 階段補 `scanQuality` 診斷。
+3. 保留現有 `extractLinks()`，另新增 payload / script URL literal extraction。
+4. link source 新增 `sourceType`，例如 `html_attribute`、`script_literal`、`spa_payload`。
+5. 第一版只抽完整 URL 與明確 `/` 開頭 path；不做站台特定欄位推論。
+6. 先不導入預設 headless render；`--render` 保留為後續 opt-in fallback。
+
+後續工作包：P5.5b site link rules + CEC rules
+
+1. 新增 `--site-link-rules <file>`，用於站台特定欄位推論。
+2. 支援 `linkUrl`、`youtubeId`、明確 route path 與簡單 template mapping。
+3. 建立 `www.cec.gov.tw` 規則範例，處理 `directType`、`directPath`、`articleId`。
+4. site rules 產生的 URL 必須標記 `sourceType: "site_rule_derived"`。
+
+後續工作包：P5.5c asset/content split + simple priority
+
+1. 將 `_nuxt` asset 與 content links / external links 分開統計。
+2. 新增 asset/content/external/document/media 分類摘要。
+3. 新增簡易 validation priority：內容頁與外連優先，文件其次，media / immutable asset 降權。
+4. 第一版不導入 binary heap；若需要，以 priority 欄位與排序實作。
+
+後續工作包：P6a report diff
 
 1. 建立 `report-diff.mjs` CLI：`old-report.json` + `new-report.json` -> `diff.json`。
 2. 實作 report normalization：新 report 優先 `checked[]`，舊 report fallback `broken[]`，外連獨立使用 `externalLinks[]`。
@@ -46,6 +71,7 @@
 
 ```text
 HTML 抽取
+  -> SPA / Nuxt payload 抽取與來源標記
   -> URL resolve / canonicalize
   -> URL inventory 去重與來源合併
   -> HTTP validator 批次檢查
@@ -86,17 +112,87 @@ CDN/WAF 處理邊界：
 - 支援 `riskLevel`、`riskReasons`、`governanceStatus`、`matchedRules`、`needsReview`。
 - `--external-risk-rules` 支援 allowlist、blocklist、watchlist。
 - GUI 自動保存的 `external-links.csv` / `external-summary.json` 與 Analyzer 已支援 P5 欄位。
-- P5 驗收通過，P6 可直接比對 `externalRisk` 與 governance 狀態。
+- P5 驗收通過；P5.5 應先補強 SPA / Nuxt report 覆蓋率，之後 P6 可直接比對 `externalRisk` 與 governance 狀態。
+
+### P5.5. SPA / Nuxt 站台抽取前置改善
+
+狀態：下一個前置工作。先補低成本 SPA 偵測與 payload link extraction，避免 `www.cec.gov.tw` 這類 Nuxt / SPA 站台只掃到 `_nuxt` asset，導致外連治理與後續 report diff 建立在不完整 report 上。
+
+P5.5 評估結論：
+
+- 現有 `extractLinks()` 使用正則掃 HTML tag attribute，對傳統 HTML 有效，但不解析 Nuxt / SPA payload。
+- `www.cec.gov.tw` 入口會轉到 `https://web.cec.gov.tw/central`，原始 HTML 中大量導覽、文章、YouTube 與外部政府網站連結藏在 script payload，不是完整 `<a href>`。
+- 目前工具會大量抽到 `_nuxt/*.css`、`_nuxt/*.js`、SVG 與 metadata，卻漏掉 payload 中真正的內容頁與外部連結。
+- 這不是 WAF、深度或頁數設定問題；應優先改善抽取模型，而不是先導入 headless render。
+- P5.5 應保持低風險：保留現有 `extractLinks()`，另加 framework-aware extractor 與診斷欄位。
+- 外部建議的 `detectSpaFramework()` 方向可採納，但應拆成「頁面層 SPA 偵測」與「build report 階段 scan quality 診斷」；`asset_dominant_scan` 需等 checked results 完成後才可靠。
+- 外部建議的 payload extractor 方向可採納，但 pseudo-code 不可照貼；實作時需修正 `match[0]` / `match[2]` 等細節，並避免 payload link 因 `tag: "script"` 被誤分類為 asset。
+
+P5.5a 範圍：SPA detection + strict payload literals
+
+- 新增 SPA / Nuxt 偵測，偵測 `_nuxt/`、`__NUXT_DATA__`、`window.__NUXT__`、低 `<a href>` 數、高 asset 佔比等訊號。
+- report summary 新增 `spaDetection`，輸出 `detected`、`framework`、`signals` 與建議。
+- build report 階段新增 `scanQuality` 診斷，例如 `_nuxt` asset 佔比過高、`pagesCrawled` 過低但 URL literal 很多。
+- 新增 CLI 開關 `--spa-links auto|off|strict`，預設 `auto`。
+- 新增 `extractFrameworkLinks()`，第一版只抽 inline script / payload 中的完整 URL literal 與明確 `/` 開頭 path。
+- 每筆 link source 新增 `sourceType`，例如 `html_attribute`、`script_literal`、`spa_payload`。
+- `strict` 模式只抽完整 URL 與明確 `/` path，不做站台特定欄位推論。
+- payload 抽出的業務連結不能只依 `tag: "script"` 分類；`classifyLinkType()` 與 external summary 應優先參考 `sourceType` 或 derived link type，避免誤列為 asset。
+- 保留 `--render` 作為後續 opt-in fallback，不預設啟用。
+
+P5.5b 範圍：site link rules + CEC rules
+
+- 新增 `--site-link-rules <file>`，用於站台特定欄位推論，例如 `directPath`、`directType`、`articleId`、`youtubeId`。
+- 第一版支援 `externalUrl` 欄位、`youtubeId` 欄位、明確 route path 與簡單 template mapping。
+- 針對 `www.cec.gov.tw` 建立 site link rules 範例，將 `linkUrl`、YouTube ID、`directType` / `directPath` 與 `articleId` 轉成可檢查 URL。
+- site rules 產生的 URL 必須標記 `sourceType: "site_rule_derived"`，方便排查誤抽與後續 diff。
+- CEC 的站內頁多來自 CMS 欄位，不一定是明確 `/central/...` path；因此 P5.5b 應排在 P6 前，不宜延後太久。
+
+P5.5c 範圍：asset/content split + simple priority
+
+- 將 `_nuxt` asset 與內容頁、外連、文件、媒體分開統計，避免單一 `urlsChecked` 誤導使用者。
+- summary / report 可新增 `pagesChecked`、`contentLinksChecked`、`externalLinksChecked`、`documentsChecked`、`assetsChecked` 等分流欄位。
+- 新增簡易 validation priority：內容頁與外連優先，文件其次，media / immutable asset 降權。
+- 若要排序，優先在抽出的 links / enqueue 階段降低 asset 優先度；不要只在 validation queue 末端排序，否則仍可能讓 asset 先佔滿 inventory 與 budget。
+- 第一版用 priority 欄位與排序即可，後續掃描量變大再評估 binary heap。
+- 視需要支援 immutable asset defer / skip，但不得影響內容頁與外連治理結果。
+
+P5.5 後續擴充：
+
+- 視需要支援 Next.js `__NEXT_DATA__` 等其他 framework payload。
+
+P5.5 不納入：
+
+- 不重寫 `extractLinks()` 為完整 DOM parser。
+- 不把 `directPath`、`directType`、`articleId` 等站台欄位硬寫在核心 crawler。
+- 不預設啟用 Playwright / headless render。
+- 不先做完整 binary heap priority queue；若需要，第一版以簡單 priority 欄位與排序即可。
+- 不在未偵測到 SPA 訊號時武斷宣稱「標準 HTML 掃描完全足夠」；report 只能說明未偵測到明顯 SPA 訊號。
+
+P5.5 驗收矩陣：
+
+- P5.5a 後，report 應能輸出 `spaDetection` 與 `scanQuality`，指出 Nuxt / SPA 訊號與 asset-dominant 掃描風險。
+- P5.5a 後，`--spa-links strict` 應只抽完整 URL / 明確 `/` path；`--spa-links off` 可回到舊行為。
+- `sourceType` 可指出連結來自 `html_attribute`、`script_literal` 或 `spa_payload`。
+- P5.5b 後，對 `www.cec.gov.tw` 的 `externalLinks` 不應為 0，report 應能列出 payload / site rules 中的 `https://db.cec.gov.tw`、YouTube、`gov.tw` 與其他政府外站連結。
+- P5.5b 後，對 `www.cec.gov.tw` 的站內 CMS route 應能透過 site rules 轉成可爬 URL，`pagesCrawled` 不應停在 1。
+- P5.5c 後，`_nuxt` asset 不再佔 checked URL 的絕大多數，或至少在 summary 中被獨立標示。
+- P5.5c 後，summary 能分開呈現內容頁、外連、文件、媒體與靜態資源。
+
+參考文件：
+
+- [docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)
+- [docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)
 
 ### P6. 歷史比對
 
 先做「兩份 report 比對」，再做完整 stateful incremental scan。
 
-狀態：下一個主要項目。P6 只做 report-to-report diff，不引入常駐資料庫、cache 或增量掃描。
+狀態：下一個主要項目，但排在 P5.5 之後。P6 只做 report-to-report diff，不引入常駐資料庫、cache 或增量掃描。
 
 P6 評估結論：
 
-- P6 可以開始，因 P4 confirmation 與 P5 externalRisk 已提供足夠穩定的 report schema。
+- P6 的 schema 條件已具備，因 P4 confirmation 與 P5 externalRisk 已提供足夠穩定的 report schema；實作順序仍排在 P5.5 report 覆蓋率改善後。
 - 第一版應做獨立 diff 工具，輸入兩份 `report.json`，輸出 JSON diff 與簡短 console summary。
 - 不重新掃描、不重新判斷風險、不引入資料庫；P7 cache 與 P8 incremental scan 應維持後置。
 - 新 report 優先用 `checked[]` 建立站內 URL index；舊 report 若沒有 `checked[]`，fallback 到 `broken[]`。
