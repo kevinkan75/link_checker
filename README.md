@@ -103,6 +103,7 @@ dist\LinkChecker-portable.zip
 .\check-links.cmd https://example.com --max-redirects 10 --long-redirect-threshold 3
 .\check-links.cmd https://example.com --external
 .\check-links.cmd https://example.com --no-confirm-404
+.\check-links.cmd https://example.com --spa-links strict
 .\check-links.cmd https://example.com --progress
 .\check-links.cmd https://example.com --verbose
 .\check-links.cmd https://example.com --output report.json
@@ -128,6 +129,7 @@ dist\LinkChecker-portable.zip
 - `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
 - `--external-risk-rules <file-or-url>`：載入外連治理規則 JSON，可用白名單、黑名單與觀察名單調整 `externalRisk`。
 - `--canonical-strategy <safe|moderate|aggressive>`：設定報告中 `canonicalUrl` 的正規化策略，預設 `safe`；此設定不改變實際請求 URL。
+- `--spa-links <auto|off|strict>`：從 SPA / Nuxt inline payload 抽取明確 URL 與 `/` 開頭 path，預設 `auto`；`off` 可回到舊行為，`strict` 只做 literal 抽取。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
 - `--confirm-404` / `--no-confirm-404`：是否在主掃描後集中複查同站 `404 / 410`。預設開啟；關閉時 report 仍會標示 confirmation 未啟用。
 - `--conservative`：套用低併發、隨機延遲、偏好 `GET` 與外部連結 `Referer` 的保守檢查設定。

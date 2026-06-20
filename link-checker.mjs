@@ -11,6 +11,7 @@ import { pathToFileURL } from "node:url";
 
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
+const SPA_LINK_MODES = new Set(["auto", "off", "strict"]);
 const TRACKING_QUERY_KEYS = new Set(["fbclid", "gclid", "msclkid", "yclid"]);
 const BODY_SIGNATURE_SNIPPET_LENGTH = 240;
 const WAF_HEADER_NAMES = [
@@ -84,6 +85,7 @@ const DEFAULTS = {
   confirmationPerHostConcurrency: 1,
   confirmationDelayMinMs: 1000,
   confirmationDelayMaxMs: 3000,
+  spaLinks: "auto",
   userAgent: `${BROWSER_USER_AGENT} LocalLinkChecker/1.0`,
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
 };
@@ -478,6 +480,7 @@ class LinkChecker {
       statusCacheHits: 0,
       bodyCacheHits: 0,
     };
+    this.spaDetections = [];
     this.domainCategoryRules = [
       ...EXTERNAL_CATEGORY_RULES,
       ...normalizeDomainCategoryRules(options.domainCategoryRules || []),
@@ -566,7 +569,13 @@ class LinkChecker {
       }
 
       const pageBaseUrl = getDocumentBaseUrl(pageResult.body, pageResult.finalUrl || url);
-      const links = extractLinks(pageResult.body, pageBaseUrl);
+      const spaDetection = detectSpaFramework(pageResult.body);
+      this.recordSpaDetection(url, pageResult.finalUrl || url, spaDetection);
+      const htmlLinks = extractLinks(pageResult.body, pageBaseUrl);
+      const frameworkLinks = this.shouldExtractFrameworkLinks(spaDetection)
+        ? extractFrameworkLinks(pageResult.body, pageBaseUrl)
+        : [];
+      const links = [...htmlLinks, ...frameworkLinks];
       this.reporter?.pageLinksFound(url, links.length);
 
       for (const link of links) {
@@ -585,6 +594,7 @@ class LinkChecker {
           tag: link.tag,
           attribute: link.attribute,
           text: link.value,
+          sourceType: link.sourceType || "html_attribute",
           fallbackUrls,
         };
         this.addSource(resolved, source);
@@ -633,7 +643,7 @@ class LinkChecker {
     if (!this.isCrawlOrigin(url)) {
       return false;
     }
-    if (!PAGE_NAVIGATION_TAGS.has(link.tag)) {
+    if (!PAGE_NAVIGATION_TAGS.has(link.tag) && !isPayloadLink(link)) {
       return false;
     }
     if (this.queuedPages.has(url) || this.crawledPages.has(url)) {
@@ -644,6 +654,29 @@ class LinkChecker {
     }
 
     return looksLikePage(url);
+  }
+
+  shouldExtractFrameworkLinks(spaDetection) {
+    if (this.options.spaLinks === "off") {
+      return false;
+    }
+    if (this.options.spaLinks === "strict") {
+      return true;
+    }
+    return Boolean(spaDetection?.detected);
+  }
+
+  recordSpaDetection(pageUrl, finalUrl, detection) {
+    if (!detection?.detected) {
+      return;
+    }
+    this.spaDetections.push({
+      pageUrl,
+      finalUrl,
+      framework: detection.framework,
+      signals: detection.signals,
+      stats: detection.stats,
+    });
   }
 
   isCrawlOrigin(url) {
@@ -663,7 +696,7 @@ class LinkChecker {
       this.sources.set(key, []);
     }
     const list = this.sources.get(key);
-    const sourceKey = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
+    const sourceKey = `${source.page}|${source.tag}|${source.attribute}|${source.sourceType || "html_attribute"}|${source.text}`;
     if (!list.some((item) => item.key === sourceKey)) {
       list.push({ key: sourceKey, ...source });
     }
@@ -687,7 +720,7 @@ class LinkChecker {
     }
 
     const item = this.externalLinks.get(key);
-    const sourceKey = `${source.page}|${source.tag}|${source.attribute}|${source.text}`;
+    const sourceKey = `${source.page}|${source.tag}|${source.attribute}|${source.sourceType || "html_attribute"}|${source.text}`;
     if (!item.sources.some((existing) => existing.key === sourceKey)) {
       item.sources.push({ key: sourceKey, ...source });
     }
@@ -767,10 +800,11 @@ class LinkChecker {
       tag: source.tag,
       attribute: source.attribute,
       text: source.text,
+      sourceType: source.sourceType || "html_attribute",
       rawValue: link.value,
       resolvedUrl,
     };
-    const key = `${sourceEntry.page}|${sourceEntry.tag}|${sourceEntry.attribute}|${sourceEntry.text}|${sourceEntry.resolvedUrl}`;
+    const key = `${sourceEntry.page}|${sourceEntry.tag}|${sourceEntry.attribute}|${sourceEntry.sourceType}|${sourceEntry.text}|${sourceEntry.resolvedUrl}`;
     let sourceAdded = false;
     if (!item.sources.some((existing) => existing.key === key)) {
       item.sources.push({ key, ...sourceEntry });
@@ -1189,6 +1223,8 @@ class LinkChecker {
     const checked = [...this.results.values()];
     const externalLinks = this.buildExternalLinks(checked);
     const inventorySummary = this.buildInventorySummary();
+    const spaDetection = this.buildSpaDetectionSummary();
+    const scanQuality = this.buildScanQuality(checked, spaDetection);
     const broken = checked
       .filter((result) => !result.ok)
       .map((result) => ({
@@ -1228,6 +1264,7 @@ class LinkChecker {
         confirmationPerHostConcurrency: this.options.confirmationPerHostConcurrency,
         confirmationDelayMinMs: this.options.confirmationDelayMinMs,
         confirmationDelayMaxMs: this.options.confirmationDelayMaxMs,
+        spaLinks: this.options.spaLinks,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
         externalRiskRulesSource: this.options.externalRiskRulesSource || null,
       },
@@ -1248,10 +1285,82 @@ class LinkChecker {
         externalRiskByDomain: summarizeExternalRiskDomains(externalLinks),
         confirmation: countConfirmationByOutcome(checked),
         inventorySummary,
+        spaDetection,
+        scanQuality,
       },
       broken,
       checked,
       externalLinks,
+    };
+  }
+
+  buildSpaDetectionSummary() {
+    const signals = new Set();
+    const frameworks = new Map();
+    let anchorCount = 0;
+    let urlLiteralCount = 0;
+    let htmlLength = 0;
+
+    for (const detection of this.spaDetections) {
+      for (const signal of detection.signals || []) {
+        signals.add(signal);
+      }
+      if (detection.framework && detection.framework !== "unknown") {
+        frameworks.set(detection.framework, (frameworks.get(detection.framework) || 0) + 1);
+      }
+      anchorCount += detection.stats?.anchorCount || 0;
+      urlLiteralCount += detection.stats?.urlLiteralCount || 0;
+      htmlLength += detection.stats?.htmlLength || 0;
+    }
+
+    const framework = [...frameworks.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name]) => name)[0] || "unknown";
+
+    return {
+      detected: this.spaDetections.length > 0,
+      framework,
+      pagesDetected: this.spaDetections.length,
+      signals: [...signals].sort(),
+      stats: {
+        htmlLength,
+        anchorCount,
+        urlLiteralCount,
+      },
+      recommendation: this.spaDetections.length > 0
+        ? "SPA/framework signals were detected; keep SPA payload extraction enabled or review scan quality warnings."
+        : "No strong SPA/framework signals were detected.",
+    };
+  }
+
+  buildScanQuality(checked, spaDetection) {
+    const checkedUrls = checked.map((result) => result.url || "");
+    const assetUrls = checkedUrls.filter((url) => isAssetUrl(url));
+    const nuxtAssetUrls = checkedUrls.filter((url) => url.includes("/_nuxt/"));
+    const assetRatio = checkedUrls.length > 0 ? assetUrls.length / checkedUrls.length : 0;
+    const nuxtAssetRatio = checkedUrls.length > 0 ? nuxtAssetUrls.length / checkedUrls.length : 0;
+    const warnings = [];
+
+    if (nuxtAssetRatio > 0.7) {
+      warnings.push("nuxt_asset_dominant_scan");
+    } else if (assetRatio > 0.7) {
+      warnings.push("asset_dominant_scan");
+    }
+    if (this.crawledPages.size <= 1 && (spaDetection?.stats?.urlLiteralCount || 0) >= 10) {
+      warnings.push("low_page_count_with_many_url_literals");
+    }
+    if (spaDetection?.detected && this.options.spaLinks === "off") {
+      warnings.push("spa_links_disabled");
+    }
+
+    return {
+      status: warnings.length > 0 ? "suspicious" : "ok",
+      warnings,
+      checkedUrls: checkedUrls.length,
+      assetUrls: assetUrls.length,
+      assetRatio: Number(assetRatio.toFixed(4)),
+      nuxtAssetUrls: nuxtAssetUrls.length,
+      nuxtAssetRatio: Number(nuxtAssetRatio.toFixed(4)),
     };
   }
 
@@ -2289,10 +2398,162 @@ function extractLinks(html, baseUrl) {
   }
 
   for (const redirect of extractJavaScriptRedirects(html)) {
-    links.push({ tag: "script", attribute: redirect.attribute, value: redirect.value });
+    links.push({ tag: "script", attribute: redirect.attribute, value: redirect.value, sourceType: "script_literal" });
+  }
+
+  return links.map((link) => ({ sourceType: "html_attribute", ...link }));
+}
+
+function detectSpaFramework(html) {
+  const signals = [];
+  const htmlLength = html.length;
+  const anchorCount = countRegexMatches(html, /<a\b[^>]*\shref\s*=/gi);
+  const urlLiteralCount = countRegexMatches(html, /https?:\/\/[^\s"'<>\\]+/gi);
+
+  if (html.includes("/_nuxt/")) {
+    signals.push("nuxt_assets");
+  }
+  if (html.includes("__NUXT_DATA__")) {
+    signals.push("nuxt_data");
+  }
+  if (html.includes("window.__NUXT__")) {
+    signals.push("nuxt_window_state");
+  }
+  if (html.includes("__NEXT_DATA__")) {
+    signals.push("next_data");
+  }
+  if (htmlLength > 100000 && anchorCount < 10) {
+    signals.push("large_html_low_anchor_count");
+  }
+  if (urlLiteralCount >= 10 && urlLiteralCount > Math.max(1, anchorCount) * 3) {
+    signals.push("url_literals_exceed_anchors");
+  }
+
+  return {
+    detected: signals.length > 0,
+    framework: inferSpaFramework(signals),
+    signals,
+    stats: {
+      htmlLength,
+      anchorCount,
+      urlLiteralCount,
+    },
+  };
+}
+
+function inferSpaFramework(signals) {
+  if (signals.some((signal) => signal.startsWith("nuxt"))) {
+    return "nuxt";
+  }
+  if (signals.some((signal) => signal.startsWith("next"))) {
+    return "next";
+  }
+  return "unknown";
+}
+
+function countRegexMatches(text, regex) {
+  return [...text.matchAll(regex)].length;
+}
+
+function extractFrameworkLinks(html, pageUrl) {
+  return dedupeExtractedLinks([
+    ...extractUrlLiteralsFromScripts(html),
+    ...extractPathLiteralsFromScripts(html, pageUrl),
+  ]);
+}
+
+function extractUrlLiteralsFromScripts(html) {
+  const links = [];
+  const urlRegex = /https?:\/\/[^\s"'<>\\]+/g;
+
+  for (const scriptText of extractInlineScriptTexts(html)) {
+    for (const match of scriptText.matchAll(urlRegex)) {
+      const value = cleanupPayloadUrl(match[0]);
+      if (!value) {
+        continue;
+      }
+      links.push({
+        tag: "payload",
+        attribute: "payload:url",
+        value,
+        sourceType: "script_literal",
+      });
+    }
   }
 
   return links;
+}
+
+function extractPathLiteralsFromScripts(html, pageUrl) {
+  const links = [];
+  const pathRegex = /["'](\/[a-zA-Z0-9][^"'<>\\\s]*)["']/g;
+
+  for (const scriptText of extractInlineScriptTexts(html)) {
+    for (const match of scriptText.matchAll(pathRegex)) {
+      const rawPath = cleanupPayloadPath(match[1]);
+      if (!rawPath || shouldIgnorePayloadPath(rawPath)) {
+        continue;
+      }
+      links.push({
+        tag: "payload",
+        attribute: "payload:path",
+        value: new URL(rawPath, pageUrl).toString(),
+        sourceType: "spa_payload",
+      });
+    }
+  }
+
+  return links;
+}
+
+function extractInlineScriptTexts(html) {
+  const scripts = [];
+  const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+
+  for (const match of html.matchAll(scriptRegex)) {
+    const attributes = match[1] || "";
+    const body = match[2] || "";
+    if (/\ssrc\s*=/i.test(attributes) || !body.trim()) {
+      continue;
+    }
+    scripts.push(body);
+  }
+
+  return scripts;
+}
+
+function cleanupPayloadUrl(value) {
+  const cleaned = decodeHtmlEntities(String(value || ""))
+    .replace(/[),.;\]}]+$/g, "")
+    .trim();
+  return safeUrl(cleaned) ? cleaned : null;
+}
+
+function cleanupPayloadPath(value) {
+  return decodeHtmlEntities(String(value || ""))
+    .replace(/[),.;\]}]+$/g, "")
+    .trim();
+}
+
+function shouldIgnorePayloadPath(pathname) {
+  return pathname.startsWith("//")
+    || pathname.startsWith("/_nuxt/")
+    || pathname.startsWith("/__")
+    || pathname === "/";
+}
+
+function dedupeExtractedLinks(links) {
+  const seen = new Set();
+  const deduped = [];
+  for (const link of links) {
+    const key = `${link.sourceType}|${link.attribute}|${link.value}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(link);
+  }
+  return deduped;
 }
 
 function getDocumentBaseUrl(html, pageUrl) {
@@ -2501,6 +2762,14 @@ function normalizeCanonicalStrategy(value) {
   return strategy;
 }
 
+function normalizeSpaLinkMode(value) {
+  const mode = String(value || DEFAULTS.spaLinks).toLowerCase();
+  if (!SPA_LINK_MODES.has(mode)) {
+    throw new Error(`Invalid SPA link mode "${value}". Use auto, off, or strict.`);
+  }
+  return mode;
+}
+
 function sortQueryParameters(url) {
   if (!url.search) {
     return;
@@ -2555,6 +2824,22 @@ function looksLikePage(urlValue) {
   }
 
   return !ASSET_EXTENSIONS.has(lastSegment.slice(dot).toLowerCase());
+}
+
+function isAssetUrl(urlValue) {
+  try {
+    const parsed = new URL(urlValue);
+    return ASSET_EXTENSIONS.has(getPathExtension(parsed.pathname));
+  } catch {
+    return false;
+  }
+}
+
+function isPayloadLink(link) {
+  return link?.sourceType === "script_literal"
+    || link?.sourceType === "spa_payload"
+    || link?.sourceType === "site_rule_derived"
+    || link?.tag === "payload";
 }
 
 function classifyExternalLink(urlValue, link, domainRules = EXTERNAL_CATEGORY_RULES) {
@@ -2874,6 +3159,15 @@ function normalizeDomainCategoryRules(rules) {
 }
 
 function classifyLinkType(link, extension) {
+  if (isPayloadLink(link)) {
+    if (DOWNLOAD_EXTENSIONS.has(extension)) {
+      return "download";
+    }
+    if (MEDIA_EXTENSIONS.has(extension)) {
+      return "media";
+    }
+    return "anchor";
+  }
   if (link.tag === "form") {
     return "form";
   }
@@ -3496,6 +3790,14 @@ function parseArgs(argv) {
       }
       continue;
     }
+    if (arg === "--spa-links") {
+      const value = args.shift();
+      if (!value || value.startsWith("-")) {
+        throw new Error("--spa-links requires auto, off, or strict");
+      }
+      options.spaLinks = normalizeSpaLinkMode(value);
+      continue;
+    }
     if (arg === "--canonical-strategy") {
       const value = args.shift();
       if (!value || value.startsWith("-")) {
@@ -3549,6 +3851,7 @@ function parseArgs(argv) {
   options.confirmationDelayMinMs = Math.max(0, Math.min(options.confirmationDelayMinMs, 60000));
   options.confirmationDelayMaxMs = Math.max(0, Math.min(options.confirmationDelayMaxMs, 60000));
   options.canonicalStrategy = normalizeCanonicalStrategy(options.canonicalStrategy);
+  options.spaLinks = normalizeSpaLinkMode(options.spaLinks);
   return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource };
 }
 
@@ -3686,6 +3989,8 @@ Options:
                        JSON external governance rules with allowlist, blocklist, and watchlist domains.
   --canonical-strategy <safe|moderate|aggressive>
                        Canonical URL strategy for report keys. Default: ${DEFAULTS.canonicalStrategy}
+  --spa-links <auto|off|strict>
+                       Extract explicit URL/path literals from SPA payloads. Default: ${DEFAULTS.spaLinks}
   --external          Also check links that point to other domains.
                       External links are always inventoried in the JSON report.
   --conservative      Lower request rate and use browser-like checks to reduce blocking.
@@ -3711,6 +4016,12 @@ function printSummary(report) {
   console.log(`Broken links: ${summary.brokenLinks}`);
   console.log(`External links found: ${summary.externalLinks || 0}`);
   console.log(`External domains found: ${summary.externalDomains || 0}`);
+  if (summary.spaDetection?.detected) {
+    console.log(`SPA/framework signals: ${summary.spaDetection.framework} (${summary.spaDetection.signals.join(", ")})`);
+  }
+  if (summary.scanQuality?.warnings?.length > 0) {
+    console.log(`Scan quality warnings: ${summary.scanQuality.warnings.join(", ")}`);
+  }
   if (summary.brokenLinks > 0) {
     for (const [issueType, count] of Object.entries(summary.brokenByType || {})) {
       if (count > 0) {
