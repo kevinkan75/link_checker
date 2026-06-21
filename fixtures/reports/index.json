@@ -1,0 +1,33 @@
+{
+  "description": "Minimal P6 report-to-report diff golden cases.",
+  "cases": [
+    {
+      "name": "404-to-200",
+      "oldReport": "404-to-200.old.json",
+      "newReport": "404-to-200.new.json",
+      "expectedSignals": ["resolvedIssue"],
+      "canonicalUrl": "https://example.test/missing"
+    },
+    {
+      "name": "200-to-404",
+      "oldReport": "200-to-404.old.json",
+      "newReport": "200-to-404.new.json",
+      "expectedSignals": ["newIssue"],
+      "canonicalUrl": "https://example.test/newly-missing"
+    },
+    {
+      "name": "needs-review-to-confirmed-missing",
+      "oldReport": "needs-review-to-confirmed-missing.old.json",
+      "newReport": "needs-review-to-confirmed-missing.new.json",
+      "expectedSignals": ["confidenceIncreased"],
+      "canonicalUrl": "https://example.test/uncertain"
+    },
+    {
+      "name": "external-risk-low-to-high",
+      "oldReport": "external-risk-low-to-high.old.json",
+      "newReport": "external-risk-low-to-high.new.json",
+      "expectedSignals": ["riskIncreased"],
+      "canonicalUrl": "https://external.example/resource"
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "startedAt": "2026-06-02T00:00:00.000Z",
+  "startUrl": "https://example.test/",
+  "options": {
+    "maxPages": 1,
+    "maxDepth": 1,
+    "concurrency": 2,
+    "perHostConcurrency": 1,
+    "timeoutMs": 5000,
+    "checkExternal": false,
+    "canonicalStrategy": "safe",
+    "confirm404": true
+  },
+  "summary": {
+    "pagesCrawled": 1,
+    "urlsChecked": 1,
+    "brokenLinks": 1,
+    "brokenByType": {
+      "not_found": 1
+    },
+    "skippedExternal": 0,
+    "confirmation": {
+      "enabled": true,
+      "candidates": 1,
+      "checked": 1,
+      "recovered": 0,
+      "confirmed_missing": 1,
+      "needs_review": 0,
+      "skipped": 0
+    }
+  },
+  "broken": [
+    {
+      "url": "https://example.test/uncertain",
+      "canonicalUrl": "https://example.test/uncertain",
+      "ok": false,
+      "status": 404,
+      "method": "GET",
+      "checkedAt": "2026-06-02T00:00:01.000Z",
+      "finalUrl": "https://example.test/uncertain",
+      "contentType": "text/html",
+      "issueType": "not_found",
+      "classification": "not_found",
+      "needsReview": false,
+      "transientFailure": false,
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 410,
+        "ok": false,
+        "finalUrl": "https://example.test/uncertain",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 43,
+        "outcome": "confirmed_missing",
+        "reason": "still_404_or_410"
+      },
+      "sources": [
+        {
+          "page": "https://example.test/",
+          "tag": "a",
+          "attribute": "href",
+          "text": "Uncertain page",
+          "rawValue": "/uncertain",
+          "resolvedUrl": "https://example.test/uncertain",
+          "sourceType": "html_attribute"
+        }
+      ]
+    }
+  ],
+  "checked": [
+    {
+      "url": "https://example.test/uncertain",
+      "canonicalUrl": "https://example.test/uncertain",
+      "ok": false,
+      "status": 404,
+      "method": "GET",
+      "checkedAt": "2026-06-02T00:00:01.000Z",
+      "finalUrl": "https://example.test/uncertain",
+      "contentType": "text/html",
+      "issueType": "not_found",
+      "classification": "not_found",
+      "needsReview": false,
+      "transientFailure": false,
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 410,
+        "ok": false,
+        "finalUrl": "https://example.test/uncertain",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 43,
+        "outcome": "confirmed_missing",
+        "reason": "still_404_or_410"
+      }
+    }
+  ],
+  "externalLinks": []
+}

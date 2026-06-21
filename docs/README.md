@@ -5,6 +5,9 @@
 ## 文件索引
 
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)：架構、掃描流程、資料模型、report schema、GUI API 與可重用設計點。
+- [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：P6 report-to-report diff 的 normalization 原則。
+- [P6_PREFLIGHT_ASSESSMENT.md](P6_PREFLIGHT_ASSESSMENT.md)：P6 前置三項完成度與進入 P6 的評估。
+- [P6_IMPLEMENTATION_ANALYSIS.md](P6_IMPLEMENTATION_ANALYSIS.md)：P6 實作範圍、切分、驗收與風險分析。
 - [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)：已完成里程碑、驗收矩陣與設計理由。
 - [rules/cec-site-link-rules.json](rules/cec-site-link-rules.json)：CEC site link rules 範例。
 

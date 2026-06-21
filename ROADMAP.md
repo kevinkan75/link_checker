@@ -120,13 +120,19 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 這些項目支援 P6 開發，不改掃描行為：
 
+已處理：
+
 1. 建立 `fixtures/reports/` golden cases：`404 -> 200`、`200 -> 404`、`needs_review -> confirmed_missing`、`externalRisk low -> high`。
 2. 建立 `schemas/diff.schema.json` 草案，約束 P6 diff 輸出必要欄位。
-3. 建立 report normalization 原則：優先 `checked[]`，舊 report fallback `broken[]`，外連使用 `externalLinks[]`。
+3. 建立 [docs/REPORT_NORMALIZATION.md](docs/REPORT_NORMALIZATION.md)：優先 `checked[]`，舊 report fallback `broken[]`，外連使用 `externalLinks[]`。
+
+評估：三項前置完成度約 85-90%，足以進入 P6 實作；剩餘測試補強記錄於 [docs/P6_PREFLIGHT_ASSESSMENT.md](docs/P6_PREFLIGHT_ASSESSMENT.md)。
 
 ## P6：Report-to-Report Diff
 
 狀態：下一個主要項目。
+
+實作分析已記錄於 [docs/P6_IMPLEMENTATION_ANALYSIS.md](docs/P6_IMPLEMENTATION_ANALYSIS.md)。
 
 交付項：
 

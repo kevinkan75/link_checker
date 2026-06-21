@@ -1,0 +1,433 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local-link-checker.test/schemas/diff.schema.json",
+  "title": "Local Link Checker Report Diff",
+  "description": "Draft schema for P6 report-to-report diff output. P6 reads existing reports and emits this diff format without changing scan behavior.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generator",
+    "generatedAt",
+    "oldReport",
+    "newReport",
+    "summary",
+    "urlChanges",
+    "externalChanges",
+    "diagnosticsChanges",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^diff\\.p6\\.draft\\.[0-9]+$"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "report-diff.mjs"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "oldReport": {
+      "$ref": "#/$defs/reportRef"
+    },
+    "newReport": {
+      "$ref": "#/$defs/reportRef"
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "urlsAdded",
+        "urlsRemoved",
+        "urlsChanged",
+        "newIssues",
+        "resolvedIssues",
+        "persistentIssues",
+        "externalRiskIncreased",
+        "externalRiskDecreased",
+        "confidenceIncreased",
+        "confidenceDecreased",
+        "diagnosticsChanged"
+      ],
+      "properties": {
+        "urlsAdded": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "urlsRemoved": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "urlsChanged": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "newIssues": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "resolvedIssues": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "persistentIssues": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "externalRiskIncreased": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "externalRiskDecreased": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "confidenceIncreased": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "confidenceDecreased": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "diagnosticsChanged": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "urlChanges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/urlChange"
+      }
+    },
+    "externalChanges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/externalChange"
+      }
+    },
+    "diagnosticsChanges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnosticsChange"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/warning"
+      }
+    }
+  },
+  "$defs": {
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reportRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "startUrl": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "urlChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "changeTypes", "fieldChanges"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/matchKey"
+        },
+        "changeTypes": {
+          "$ref": "#/$defs/changeTypeList"
+        },
+        "old": {
+          "$ref": "#/$defs/urlSnapshot"
+        },
+        "new": {
+          "$ref": "#/$defs/urlSnapshot"
+        },
+        "fieldChanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldChange"
+          }
+        }
+      }
+    },
+    "externalChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "changeTypes", "fieldChanges"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/matchKey"
+        },
+        "changeTypes": {
+          "$ref": "#/$defs/changeTypeList"
+        },
+        "old": {
+          "$ref": "#/$defs/externalSnapshot"
+        },
+        "new": {
+          "$ref": "#/$defs/externalSnapshot"
+        },
+        "fieldChanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldChange"
+          }
+        }
+      }
+    },
+    "diagnosticsChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "fieldChanges"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "enum": [
+            "summary.scanQuality",
+            "summary.spaDetection",
+            "summary.checkedByKind"
+          ]
+        },
+        "changeTypes": {
+          "$ref": "#/$defs/changeTypeList"
+        },
+        "fieldChanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldChange"
+          }
+        }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "legacy_report",
+            "partial_report",
+            "missing_checked",
+            "missing_external_links",
+            "fallback_to_broken",
+            "duplicate_key",
+            "unsupported_schema"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report": {
+          "type": "string",
+          "enum": ["old", "new", "both"]
+        },
+        "key": {
+          "type": "string"
+        }
+      }
+    },
+    "matchKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "enum": ["canonicalUrl", "url"]
+        }
+      }
+    },
+    "changeTypeList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "added",
+          "removed",
+          "changed",
+          "newIssue",
+          "resolvedIssue",
+          "persistentIssue",
+          "riskIncreased",
+          "riskDecreased",
+          "confidenceIncreased",
+          "confidenceDecreased"
+        ]
+      }
+    },
+    "urlSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "ok"],
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "canonicalUrl": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/httpStatus"
+        },
+        "issueType": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "classification": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finalUrl": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "redirected": {
+          "type": "boolean"
+        },
+        "redirectCount": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "redirectType": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "redirectIssues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confirmationOutcome": {
+          "type": ["string", "null"],
+          "enum": ["recovered", "confirmed_missing", "needs_review", null]
+        },
+        "confirmationNeedsReview": {
+          "type": "boolean"
+        },
+        "transientFailure": {
+          "type": "boolean"
+        }
+      }
+    },
+    "externalSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "canonicalUrl": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "registrableDomain": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/httpStatus"
+        },
+        "issueType": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finalUrl": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "externalRisk": {
+          "$ref": "#/$defs/externalRiskSnapshot"
+        }
+      }
+    },
+    "externalRiskSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "riskLevel": {
+          "type": ["string", "null"],
+          "enum": ["high", "medium", "low", "info", null]
+        },
+        "governanceStatus": {
+          "type": ["string", "null"],
+          "enum": ["allowed", "blocked", "watchlisted", "unknown", "needs_review", null]
+        },
+        "riskReasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "matchedRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "needsReview": {
+          "type": "boolean"
+        }
+      }
+    },
+    "fieldChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "oldValue": true,
+        "newValue": true
+      }
+    },
+    "httpStatus": {
+      "type": ["integer", "null"],
+      "minimum": 100,
+      "maximum": 599
+    },
+    "nullableString": {
+      "type": ["string", "null"]
+    }
+  }
+}

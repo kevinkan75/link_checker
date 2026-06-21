@@ -1,0 +1,53 @@
+{
+  "startedAt": "2026-06-01T00:00:00.000Z",
+  "startUrl": "https://example.test/",
+  "options": {
+    "maxPages": 1,
+    "maxDepth": 1,
+    "concurrency": 2,
+    "perHostConcurrency": 1,
+    "timeoutMs": 5000,
+    "checkExternal": false,
+    "canonicalStrategy": "safe",
+    "confirm404": true
+  },
+  "summary": {
+    "pagesCrawled": 1,
+    "urlsChecked": 1,
+    "brokenLinks": 0,
+    "brokenByType": {},
+    "skippedExternal": 0,
+    "confirmation": {
+      "enabled": true,
+      "candidates": 0,
+      "checked": 0,
+      "recovered": 0,
+      "confirmed_missing": 0,
+      "needs_review": 0,
+      "skipped": 0
+    }
+  },
+  "broken": [],
+  "checked": [
+    {
+      "url": "https://example.test/newly-missing",
+      "canonicalUrl": "https://example.test/newly-missing",
+      "ok": true,
+      "status": 200,
+      "method": "GET",
+      "checkedAt": "2026-06-01T00:00:01.000Z",
+      "finalUrl": "https://example.test/newly-missing",
+      "contentType": "text/html",
+      "issueType": null,
+      "classification": "ok",
+      "needsReview": false,
+      "transientFailure": false,
+      "confirmation": {
+        "enabled": true,
+        "candidate": false,
+        "checked": false
+      }
+    }
+  ],
+  "externalLinks": []
+}

@@ -1,0 +1,82 @@
+{
+  "startedAt": "2026-06-01T00:00:00.000Z",
+  "startUrl": "https://example.test/",
+  "options": {
+    "maxPages": 1,
+    "maxDepth": 1,
+    "concurrency": 2,
+    "perHostConcurrency": 1,
+    "timeoutMs": 5000,
+    "checkExternal": true,
+    "canonicalStrategy": "safe",
+    "confirm404": true
+  },
+  "summary": {
+    "pagesCrawled": 1,
+    "urlsChecked": 1,
+    "brokenLinks": 0,
+    "brokenByType": {},
+    "skippedExternal": 0,
+    "externalLinks": 1,
+    "externalDomains": 1,
+    "externalRiskByLevel": {
+      "low": 1
+    },
+    "externalRiskByGovernanceStatus": {
+      "allowed": 1
+    }
+  },
+  "broken": [],
+  "checked": [
+    {
+      "url": "https://external.example/resource",
+      "canonicalUrl": "https://external.example/resource",
+      "ok": true,
+      "status": 200,
+      "method": "HEAD",
+      "checkedAt": "2026-06-01T00:00:01.000Z",
+      "finalUrl": "https://external.example/resource",
+      "contentType": "text/html",
+      "issueType": null,
+      "classification": "ok",
+      "needsReview": false,
+      "transientFailure": false
+    }
+  ],
+  "externalLinks": [
+    {
+      "url": "https://external.example/resource",
+      "canonicalUrl": "https://external.example/resource",
+      "hostname": "external.example",
+      "registrableDomain": "external.example",
+      "type": "website",
+      "categories": ["partner"],
+      "categorySources": ["domain_rules"],
+      "checked": true,
+      "ok": true,
+      "status": 200,
+      "method": "HEAD",
+      "checkedAt": "2026-06-01T00:00:01.000Z",
+      "finalUrl": "https://external.example/resource",
+      "sourceCount": 1,
+      "sources": [
+        {
+          "page": "https://example.test/",
+          "tag": "a",
+          "attribute": "href",
+          "text": "Partner resource",
+          "rawValue": "https://external.example/resource",
+          "resolvedUrl": "https://external.example/resource",
+          "sourceType": "html_attribute"
+        }
+      ],
+      "externalRisk": {
+        "riskLevel": "low",
+        "riskReasons": ["allowed_domain"],
+        "governanceStatus": "allowed",
+        "matchedRules": ["allow-partner"],
+        "needsReview": false
+      }
+    }
+  ]
+}
