@@ -14,8 +14,9 @@ Options:
   --output, -o <path>  Write diff JSON to the given path.
   --help, -h          Show this help text.
 
-P6.2 reads and normalizes both reports, then emits the schema root skeleton.
-Actual diff signals are implemented in later P6 steps.`);
+P6.3 reads and normalizes both reports, then emits the schema root skeleton.
+Fixture regression coverage is available in test-report-diff.mjs. Actual diff
+signals are implemented in later P6 steps.`);
 }
 
 function parseArgs(argv) {
