@@ -1,0 +1,36 @@
+{
+  "startedAt": "2026-06-01T00:00:00.000Z",
+  "startUrl": "https://example.test/",
+  "summary": {
+    "pagesCrawled": 1,
+    "urlsChecked": 2,
+    "brokenLinks": 0,
+    "scanQuality": {
+      "status": "suspicious",
+      "warnings": ["asset_dominant_scan"],
+      "assetRatio": 0.8,
+      "nuxtAssetRatio": 0.5
+    },
+    "spaDetection": {
+      "detected": true,
+      "framework": "nuxt",
+      "signals": ["nuxt_asset_path"]
+    },
+    "checkedByKind": {
+      "content": 1,
+      "asset": 1,
+      "nuxt_asset": 1
+    }
+  },
+  "checked": [
+    {
+      "url": "https://example.test/",
+      "canonicalUrl": "https://example.test/",
+      "ok": true,
+      "status": 200,
+      "issueType": null,
+      "classification": "ok"
+    }
+  ],
+  "externalLinks": []
+}

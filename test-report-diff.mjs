@@ -79,8 +79,8 @@ function assertWarnings(diff, schema) {
   assert(legacyReports.has("new"), "Expected legacy_report warning for new report.");
 }
 
-function assertP65Scope(diff) {
-  assert(diff.diagnosticsChanges.length === 0, "P6.5 should not emit diagnosticsChanges yet.");
+function assertP66Scope(diff) {
+  assert(Array.isArray(diff.diagnosticsChanges), "diagnosticsChanges must be an array.");
 }
 
 function findChangeByKey(changes, canonicalUrl) {
@@ -90,9 +90,17 @@ function findChangeByKey(changes, canonicalUrl) {
 function assertSignal(diff, fixture, signal) {
   const urlSignals = new Set(["newIssue", "resolvedIssue", "confidenceIncreased", "confidenceDecreased"]);
   const externalSignals = new Set(["riskIncreased", "riskDecreased"]);
+  const diagnosticsSignals = new Set(["diagnosticsChanged"]);
 
-  if (!urlSignals.has(signal) && !externalSignals.has(signal)) {
+  if (!urlSignals.has(signal) && !externalSignals.has(signal) && !diagnosticsSignals.has(signal)) {
     return false;
+  }
+
+  if (diagnosticsSignals.has(signal)) {
+    const change = diff.diagnosticsChanges.find((item) => item.path === fixture.diagnosticsPath);
+    assert(change, `${fixture.name}: expected diagnosticsChange for ${fixture.diagnosticsPath}.`);
+    assert(diff.summary.diagnosticsChanged > 0, `${fixture.name}: summary.diagnosticsChanged should increase.`);
+    return true;
   }
 
   const changes = urlSignals.has(signal) ? diff.urlChanges : diff.externalChanges;
@@ -142,7 +150,7 @@ async function main() {
       assertRootShape(diff, schema);
       assertSummarySkeleton(diff, schema);
       assertWarnings(diff, schema);
-      assertP65Scope(diff);
+      assertP66Scope(diff);
 
       assert(diff.oldReport.path.endsWith(path.normalize(fixture.oldReport)), `${fixture.name}: oldReport path mismatch.`);
       assert(diff.newReport.path.endsWith(path.normalize(fixture.newReport)), `${fixture.name}: newReport path mismatch.`);

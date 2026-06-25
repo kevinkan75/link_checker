@@ -43,6 +43,11 @@ const GOVERNANCE_ORDER = new Map([
   ["needs_review", 3],
   ["blocked", 4]
 ]);
+const DIAGNOSTICS_PATHS = [
+  "summary.scanQuality",
+  "summary.spaDetection",
+  "summary.checkedByKind"
+];
 
 function printHelp() {
   console.log(`Usage:
@@ -52,9 +57,8 @@ Options:
   --output, -o <path>  Write diff JSON to the given path.
   --help, -h          Show this help text.
 
-P6.5 reads and normalizes both reports, emits URL and external diff changes,
-and keeps diagnostics changes for later P6 steps. Fixture regression coverage is
-available in test-report-diff.mjs.`);
+P6.6 reads and normalizes both reports, emits URL, external, and diagnostics
+diff changes. Fixture regression coverage is available in test-report-diff.mjs.`);
 }
 
 function parseArgs(argv) {
@@ -308,9 +312,9 @@ function normalizeReport(report, reportPath, reportLabel) {
     urlsByKey,
     externalByKey,
     diagnostics: {
-      scanQuality: report?.summary?.scanQuality ?? null,
-      spaDetection: report?.summary?.spaDetection ?? null,
-      checkedByKind: report?.summary?.checkedByKind ?? null
+      "summary.scanQuality": report?.summary?.scanQuality ?? null,
+      "summary.spaDetection": report?.summary?.spaDetection ?? null,
+      "summary.checkedByKind": report?.summary?.checkedByKind ?? null
     },
     warnings
   };
@@ -535,7 +539,36 @@ function diffExternal(oldExternalByKey, newExternalByKey) {
   return changes;
 }
 
-function buildSummary(urlChanges, externalChanges) {
+function diffDiagnostics(oldDiagnostics, newDiagnostics) {
+  const changes = [];
+
+  for (const pathName of DIAGNOSTICS_PATHS) {
+    const oldValue = oldDiagnostics[pathName];
+    const newValue = newDiagnostics[pathName];
+
+    if (valuesEqual(oldValue, newValue)) {
+      continue;
+    }
+
+    const fieldChange = { path: pathName };
+    if (oldValue !== undefined) {
+      fieldChange.oldValue = oldValue;
+    }
+    if (newValue !== undefined) {
+      fieldChange.newValue = newValue;
+    }
+
+    changes.push({
+      path: pathName,
+      changeTypes: ["changed"],
+      fieldChanges: [fieldChange]
+    });
+  }
+
+  return changes;
+}
+
+function buildSummary(urlChanges, externalChanges, diagnosticsChanges) {
   const summary = {
     urlsAdded: 0,
     urlsRemoved: 0,
@@ -586,12 +619,15 @@ function buildSummary(urlChanges, externalChanges) {
     }
   }
 
+  summary.diagnosticsChanged = diagnosticsChanges.length;
+
   return summary;
 }
 
 function buildEmptyDiff(oldReport, newReport) {
   const urlChanges = diffUrls(oldReport.urlsByKey, newReport.urlsByKey);
   const externalChanges = diffExternal(oldReport.externalByKey, newReport.externalByKey);
+  const diagnosticsChanges = diffDiagnostics(oldReport.diagnostics, newReport.diagnostics);
 
   return {
     schemaVersion: DIFF_SCHEMA_VERSION,
@@ -602,10 +638,10 @@ function buildEmptyDiff(oldReport, newReport) {
     generatedAt: new Date().toISOString(),
     oldReport: oldReport.ref,
     newReport: newReport.ref,
-    summary: buildSummary(urlChanges, externalChanges),
+    summary: buildSummary(urlChanges, externalChanges, diagnosticsChanges),
     urlChanges,
     externalChanges,
-    diagnosticsChanges: [],
+    diagnosticsChanges,
     warnings: [...oldReport.warnings, ...newReport.warnings]
   };
 }
@@ -632,7 +668,7 @@ async function main() {
   console.log(`Normalized URL records: old ${oldReport.urlsByKey.size}, new ${newReport.urlsByKey.size}`);
   console.log(`Normalized external records: old ${oldReport.externalByKey.size}, new ${newReport.externalByKey.size}`);
   console.log(`Warnings: ${diff.warnings.length}`);
-  console.log(`URL changes: ${diff.urlChanges.length}, external changes: ${diff.externalChanges.length}, diagnostics changes: 0`);
+  console.log(`URL changes: ${diff.urlChanges.length}, external changes: ${diff.externalChanges.length}, diagnostics changes: ${diff.diagnosticsChanges.length}`);
 }
 
 main().catch((error) => {

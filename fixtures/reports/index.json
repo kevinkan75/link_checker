@@ -28,6 +28,13 @@
       "newReport": "external-risk-low-to-high.new.json",
       "expectedSignals": ["riskIncreased"],
       "canonicalUrl": "https://external.example/resource"
+    },
+    {
+      "name": "diagnostics-suspicious-to-ok",
+      "oldReport": "diagnostics-suspicious-to-ok.old.json",
+      "newReport": "diagnostics-suspicious-to-ok.new.json",
+      "expectedSignals": ["diagnosticsChanged"],
+      "diagnosticsPath": "summary.scanQuality"
     }
   ]
 }
