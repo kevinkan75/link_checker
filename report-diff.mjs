@@ -5,6 +5,20 @@ import path from "node:path";
 
 const DIFF_SCHEMA_VERSION = "diff.p6.draft.1";
 const GENERATOR_VERSION = "0.1.0";
+const URL_COMPARISON_FIELDS = [
+  "ok",
+  "status",
+  "issueType",
+  "classification",
+  "finalUrl",
+  "redirected",
+  "redirectCount",
+  "redirectType",
+  "redirectIssues",
+  "confirmationOutcome",
+  "confirmationNeedsReview",
+  "transientFailure"
+];
 
 function printHelp() {
   console.log(`Usage:
@@ -14,9 +28,9 @@ Options:
   --output, -o <path>  Write diff JSON to the given path.
   --help, -h          Show this help text.
 
-P6.3 reads and normalizes both reports, then emits the schema root skeleton.
-Fixture regression coverage is available in test-report-diff.mjs. Actual diff
-signals are implemented in later P6 steps.`);
+P6.4 reads and normalizes both reports, emits URL diff changes, and keeps
+external/diagnostics changes for later P6 steps. Fixture regression coverage is
+available in test-report-diff.mjs.`);
 }
 
 function parseArgs(argv) {
@@ -278,7 +292,190 @@ function normalizeReport(report, reportPath, reportLabel) {
   };
 }
 
+function stableValue(value) {
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+
+  if (value && typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return value;
+}
+
+function valuesEqual(oldValue, newValue) {
+  return stableValue(oldValue) === stableValue(newValue);
+}
+
+function buildFieldChanges(oldSnapshot, newSnapshot, fields) {
+  const changes = [];
+  for (const field of fields) {
+    const oldValue = oldSnapshot?.[field];
+    const newValue = newSnapshot?.[field];
+    if (valuesEqual(oldValue, newValue)) {
+      continue;
+    }
+
+    const change = { path: field };
+    if (oldValue !== undefined) {
+      change.oldValue = oldValue;
+    }
+    if (newValue !== undefined) {
+      change.newValue = newValue;
+    }
+    changes.push(change);
+  }
+
+  return changes;
+}
+
+function addChangeType(changeTypes, type) {
+  if (!changeTypes.includes(type)) {
+    changeTypes.push(type);
+  }
+}
+
+function isIssue(snapshot) {
+  return snapshot?.ok !== true;
+}
+
+function confidenceIncreased(oldSnapshot, newSnapshot) {
+  if (oldSnapshot?.confirmationOutcome === "needs_review" && newSnapshot?.confirmationOutcome === "confirmed_missing") {
+    return true;
+  }
+
+  return oldSnapshot?.confirmationNeedsReview === true &&
+    newSnapshot?.confirmationNeedsReview === false &&
+    isIssue(newSnapshot);
+}
+
+function confidenceDecreased(oldSnapshot, newSnapshot) {
+  if (oldSnapshot?.confirmationOutcome === "confirmed_missing" && newSnapshot?.confirmationOutcome === "needs_review") {
+    return true;
+  }
+
+  return oldSnapshot?.confirmationNeedsReview === false && newSnapshot?.confirmationNeedsReview === true;
+}
+
+function diffUrls(oldUrlsByKey, newUrlsByKey) {
+  const changes = [];
+  const keys = Array.from(new Set([...oldUrlsByKey.keys(), ...newUrlsByKey.keys()])).sort();
+
+  for (const key of keys) {
+    const oldEntry = oldUrlsByKey.get(key);
+    const newEntry = newUrlsByKey.get(key);
+    const oldSnapshot = oldEntry?.snapshot;
+    const newSnapshot = newEntry?.snapshot;
+    const changeTypes = [];
+    const fieldChanges = buildFieldChanges(oldSnapshot, newSnapshot, URL_COMPARISON_FIELDS);
+
+    if (!oldEntry) {
+      addChangeType(changeTypes, "added");
+      if (isIssue(newSnapshot)) {
+        addChangeType(changeTypes, "newIssue");
+      }
+    }
+    else if (!newEntry) {
+      addChangeType(changeTypes, "removed");
+      if (isIssue(oldSnapshot)) {
+        addChangeType(changeTypes, "resolvedIssue");
+      }
+    }
+    else {
+      if (fieldChanges.length > 0) {
+        addChangeType(changeTypes, "changed");
+      }
+
+      if (!isIssue(oldSnapshot) && isIssue(newSnapshot)) {
+        addChangeType(changeTypes, "newIssue");
+      }
+      else if (isIssue(oldSnapshot) && !isIssue(newSnapshot)) {
+        addChangeType(changeTypes, "resolvedIssue");
+      }
+      else if (isIssue(oldSnapshot) && isIssue(newSnapshot)) {
+        addChangeType(changeTypes, "persistentIssue");
+      }
+
+      if (confidenceIncreased(oldSnapshot, newSnapshot)) {
+        addChangeType(changeTypes, "confidenceIncreased");
+      }
+      if (confidenceDecreased(oldSnapshot, newSnapshot)) {
+        addChangeType(changeTypes, "confidenceDecreased");
+      }
+    }
+
+    if (changeTypes.length === 0) {
+      continue;
+    }
+
+    const change = {
+      key: newEntry?.key ?? oldEntry.key,
+      changeTypes,
+      fieldChanges
+    };
+
+    if (oldSnapshot) {
+      change.old = oldSnapshot;
+    }
+    if (newSnapshot) {
+      change.new = newSnapshot;
+    }
+
+    changes.push(change);
+  }
+
+  return changes;
+}
+
+function buildSummary(urlChanges) {
+  const summary = {
+    urlsAdded: 0,
+    urlsRemoved: 0,
+    urlsChanged: 0,
+    newIssues: 0,
+    resolvedIssues: 0,
+    persistentIssues: 0,
+    externalRiskIncreased: 0,
+    externalRiskDecreased: 0,
+    confidenceIncreased: 0,
+    confidenceDecreased: 0,
+    diagnosticsChanged: 0
+  };
+
+  for (const change of urlChanges) {
+    if (change.changeTypes.includes("added")) {
+      summary.urlsAdded++;
+    }
+    if (change.changeTypes.includes("removed")) {
+      summary.urlsRemoved++;
+    }
+    if (change.changeTypes.includes("changed")) {
+      summary.urlsChanged++;
+    }
+    if (change.changeTypes.includes("newIssue")) {
+      summary.newIssues++;
+    }
+    if (change.changeTypes.includes("resolvedIssue")) {
+      summary.resolvedIssues++;
+    }
+    if (change.changeTypes.includes("persistentIssue")) {
+      summary.persistentIssues++;
+    }
+    if (change.changeTypes.includes("confidenceIncreased")) {
+      summary.confidenceIncreased++;
+    }
+    if (change.changeTypes.includes("confidenceDecreased")) {
+      summary.confidenceDecreased++;
+    }
+  }
+
+  return summary;
+}
+
 function buildEmptyDiff(oldReport, newReport) {
+  const urlChanges = diffUrls(oldReport.urlsByKey, newReport.urlsByKey);
+
   return {
     schemaVersion: DIFF_SCHEMA_VERSION,
     generator: {
@@ -288,20 +485,8 @@ function buildEmptyDiff(oldReport, newReport) {
     generatedAt: new Date().toISOString(),
     oldReport: oldReport.ref,
     newReport: newReport.ref,
-    summary: {
-      urlsAdded: 0,
-      urlsRemoved: 0,
-      urlsChanged: 0,
-      newIssues: 0,
-      resolvedIssues: 0,
-      persistentIssues: 0,
-      externalRiskIncreased: 0,
-      externalRiskDecreased: 0,
-      confidenceIncreased: 0,
-      confidenceDecreased: 0,
-      diagnosticsChanged: 0
-    },
-    urlChanges: [],
+    summary: buildSummary(urlChanges),
+    urlChanges,
     externalChanges: [],
     diagnosticsChanges: [],
     warnings: [...oldReport.warnings, ...newReport.warnings]
@@ -325,12 +510,12 @@ async function main() {
 
   await writeFile(options.outputPath, json, "utf8");
 
-  console.log("Report diff skeleton written.");
+  console.log("Report diff written.");
   console.log(`Output: ${options.outputPath}`);
   console.log(`Normalized URL records: old ${oldReport.urlsByKey.size}, new ${newReport.urlsByKey.size}`);
   console.log(`Normalized external records: old ${oldReport.externalByKey.size}, new ${newReport.externalByKey.size}`);
   console.log(`Warnings: ${diff.warnings.length}`);
-  console.log("URL changes: 0, external changes: 0, diagnostics changes: 0");
+  console.log(`URL changes: ${diff.urlChanges.length}, external changes: 0, diagnostics changes: 0`);
 }
 
 main().catch((error) => {
