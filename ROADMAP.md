@@ -206,7 +206,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 2. P6.2 Report loading / normalization：已完成。實作 `readReport()` 與 `normalizeReport()`，支援 legacy report warning、UTF-8 BOM JSON、`checked[]`、`broken[]` fallback、`externalLinks[]`、duplicate key warning 與 diagnostics extraction。
 3. P6.3 Fixture regression runner：已完成。新增 `test-report-diff.mjs`，用 `fixtures/reports/index.json` 跑 4 組 golden cases；目前檢查 CLI 可輸出、warnings 合理、root required fields 與 P6.3 skeleton changes 為空，後續逐步加入 signal assertion。
 4. P6.4 URL diff：已完成。實作 `added`、`removed`、`changed`、`newIssue`、`resolvedIssue`、`persistentIssue`、`confidenceIncreased`、`confidenceDecreased`；驗收 `404-to-200`、`200-to-404`、`needs-review-to-confirmed-missing`。
-5. P6.5 External diff：實作 `externalChanges`、`riskIncreased`、`riskDecreased`；以 `info < low < medium < high` 判斷風險升降，risk 缺少時才 fallback governance order；驗收 `external-risk-low-to-high`。
+5. P6.5 External diff：已完成。實作 `externalChanges`、`riskIncreased`、`riskDecreased`；以 `info < low < medium < high` 判斷風險升降，risk 缺少時才 fallback governance order；驗收 `external-risk-low-to-high`。
 6. P6.6 Diagnostics diff：只比較既有 `summary.scanQuality`、`summary.spaDetection`、`summary.checkedByKind`，不重新計算、不回頭掃描。
 7. P6.7 Schema alignment / output polish：對齊 `schemas/diff.schema.json`，補 summary counts、deterministic ordering、console summary，並加入最低限度 required-field assertions；若成本可控再加 JSON Schema validator。
 8. P6.8 README / Roadmap update：README 加 P6 使用方式；Roadmap 更新 P6 第一版完成狀態與後續限制。

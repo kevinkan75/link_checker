@@ -79,9 +79,8 @@ function assertWarnings(diff, schema) {
   assert(legacyReports.has("new"), "Expected legacy_report warning for new report.");
 }
 
-function assertP64Scope(diff) {
-  assert(diff.externalChanges.length === 0, "P6.4 should not emit externalChanges yet.");
-  assert(diff.diagnosticsChanges.length === 0, "P6.4 should not emit diagnosticsChanges yet.");
+function assertP65Scope(diff) {
+  assert(diff.diagnosticsChanges.length === 0, "P6.5 should not emit diagnosticsChanges yet.");
 }
 
 function findChangeByKey(changes, canonicalUrl) {
@@ -90,12 +89,15 @@ function findChangeByKey(changes, canonicalUrl) {
 
 function assertSignal(diff, fixture, signal) {
   const urlSignals = new Set(["newIssue", "resolvedIssue", "confidenceIncreased", "confidenceDecreased"]);
-  if (!urlSignals.has(signal)) {
+  const externalSignals = new Set(["riskIncreased", "riskDecreased"]);
+
+  if (!urlSignals.has(signal) && !externalSignals.has(signal)) {
     return false;
   }
 
-  const change = findChangeByKey(diff.urlChanges, fixture.canonicalUrl);
-  assert(change, `${fixture.name}: expected urlChange for ${fixture.canonicalUrl}.`);
+  const changes = urlSignals.has(signal) ? diff.urlChanges : diff.externalChanges;
+  const change = findChangeByKey(changes, fixture.canonicalUrl);
+  assert(change, `${fixture.name}: expected change for ${fixture.canonicalUrl}.`);
   assert(change.changeTypes.includes(signal), `${fixture.name}: expected signal ${signal}.`);
 
   if (signal === "newIssue") {
@@ -109,6 +111,12 @@ function assertSignal(diff, fixture, signal) {
   }
   if (signal === "confidenceDecreased") {
     assert(diff.summary.confidenceDecreased > 0, `${fixture.name}: summary.confidenceDecreased should increase.`);
+  }
+  if (signal === "riskIncreased") {
+    assert(diff.summary.externalRiskIncreased > 0, `${fixture.name}: summary.externalRiskIncreased should increase.`);
+  }
+  if (signal === "riskDecreased") {
+    assert(diff.summary.externalRiskDecreased > 0, `${fixture.name}: summary.externalRiskDecreased should increase.`);
   }
 
   return true;
@@ -134,7 +142,7 @@ async function main() {
       assertRootShape(diff, schema);
       assertSummarySkeleton(diff, schema);
       assertWarnings(diff, schema);
-      assertP64Scope(diff);
+      assertP65Scope(diff);
 
       assert(diff.oldReport.path.endsWith(path.normalize(fixture.oldReport)), `${fixture.name}: oldReport path mismatch.`);
       assert(diff.newReport.path.endsWith(path.normalize(fixture.newReport)), `${fixture.name}: newReport path mismatch.`);

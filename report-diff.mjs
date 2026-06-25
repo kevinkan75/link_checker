@@ -19,6 +19,30 @@ const URL_COMPARISON_FIELDS = [
   "confirmationNeedsReview",
   "transientFailure"
 ];
+const EXTERNAL_COMPARISON_FIELDS = [
+  "ok",
+  "status",
+  "issueType",
+  "finalUrl",
+  "externalRisk.riskLevel",
+  "externalRisk.governanceStatus",
+  "externalRisk.riskReasons",
+  "externalRisk.matchedRules",
+  "externalRisk.needsReview"
+];
+const RISK_ORDER = new Map([
+  ["info", 0],
+  ["low", 1],
+  ["medium", 2],
+  ["high", 3]
+]);
+const GOVERNANCE_ORDER = new Map([
+  ["allowed", 0],
+  ["unknown", 1],
+  ["watchlisted", 2],
+  ["needs_review", 3],
+  ["blocked", 4]
+]);
 
 function printHelp() {
   console.log(`Usage:
@@ -28,8 +52,8 @@ Options:
   --output, -o <path>  Write diff JSON to the given path.
   --help, -h          Show this help text.
 
-P6.4 reads and normalizes both reports, emits URL diff changes, and keeps
-external/diagnostics changes for later P6 steps. Fixture regression coverage is
+P6.5 reads and normalizes both reports, emits URL and external diff changes,
+and keeps diagnostics changes for later P6 steps. Fixture regression coverage is
 available in test-report-diff.mjs.`);
 }
 
@@ -304,6 +328,10 @@ function stableValue(value) {
   return value;
 }
 
+function getPathValue(source, dottedPath) {
+  return dottedPath.split(".").reduce((value, part) => value?.[part], source);
+}
+
 function valuesEqual(oldValue, newValue) {
   return stableValue(oldValue) === stableValue(newValue);
 }
@@ -311,8 +339,8 @@ function valuesEqual(oldValue, newValue) {
 function buildFieldChanges(oldSnapshot, newSnapshot, fields) {
   const changes = [];
   for (const field of fields) {
-    const oldValue = oldSnapshot?.[field];
-    const newValue = newSnapshot?.[field];
+    const oldValue = getPathValue(oldSnapshot, field);
+    const newValue = getPathValue(newSnapshot, field);
     if (valuesEqual(oldValue, newValue)) {
       continue;
     }
@@ -428,7 +456,86 @@ function diffUrls(oldUrlsByKey, newUrlsByKey) {
   return changes;
 }
 
-function buildSummary(urlChanges) {
+function riskRank(snapshot) {
+  const riskLevel = snapshot?.externalRisk?.riskLevel;
+  if (RISK_ORDER.has(riskLevel)) {
+    return RISK_ORDER.get(riskLevel);
+  }
+
+  const governanceStatus = snapshot?.externalRisk?.governanceStatus;
+  if (GOVERNANCE_ORDER.has(governanceStatus)) {
+    return GOVERNANCE_ORDER.get(governanceStatus);
+  }
+
+  return null;
+}
+
+function riskIncreased(oldSnapshot, newSnapshot) {
+  const oldRank = riskRank(oldSnapshot);
+  const newRank = riskRank(newSnapshot);
+  return oldRank !== null && newRank !== null && newRank > oldRank;
+}
+
+function riskDecreased(oldSnapshot, newSnapshot) {
+  const oldRank = riskRank(oldSnapshot);
+  const newRank = riskRank(newSnapshot);
+  return oldRank !== null && newRank !== null && newRank < oldRank;
+}
+
+function diffExternal(oldExternalByKey, newExternalByKey) {
+  const changes = [];
+  const keys = Array.from(new Set([...oldExternalByKey.keys(), ...newExternalByKey.keys()])).sort();
+
+  for (const key of keys) {
+    const oldEntry = oldExternalByKey.get(key);
+    const newEntry = newExternalByKey.get(key);
+    const oldSnapshot = oldEntry?.snapshot;
+    const newSnapshot = newEntry?.snapshot;
+    const changeTypes = [];
+    const fieldChanges = buildFieldChanges(oldSnapshot, newSnapshot, EXTERNAL_COMPARISON_FIELDS);
+
+    if (!oldEntry) {
+      addChangeType(changeTypes, "added");
+    }
+    else if (!newEntry) {
+      addChangeType(changeTypes, "removed");
+    }
+    else {
+      if (fieldChanges.length > 0) {
+        addChangeType(changeTypes, "changed");
+      }
+      if (riskIncreased(oldSnapshot, newSnapshot)) {
+        addChangeType(changeTypes, "riskIncreased");
+      }
+      if (riskDecreased(oldSnapshot, newSnapshot)) {
+        addChangeType(changeTypes, "riskDecreased");
+      }
+    }
+
+    if (changeTypes.length === 0) {
+      continue;
+    }
+
+    const change = {
+      key: newEntry?.key ?? oldEntry.key,
+      changeTypes,
+      fieldChanges
+    };
+
+    if (oldSnapshot) {
+      change.old = oldSnapshot;
+    }
+    if (newSnapshot) {
+      change.new = newSnapshot;
+    }
+
+    changes.push(change);
+  }
+
+  return changes;
+}
+
+function buildSummary(urlChanges, externalChanges) {
   const summary = {
     urlsAdded: 0,
     urlsRemoved: 0,
@@ -470,11 +577,21 @@ function buildSummary(urlChanges) {
     }
   }
 
+  for (const change of externalChanges) {
+    if (change.changeTypes.includes("riskIncreased")) {
+      summary.externalRiskIncreased++;
+    }
+    if (change.changeTypes.includes("riskDecreased")) {
+      summary.externalRiskDecreased++;
+    }
+  }
+
   return summary;
 }
 
 function buildEmptyDiff(oldReport, newReport) {
   const urlChanges = diffUrls(oldReport.urlsByKey, newReport.urlsByKey);
+  const externalChanges = diffExternal(oldReport.externalByKey, newReport.externalByKey);
 
   return {
     schemaVersion: DIFF_SCHEMA_VERSION,
@@ -485,9 +602,9 @@ function buildEmptyDiff(oldReport, newReport) {
     generatedAt: new Date().toISOString(),
     oldReport: oldReport.ref,
     newReport: newReport.ref,
-    summary: buildSummary(urlChanges),
+    summary: buildSummary(urlChanges, externalChanges),
     urlChanges,
-    externalChanges: [],
+    externalChanges,
     diagnosticsChanges: [],
     warnings: [...oldReport.warnings, ...newReport.warnings]
   };
@@ -515,7 +632,7 @@ async function main() {
   console.log(`Normalized URL records: old ${oldReport.urlsByKey.size}, new ${newReport.urlsByKey.size}`);
   console.log(`Normalized external records: old ${oldReport.externalByKey.size}, new ${newReport.externalByKey.size}`);
   console.log(`Warnings: ${diff.warnings.length}`);
-  console.log(`URL changes: ${diff.urlChanges.length}, external changes: 0, diagnostics changes: 0`);
+  console.log(`URL changes: ${diff.urlChanges.length}, external changes: ${diff.externalChanges.length}, diagnostics changes: 0`);
 }
 
 main().catch((error) => {
