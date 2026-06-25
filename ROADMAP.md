@@ -39,6 +39,7 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 - P5.5a：SPA / Nuxt 偵測、`scanQuality`、strict payload URL/path literal 抽取與 `sourceType`。
 - P5.5b：`--site-link-rules`、CEC 規則範例、CMS 欄位推導與 `site_rule_derived`。
 - P5.5c：內容/外連/文件/媒體/asset 分流統計與簡易 validation priority。
+- Packaging 小修：portable 打包流程已在 `build-portable.ps1` 中加入本機自簽 Authenticode 步驟，並匯出 `LinkChecker-local-code-signing.cer` 供內部手動信任匯入；此為 local self-signed，不等同正式公開信任 code signing。
 
 ## 全域原則
 
@@ -95,7 +96,7 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 | Rules schema / rulesVersion / 載入安全 | 採納，中優先 | P9；HTTP 載入規則檔同樣套 SSRF 防護。 |
 | Profile 與 configured/effective values | 採納，中優先 | P9；profile 展開結果寫入 `report.options`。 |
 | 產出檔版本策略 | 採納，高優先 | P6.5a；穩定檔名、內容版本化、每次輸出建立 manifest。 |
-| SBOM、dependency audit、code signing | 後續評估 | P11 release / packaging。 |
+| SBOM、dependency audit、正式 code signing | 後續評估 | P11 release / packaging；local self-signed portable launcher 已先以 packaging 小修完成。 |
 
 ### 落點修正
 
@@ -429,7 +430,7 @@ CLI 可新增：
 - Dependency audit。
 - License summary。
 - SBOM。
-- 簽章與 checksum 評估。
+- 正式公開信任簽章與 checksum 評估；local self-signed launcher signing 已在 portable build 流程中完成，P11 仍需評估 OV/EV 或代管簽章與 release checksum 策略。
 
 ## 細部規格索引
 
@@ -456,7 +457,7 @@ CLI 可新增：
 | types | `types/report.d.ts`、`types/diff.d.ts`、`types/rules.d.ts` 與 JSON Schema 同步維護 | P6.5a / P9 |
 | rules governance | `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`；支援 `rulesVersion`、`name`、`updatedAt` | P9 |
 | profiles | `normal`、`government-conservative`、`large-site`、`spa`、`external-governance`；CLI explicit option 可覆蓋 profile default | P9 |
-| release | portable package manifest、Node runtime version、package smoke test、dependency audit、license summary、SBOM、checksum / signing 評估 | P11 |
+| release | portable package manifest、Node runtime version、package smoke test、dependency audit、license summary、SBOM、正式 checksum / signing 評估；local self-signed portable launcher signing 已完成 | P11 |
 
 ## 暫不納入近期主線
 
