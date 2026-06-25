@@ -3,10 +3,20 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
+
+[assembly: AssemblyTitle("Link Checker Portable Launcher")]
+[assembly: AssemblyDescription("Starts the Link Checker local GUI server and opens the browser.")]
+[assembly: AssemblyCompany("Link Checker")]
+[assembly: AssemblyProduct("Link Checker")]
+[assembly: AssemblyCopyright("Copyright (c) 2026")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyInformationalVersion("1.0.0-portable")]
 
 internal static class StartLinkChecker
 {
