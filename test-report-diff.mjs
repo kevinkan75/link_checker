@@ -19,6 +19,12 @@ function assert(condition, message) {
   }
 }
 
+function assertNoExtraProperties(value, allowed, label) {
+  for (const key of Object.keys(value || {})) {
+    assert(allowed.has(key), `${label} has unexpected property: ${key}`);
+  }
+}
+
 async function readJson(filePath) {
   const text = await readFile(filePath, "utf8");
   return JSON.parse(text.replace(/^\uFEFF/, ""));
@@ -40,6 +46,7 @@ async function runReportDiff(oldReport, newReport, outputPath) {
 }
 
 function assertRootShape(diff, schema) {
+  assertNoExtraProperties(diff, new Set(Object.keys(schema.properties)), "diff root");
   for (const key of schema.required) {
     assert(Object.hasOwn(diff, key), `Missing required root field: ${key}`);
   }
@@ -57,6 +64,7 @@ function assertRootShape(diff, schema) {
 
 function assertSummarySkeleton(diff, schema) {
   const requiredSummary = schema.properties.summary.required;
+  assertNoExtraProperties(diff.summary, new Set(Object.keys(schema.properties.summary.properties)), "summary");
   for (const key of requiredSummary) {
     assert(Object.hasOwn(diff.summary, key), `Missing required summary field: ${key}`);
     assert(Number.isInteger(diff.summary[key]) && diff.summary[key] >= 0, `Summary field must be non-negative integer: ${key}`);
@@ -65,7 +73,9 @@ function assertSummarySkeleton(diff, schema) {
 
 function assertWarnings(diff, schema) {
   const allowedCodes = new Set(schema.$defs.warning.properties.code.enum);
+  const allowedWarningProps = new Set(Object.keys(schema.$defs.warning.properties));
   for (const warning of diff.warnings) {
+    assertNoExtraProperties(warning, allowedWarningProps, "warning");
     assert(allowedCodes.has(warning.code), `Unexpected warning code: ${warning.code}`);
     assert(typeof warning.message === "string" && warning.message.length > 0, "Warning message is required.");
   }
@@ -79,8 +89,106 @@ function assertWarnings(diff, schema) {
   assert(legacyReports.has("new"), "Expected legacy_report warning for new report.");
 }
 
-function assertP66Scope(diff) {
+function assertSortedBy(items, label, selector) {
+  const values = items.map(selector);
+  const sorted = [...values].sort();
+  assert(JSON.stringify(values) === JSON.stringify(sorted), `${label} must be sorted deterministically.`);
+}
+
+function assertChangeTypes(changeTypes, schema, label) {
+  const allowed = new Set(schema.$defs.changeTypeList.items.enum);
+  assert(Array.isArray(changeTypes) && changeTypes.length > 0, `${label}.changeTypes must be a non-empty array.`);
+  assert(new Set(changeTypes).size === changeTypes.length, `${label}.changeTypes must be unique.`);
+  for (const type of changeTypes) {
+    assert(allowed.has(type), `${label}.changeTypes has unexpected type: ${type}`);
+  }
+}
+
+function assertFieldChanges(fieldChanges, label) {
+  assert(Array.isArray(fieldChanges), `${label}.fieldChanges must be an array.`);
+  for (const fieldChange of fieldChanges) {
+    assertNoExtraProperties(fieldChange, new Set(["path", "oldValue", "newValue"]), `${label}.fieldChange`);
+    assert(typeof fieldChange.path === "string" && fieldChange.path.length > 0, `${label}.fieldChange.path is required.`);
+  }
+}
+
+function assertMatchKey(key, label) {
+  assertNoExtraProperties(key, new Set(["value", "source"]), `${label}.key`);
+  assert(typeof key?.value === "string" && key.value.length > 0, `${label}.key.value is required.`);
+  assert(key.source === "canonicalUrl" || key.source === "url", `${label}.key.source is invalid.`);
+}
+
+function assertUrlSnapshot(snapshot, label) {
+  if (!snapshot) {
+    return;
+  }
+  assert(typeof snapshot.url === "string" && snapshot.url.length > 0, `${label}.url is required.`);
+  assert(typeof snapshot.ok === "boolean", `${label}.ok is required.`);
+}
+
+function assertExternalSnapshot(snapshot, label) {
+  if (!snapshot) {
+    return;
+  }
+  assert(typeof snapshot.url === "string" && snapshot.url.length > 0, `${label}.url is required.`);
+}
+
+function assertChangeItems(diff, schema) {
+  assertSortedBy(diff.urlChanges, "urlChanges", (change) => change.key.value);
+  assertSortedBy(diff.externalChanges, "externalChanges", (change) => change.key.value);
+  assertSortedBy(diff.diagnosticsChanges, "diagnosticsChanges", (change) => change.path);
+
+  for (const [index, change] of diff.urlChanges.entries()) {
+    const label = `urlChanges[${index}]`;
+    assertNoExtraProperties(change, new Set(["key", "changeTypes", "old", "new", "fieldChanges"]), label);
+    assertMatchKey(change.key, label);
+    assertChangeTypes(change.changeTypes, schema, label);
+    assertFieldChanges(change.fieldChanges, label);
+    assertUrlSnapshot(change.old, `${label}.old`);
+    assertUrlSnapshot(change.new, `${label}.new`);
+  }
+
+  for (const [index, change] of diff.externalChanges.entries()) {
+    const label = `externalChanges[${index}]`;
+    assertNoExtraProperties(change, new Set(["key", "changeTypes", "old", "new", "fieldChanges"]), label);
+    assertMatchKey(change.key, label);
+    assertChangeTypes(change.changeTypes, schema, label);
+    assertFieldChanges(change.fieldChanges, label);
+    assertExternalSnapshot(change.old, `${label}.old`);
+    assertExternalSnapshot(change.new, `${label}.new`);
+  }
+
+  for (const [index, change] of diff.diagnosticsChanges.entries()) {
+    const label = `diagnosticsChanges[${index}]`;
+    assertNoExtraProperties(change, new Set(["path", "changeTypes", "fieldChanges"]), label);
+    assert(["summary.scanQuality", "summary.spaDetection", "summary.checkedByKind"].includes(change.path), `${label}.path is invalid.`);
+    assertChangeTypes(change.changeTypes, schema, label);
+    assertFieldChanges(change.fieldChanges, label);
+  }
+}
+
+function countChanges(changes, type) {
+  return changes.filter((change) => change.changeTypes.includes(type)).length;
+}
+
+function assertSummaryCounts(diff) {
+  assert(diff.summary.urlsAdded === countChanges(diff.urlChanges, "added"), "summary.urlsAdded mismatch.");
+  assert(diff.summary.urlsRemoved === countChanges(diff.urlChanges, "removed"), "summary.urlsRemoved mismatch.");
+  assert(diff.summary.urlsChanged === countChanges(diff.urlChanges, "changed"), "summary.urlsChanged mismatch.");
+  assert(diff.summary.newIssues === countChanges(diff.urlChanges, "newIssue"), "summary.newIssues mismatch.");
+  assert(diff.summary.resolvedIssues === countChanges(diff.urlChanges, "resolvedIssue"), "summary.resolvedIssues mismatch.");
+  assert(diff.summary.persistentIssues === countChanges(diff.urlChanges, "persistentIssue"), "summary.persistentIssues mismatch.");
+  assert(diff.summary.confidenceIncreased === countChanges(diff.urlChanges, "confidenceIncreased"), "summary.confidenceIncreased mismatch.");
+  assert(diff.summary.confidenceDecreased === countChanges(diff.urlChanges, "confidenceDecreased"), "summary.confidenceDecreased mismatch.");
+  assert(diff.summary.externalRiskIncreased === countChanges(diff.externalChanges, "riskIncreased"), "summary.externalRiskIncreased mismatch.");
+  assert(diff.summary.externalRiskDecreased === countChanges(diff.externalChanges, "riskDecreased"), "summary.externalRiskDecreased mismatch.");
+  assert(diff.summary.diagnosticsChanged === diff.diagnosticsChanges.length, "summary.diagnosticsChanged mismatch.");
+}
+
+function assertP67Output(diff, schema) {
   assert(Array.isArray(diff.diagnosticsChanges), "diagnosticsChanges must be an array.");
+  assertChangeItems(diff, schema);
+  assertSummaryCounts(diff);
 }
 
 function findChangeByKey(changes, canonicalUrl) {
@@ -150,7 +258,7 @@ async function main() {
       assertRootShape(diff, schema);
       assertSummarySkeleton(diff, schema);
       assertWarnings(diff, schema);
-      assertP66Scope(diff);
+      assertP67Output(diff, schema);
 
       assert(diff.oldReport.path.endsWith(path.normalize(fixture.oldReport)), `${fixture.name}: oldReport path mismatch.`);
       assert(diff.newReport.path.endsWith(path.normalize(fixture.newReport)), `${fixture.name}: newReport path mismatch.`);
@@ -165,7 +273,7 @@ async function main() {
     }
 
     if (pendingSignals.length > 0) {
-      console.log(`pending signal assertions for later P6 steps: ${pendingSignals.join(", ")}`);
+      throw new Error(`Unexpected pending signal assertions: ${pendingSignals.join(", ")}`);
     }
   }
   finally {

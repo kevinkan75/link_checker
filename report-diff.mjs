@@ -57,8 +57,9 @@ Options:
   --output, -o <path>  Write diff JSON to the given path.
   --help, -h          Show this help text.
 
-P6.6 reads and normalizes both reports, emits URL, external, and diagnostics
-diff changes. Fixture regression coverage is available in test-report-diff.mjs.`);
+P6.7 reads and normalizes both reports, emits URL, external, and diagnostics
+diff changes, and prints a concise summary. Fixture regression coverage is
+available in test-report-diff.mjs.`);
 }
 
 function parseArgs(argv) {
@@ -359,7 +360,7 @@ function buildFieldChanges(oldSnapshot, newSnapshot, fields) {
     changes.push(change);
   }
 
-  return changes;
+  return changes.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function addChangeType(changeTypes, type) {
@@ -457,7 +458,7 @@ function diffUrls(oldUrlsByKey, newUrlsByKey) {
     changes.push(change);
   }
 
-  return changes;
+  return changes.sort((left, right) => left.key.value.localeCompare(right.key.value));
 }
 
 function riskRank(snapshot) {
@@ -536,7 +537,7 @@ function diffExternal(oldExternalByKey, newExternalByKey) {
     changes.push(change);
   }
 
-  return changes;
+  return changes.sort((left, right) => left.key.value.localeCompare(right.key.value));
 }
 
 function diffDiagnostics(oldDiagnostics, newDiagnostics) {
@@ -565,7 +566,7 @@ function diffDiagnostics(oldDiagnostics, newDiagnostics) {
     });
   }
 
-  return changes;
+  return changes.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function buildSummary(urlChanges, externalChanges, diagnosticsChanges) {
@@ -624,7 +625,7 @@ function buildSummary(urlChanges, externalChanges, diagnosticsChanges) {
   return summary;
 }
 
-function buildEmptyDiff(oldReport, newReport) {
+function buildDiff(oldReport, newReport) {
   const urlChanges = diffUrls(oldReport.urlsByKey, newReport.urlsByKey);
   const externalChanges = diffExternal(oldReport.externalByKey, newReport.externalByKey);
   const diagnosticsChanges = diffDiagnostics(oldReport.diagnostics, newReport.diagnostics);
@@ -646,6 +647,24 @@ function buildEmptyDiff(oldReport, newReport) {
   };
 }
 
+function printConsoleSummary(diff, oldReport, newReport, outputPath) {
+  console.log("Report diff written.");
+  console.log(`Output: ${outputPath}`);
+  console.log(`Normalized URL records: old ${oldReport.urlsByKey.size}, new ${newReport.urlsByKey.size}`);
+  console.log(`Normalized external records: old ${oldReport.externalByKey.size}, new ${newReport.externalByKey.size}`);
+  console.log(`Warnings: ${diff.warnings.length}`);
+  console.log(`Changes: URLs ${diff.urlChanges.length}, external ${diff.externalChanges.length}, diagnostics ${diff.diagnosticsChanges.length}`);
+  console.log(
+    `Issues: new ${diff.summary.newIssues}, resolved ${diff.summary.resolvedIssues}, persistent ${diff.summary.persistentIssues}`
+  );
+  console.log(
+    `Risk: increased ${diff.summary.externalRiskIncreased}, decreased ${diff.summary.externalRiskDecreased}`
+  );
+  console.log(
+    `Confidence: increased ${diff.summary.confidenceIncreased}, decreased ${diff.summary.confidenceDecreased}`
+  );
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.help) {
@@ -658,17 +677,11 @@ async function main() {
   const oldReport = normalizeReport(oldRawReport, options.oldReportPath, "old");
   const newReport = normalizeReport(newRawReport, options.newReportPath, "new");
 
-  const diff = buildEmptyDiff(oldReport, newReport);
+  const diff = buildDiff(oldReport, newReport);
   const json = `${JSON.stringify(diff, null, 2)}\n`;
 
   await writeFile(options.outputPath, json, "utf8");
-
-  console.log("Report diff written.");
-  console.log(`Output: ${options.outputPath}`);
-  console.log(`Normalized URL records: old ${oldReport.urlsByKey.size}, new ${newReport.urlsByKey.size}`);
-  console.log(`Normalized external records: old ${oldReport.externalByKey.size}, new ${newReport.externalByKey.size}`);
-  console.log(`Warnings: ${diff.warnings.length}`);
-  console.log(`URL changes: ${diff.urlChanges.length}, external changes: ${diff.externalChanges.length}, diagnostics changes: ${diff.diagnosticsChanges.length}`);
+  printConsoleSummary(diff, oldReport, newReport, options.outputPath);
 }
 
 main().catch((error) => {

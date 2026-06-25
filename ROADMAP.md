@@ -208,7 +208,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 4. P6.4 URL diff：已完成。實作 `added`、`removed`、`changed`、`newIssue`、`resolvedIssue`、`persistentIssue`、`confidenceIncreased`、`confidenceDecreased`；驗收 `404-to-200`、`200-to-404`、`needs-review-to-confirmed-missing`。
 5. P6.5 External diff：已完成。實作 `externalChanges`、`riskIncreased`、`riskDecreased`；以 `info < low < medium < high` 判斷風險升降，risk 缺少時才 fallback governance order；驗收 `external-risk-low-to-high`。
 6. P6.6 Diagnostics diff：已完成。只比較既有 `summary.scanQuality`、`summary.spaDetection`、`summary.checkedByKind`，不重新計算、不回頭掃描。
-7. P6.7 Schema alignment / output polish：對齊 `schemas/diff.schema.json`，補 summary counts、deterministic ordering、console summary，並加入最低限度 required-field assertions；若成本可控再加 JSON Schema validator。
+7. P6.7 Schema alignment / output polish：已完成。對齊 `schemas/diff.schema.json`，補 summary counts、deterministic ordering、console summary，並加入最低限度 required-field assertions；暫不引入外部 JSON Schema validator。
 8. P6.8 README / Roadmap update：README 加 P6 使用方式；Roadmap 更新 P6 第一版完成狀態與後續限制。
 
 建議 commit 切法：
