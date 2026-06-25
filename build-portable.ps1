@@ -138,6 +138,7 @@ New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $root "link-checker.mjs") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $root "report-diff.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "gui-server.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "convert-ut1-rules.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "check-links.cmd") -Destination $packageDir
@@ -179,6 +180,7 @@ $portableReadme = @(
   "Command line:",
   "  check-links.cmd https://example.com",
   "  check-links.cmd https://example.com --system-ca",
+  "  runtime\node.exe report-diff.mjs old-report.json new-report.json --output diff.json",
   "  runtime\node.exe convert-ut1-rules.mjs --input path\to\ut1\blacklists --output ut1-rules.json --pretty",
   "",
   "System CA mode:",
