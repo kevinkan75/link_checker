@@ -2,9 +2,9 @@
 
 ## 一致性結論
 
-P0-P5.5 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP，以及 SPA / Nuxt 站台抽取前置改善。
+P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP、SPA / Nuxt 站台抽取前置改善，以及 report-to-report diff 第一版。
 
-下一個主線維持 **P6 report-to-report diff**。Stage 0 可穿插處理，但只做文件與輸出相容性小修，不改掃描語意、不改既有 report 主契約，也不得拖住 P6。
+下一個主線維持 **P6.5a 低風險穩定性修補**。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
 
 目前 Roadmap 採納兩份分析文件：
 
@@ -16,9 +16,9 @@ P0-P5.5 已完成，包含本機服務生命週期、URL inventory、404 / 410 �
 | 順序 | 階段 | 狀態 | 主要交付 | 不得混入 |
 | ---: | --- | --- | --- | --- |
 | 0 | Stage 0 | 已收斂 | README、CSV BOM、GUI/CLI 落差提示、`sourceCount` 說明 | schema、robots、cache、incremental scan、Keep-Alive |
-| 1 | P6 前置 | 可先做 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
-| 2 | P6 | 下一個主線 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
-| 3 | P6.5a | P6 後 | schema/generator、manifest、redaction、response limit、sources 上限、Header/Keep-Alive | robots / compliance 語意 |
+| 1 | P6 前置 | 已完成 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
+| 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
+| 3 | P6.5a | 下一個主線 | schema/generator、manifest、redaction、response limit、sources 上限、Header/Keep-Alive | robots / compliance 語意 |
 | 4 | P6.5b | P6.5a 後 | SSRF、WAF signature、Retry-After、partial report、robots summary、compliance | WAF/Bot 繞過 |
 | 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
@@ -39,6 +39,7 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 - P5.5a：SPA / Nuxt 偵測、`scanQuality`、strict payload URL/path literal 抽取與 `sourceType`。
 - P5.5b：`--site-link-rules`、CEC 規則範例、CMS 欄位推導與 `site_rule_derived`。
 - P5.5c：內容/外連/文件/媒體/asset 分流統計與簡易 validation priority。
+- P6：`report-diff.mjs` 第一版，支援 URL、external risk 與 summary diagnostics 的 report-to-report diff，並以 5 組 fixtures 驗收。
 - Packaging 小修：portable 打包流程已在 `build-portable.ps1` 中加入本機自簽 Authenticode 步驟，並匯出 `LinkChecker-local-code-signing.cer` 供內部手動信任匯入；此為 local self-signed，不等同正式公開信任 code signing。
 
 ## 全域原則
@@ -123,15 +124,15 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 已處理：
 
-1. 建立 `fixtures/reports/` golden cases：`404 -> 200`、`200 -> 404`、`needs_review -> confirmed_missing`、`externalRisk low -> high`。
+1. 建立 `fixtures/reports/` golden cases：`404 -> 200`、`200 -> 404`、`needs_review -> confirmed_missing`、`externalRisk low -> high`、`scanQuality suspicious -> ok`。
 2. 建立 `schemas/diff.schema.json` 草案，約束 P6 diff 輸出必要欄位。
 3. 建立 [docs/REPORT_NORMALIZATION.md](docs/REPORT_NORMALIZATION.md)：優先 `checked[]`，舊 report fallback `broken[]`，外連使用 `externalLinks[]`。
 
-評估：三項前置完成度約 85-90%，足以進入 P6 實作；剩餘測試補強記錄於 [docs/P6_PREFLIGHT_ASSESSMENT.md](docs/P6_PREFLIGHT_ASSESSMENT.md)。
+結果：前置項目已支援並完成 P6 第一版；現行 regression runner 以 `fixtures/reports/index.json` 驗證 5 組 expected signals。原始進入 P6 評估保留於 [docs/P6_PREFLIGHT_ASSESSMENT.md](docs/P6_PREFLIGHT_ASSESSMENT.md)。
 
 ## P6：Report-to-Report Diff
 
-狀態：下一個主要項目。
+狀態：第一版已完成。
 
 實作分析已記錄於 [docs/P6_IMPLEMENTATION_ANALYSIS.md](docs/P6_IMPLEMENTATION_ANALYSIS.md)。
 
@@ -140,7 +141,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 1. `report-diff.mjs` CLI：`old-report.json` + `new-report.json` -> `diff.json`。
 2. Report normalization：新 report 優先 `checked[]`，舊 report fallback `broken[]`，外連獨立使用 `externalLinks[]`。
 3. URL diff summary：新增、移除、變更、新發生問題、已修復、持續存在。
-4. P4/P5 欄位 diff：`confirmation.outcome`、`transientFailure`、`confirmationNeedsReview`、`externalRisk`、`externalRiskNeedsReview`。
+4. P4/P5 欄位 diff：`confirmation.outcome`、`confirmationNeedsReview`、`transientFailure`、`externalRisk.riskLevel`、`externalRisk.governanceStatus`、`externalRisk.riskReasons`、`externalRisk.matchedRules`、`externalRisk.needsReview`。
 5. P5.5 diagnostics diff：`scanQuality`、`spaDetection` 與 `checkedByKind` 摘要變化。
 6. JSON 輸出與簡短 console summary；GUI / Analyzer 呈現放 P9。
 
@@ -162,11 +163,13 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 - `redirectType`
 - `redirectIssues`
 - `confirmation.outcome`
-- `needsReview`
+- `confirmationNeedsReview`
 - `transientFailure`
 - `externalRisk.riskLevel`
 - `externalRisk.governanceStatus`
 - `externalRisk.riskReasons`
+- `externalRisk.matchedRules`
+- `externalRisk.needsReview`
 
 第一版 summary diagnostics：
 
@@ -204,20 +207,19 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 1. P6.1 CLI skeleton：已完成。新增 `report-diff.mjs`，支援 `old-report.json`、`new-report.json`、`--output diff.json`、`--help`，先輸出空的合法 root shape，不做實際 diff。
 2. P6.2 Report loading / normalization：已完成。實作 `readReport()` 與 `normalizeReport()`，支援 legacy report warning、UTF-8 BOM JSON、`checked[]`、`broken[]` fallback、`externalLinks[]`、duplicate key warning 與 diagnostics extraction。
-3. P6.3 Fixture regression runner：已完成。新增 `test-report-diff.mjs`，用 `fixtures/reports/index.json` 跑 4 組 golden cases；目前檢查 CLI 可輸出、warnings 合理、root required fields 與 P6.3 skeleton changes 為空，後續逐步加入 signal assertion。
+3. P6.3 Fixture regression runner：已完成。新增 `test-report-diff.mjs`，用 `fixtures/reports/index.json` 跑 5 組 golden cases；檢查 CLI 可輸出、warnings 合理、root required fields、change item shape、summary counts 與所有 expected signals。
 4. P6.4 URL diff：已完成。實作 `added`、`removed`、`changed`、`newIssue`、`resolvedIssue`、`persistentIssue`、`confidenceIncreased`、`confidenceDecreased`；驗收 `404-to-200`、`200-to-404`、`needs-review-to-confirmed-missing`。
 5. P6.5 External diff：已完成。實作 `externalChanges`、`riskIncreased`、`riskDecreased`；以 `info < low < medium < high` 判斷風險升降，risk 缺少時才 fallback governance order；驗收 `external-risk-low-to-high`。
 6. P6.6 Diagnostics diff：已完成。只比較既有 `summary.scanQuality`、`summary.spaDetection`、`summary.checkedByKind`，不重新計算、不回頭掃描。
 7. P6.7 Schema alignment / output polish：已完成。對齊 `schemas/diff.schema.json`，補 summary counts、deterministic ordering、console summary，並加入最低限度 required-field assertions；暫不引入外部 JSON Schema validator。
-8. P6.8 README / Roadmap update：README 加 P6 使用方式；Roadmap 更新 P6 第一版完成狀態與後續限制。
+8. P6.8 README / Roadmap update：已完成。README 加 P6 使用方式；Roadmap 更新 P6 第一版完成狀態與後續限制。
 
-建議 commit 切法：
+實作與驗證：
 
-1. `feat: add report diff cli and normalization`
-2. `test: add report diff fixture regression`
-3. `feat: add url and external report diff`
-4. `feat: add diagnostics diff and schema-aligned summary`
-5. `docs: document report diff usage`
+- `report-diff.mjs`：CLI、normalization 與 diff implementation。
+- `test-report-diff.mjs`：fixture regression runner。
+- `fixtures/reports/index.json`：5 組 expected signals。
+- `schemas/diff.schema.json`：第一版 diff output contract。
 
 不納入 P6：
 
@@ -228,7 +230,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6.5a：低風險穩定性修補
 
-狀態：P6 後實作。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
+狀態：下一個主線。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
 
 交付項：
 

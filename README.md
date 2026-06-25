@@ -7,6 +7,7 @@
 - [功能摘要](#功能摘要)
 - [目前狀態與邊界](#目前狀態與邊界)
 - [使用方式](#使用方式)
+- [Report diff](#report-diff)
 - [快速選擇](#快速選擇)
 - [圖形介面](#圖形介面)
 - [輸出檔案](#輸出檔案)
@@ -33,7 +34,7 @@
 
 ## 目前狀態與邊界
 
-目前已完成 P0-P5.5 的功能基線。下一個主要開發項目是 P6 report-to-report diff，尚未提供正式的 `report-diff.mjs`、TTL cache、incremental scan、robots path enforcement、partial report schema、`manifest.json` 或 report `schemaVersion`。
+目前已完成 P0-P6 的功能基線。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement、partial report schema、`manifest.json` 與 scan report `schemaVersion` 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
 
 現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。後續版本資訊會依 [ROADMAP.md](ROADMAP.md) 放入 JSON 內容與每次輸出的 manifest；一般日常輸出不預設在檔名加版本號。
 
@@ -50,6 +51,21 @@
 ```powershell
 node .\link-checker.mjs https://example.com
 ```
+
+## Report diff
+
+`report-diff.mjs` 用來比對兩份既有 `report.json`：
+
+```powershell
+node .\report-diff.mjs old-report.json new-report.json --output diff.json
+```
+
+這個指令只讀取已產生的 report，不重新掃描網站、不重新送 HTTP request，也不改寫原始 report。第一版會輸出：
+
+- URL 狀態變化：新增、移除、變更、新發生問題、已修復、持續存在、信心升降。
+- 外連治理風險變化：風險升高、風險降低。
+- Summary diagnostics 變化：`summary.scanQuality`、`summary.spaDetection`、`summary.checkedByKind`。
+- Normalization warnings：legacy report、`broken[]` fallback、duplicate key 等。
 
 ## 快速選擇
 
@@ -435,7 +451,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；下一個主要項目是 P6 report-to-report diff，並規劃 P6.5a 的 schema / generator / manifest 版本策略。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版已完成，後續規劃 P6.5a 的 schema / generator / manifest 版本策略。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。

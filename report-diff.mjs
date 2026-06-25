@@ -57,9 +57,9 @@ Options:
   --output, -o <path>  Write diff JSON to the given path.
   --help, -h          Show this help text.
 
-P6.7 reads and normalizes both reports, emits URL, external, and diagnostics
-diff changes, and prints a concise summary. Fixture regression coverage is
-available in test-report-diff.mjs.`);
+Reads and normalizes both reports, emits URL, external, and diagnostics diff
+changes, and prints a concise summary. Fixture regression coverage is available
+in test-report-diff.mjs.`);
 }
 
 function parseArgs(argv) {
