@@ -202,8 +202,8 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 細分實作順序：
 
-1. P6.1 CLI skeleton：新增 `report-diff.mjs`，支援 `old-report.json`、`new-report.json`、`--output diff.json`、`--help`，先輸出空的合法 root shape，不做實際 diff。
-2. P6.2 Report loading / normalization：實作 `readReport()` 與 `normalizeReport()`，支援 legacy report warning、`checked[]`、`broken[]` fallback、`externalLinks[]`、duplicate key warning 與 diagnostics extraction。
+1. P6.1 CLI skeleton：已完成。新增 `report-diff.mjs`，支援 `old-report.json`、`new-report.json`、`--output diff.json`、`--help`，先輸出空的合法 root shape，不做實際 diff。
+2. P6.2 Report loading / normalization：已完成。實作 `readReport()` 與 `normalizeReport()`，支援 legacy report warning、UTF-8 BOM JSON、`checked[]`、`broken[]` fallback、`externalLinks[]`、duplicate key warning 與 diagnostics extraction。
 3. P6.3 Fixture regression runner：用 `fixtures/reports/index.json` 跑 4 組 golden cases；初期檢查 CLI 可輸出、warnings 合理與 root required fields，後續逐步加入 signal assertion。
 4. P6.4 URL diff：實作 `added`、`removed`、`changed`、`newIssue`、`resolvedIssue`、`persistentIssue`、`confidenceIncreased`、`confidenceDecreased`；驗收 `404-to-200`、`200-to-404`、`needs-review-to-confirmed-missing`。
 5. P6.5 External diff：實作 `externalChanges`、`riskIncreased`、`riskDecreased`；以 `info < low < medium < high` 判斷風險升降，risk 缺少時才 fallback governance order；驗收 `external-risk-low-to-high`。
