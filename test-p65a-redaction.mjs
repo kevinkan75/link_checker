@@ -82,6 +82,7 @@ async function main() {
       maxPages: 1,
       retryCount: 0,
       confirm404: false,
+      allowLocalhost: true,
       concurrency: 2,
       perHostConcurrency: 2,
       requestDelayMs: 0,

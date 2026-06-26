@@ -240,7 +240,7 @@ Report root：
 }
 ```
 
-P6.5a-1 起，scan report 使用 `schemaVersion: "1.1.0"`，`generator.name` 為 `link-checker.mjs`。最低契約草案位於 `schemas/report.schema.json`。
+P6.5b-1 起，scan report 使用 `schemaVersion: "1.2.0"`，`generator.name` 為 `link-checker.mjs`。`1.1.0` 代表 P6.5a 輸出契約、redaction 與 body/source limit 基線；`1.2.0` 起加入 URL security policy。最低契約草案位於 `schemas/report.schema.json`。
 
 ### 7.1 options
 
@@ -252,6 +252,7 @@ P6.5a-1 起，scan report 使用 `schemaVersion: "1.1.0"`，`generator.name` 為
 - HTTP：`timeoutMs`、`retryCount`、`maxRedirects`、`userAgent`、`acceptLanguage`
 - behavior：`checkExternal`、`preferGet`、`externalReferer`、`conservativeMode`
 - compatibility：`canonicalStrategy`、`legacyTls`、`systemCa`
+- security：`blockPrivateIp`、`allowLocalhost`、`allowPrivateIp`
 - confirmation：`confirm404`、confirmation limits and delays
 - rules：`domainCategoryRulesSource`、`externalRiskRulesSource`、`siteLinkRulesSource`
 - SPA：`spaLinks`
@@ -262,6 +263,8 @@ P6.5a-1 起，scan report 使用 `schemaVersion: "1.1.0"`，`generator.name` 為
 P6.5a-2 起，report、CSV、events log 與 manifest 中的 URL 顯示值會依 `redactQueryKeys` 遮罩敏感 query value。此遮罩只作用於輸出層，實際 request URL、inventory key 與 fetch cache 不使用遮罩後 URL。
 
 P6.5a-4 起，request `Accept` 依 URL intent 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。`Accept-Encoding` 啟用 `gzip` / `deflate`，`br` 暫不啟用。Keep-Alive 預設開啟，仍由 global concurrency 與 `perHostConcurrency` 控制併發；`--no-keep-alive` 會送出 `Connection: close` 並停用 legacy HTTP agent keep-alive。
+
+P6.5b-1 起，URL security policy 預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與非 HTTP(S) scheme。一般 hostname 在 request 前會先 DNS resolve 後檢查，redirect 目標也會重新檢查。可信任本機掃描可用 `--allow-localhost`，內網相容情境可用 `--allow-private-ip`；兩者互不隱含，metadata service IP 仍會阻擋。被阻擋的 result 使用 `classification: "security_blocked"`，並在 result `securityPolicy` 中記錄原因、hostname、address 與 address type。
 
 ### 7.2 summary
 

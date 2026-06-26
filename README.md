@@ -34,11 +34,13 @@
 
 ## 目前狀態與邊界
 
-目前已完成 P0-P6 的功能基線與 P6.5a 低風險穩定性修補；後續主線是 P6.5b 的稽查語意與誤判降低。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
+目前已完成 P0-P6 的功能基線、P6.5a 低風險穩定性修補與 P6.5b-1 SSRF / URL security policy。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
 
 現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。JSON 輸出以內容欄位記錄 `schemaVersion` / `generator`，並以同目錄 `manifest.json` 追溯工具、schema、runtime 與輸出清單；一般日常輸出不預設在檔名加版本號。report、CSV 與事件 log 預設會遮罩高風險 query value，實際 request URL 不受遮罩影響。
 
 請求層會依 URL 類型分流 `Accept` header，page-like 使用 document request Accept，asset/media/document 使用 `*/*`；並啟用 `gzip` / `deflate`。Keep-Alive 預設開啟，仍受全域與 per-host concurrency 控制，可用 `--no-keep-alive` 回退。
+
+安全邊界預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與非 HTTP(S) scheme；redirect 後也會重新檢查目標。可信任的本機掃描可用 `--allow-localhost`，內網相容情境可用 `--allow-private-ip`；兩者互不隱含，metadata IP 仍會阻擋。
 
 工具會嘗試降低誤判並保存防護層診斷，但不繞過 WAF/Bot 防護，也不驗證使用者是否取得掃描授權。若網站政策、robots.txt、登入權限或防護服務限制自動化請求，結果仍需人工判讀。
 
@@ -190,6 +192,9 @@ GUI 尚未提供規則檔輸入欄位；若需要外連治理規則或站台特�
 - `--accept-language <value>`：送出的語言標頭，預設 `zh-TW,zh;q=0.9,en;q=0.8`。
 - `--user-agent <value>`：送出的 User-Agent。預設使用瀏覽器相容字串並包含 `LocalLinkChecker/1.0` 識別。
 - `--no-keep-alive`：送出 `Connection: close` 並停用 legacy HTTP agent keep-alive；預設 Keep-Alive 開啟。
+- `--block-private-ip`：阻擋 localhost、private、link-local、metadata 與 reserved IP，預設開啟。
+- `--allow-localhost`：允許 localhost / loopback 目標，只建議用於可信任的本機掃描。
+- `--allow-private-ip`：允許內網/private IP 目標，但不包含 localhost，metadata service IP 仍會阻擋。
 - `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
 - `--external-risk-rules <file-or-url>`：載入外連治理規則 JSON，可用白名單、黑名單與觀察名單調整 `externalRisk`。
 - `--site-link-rules <file-or-url>`：載入 SPA/CMS payload 欄位推導規則，例如從 `linkUrl`、`youtubeId` 或站台 route 欄位產生可檢查 URL。
@@ -463,7 +468,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版與 P6.5a 已完成，P6.5b 建議先做 SSRF / URL security policy。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a 與 P6.5b-1 已完成，後續規劃 partial report。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。

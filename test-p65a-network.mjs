@@ -67,6 +67,7 @@ async function assertHeadersAndCompression() {
     const checker = new LinkChecker(`${origin}/`, {
       retryCount: 0,
       confirm404: false,
+      allowLocalhost: true,
       preferGet: true,
       requestDelayMs: 0,
     });
@@ -104,6 +105,7 @@ async function assertNoKeepAliveHeader() {
       keepAlive: false,
       retryCount: 0,
       confirm404: false,
+      allowLocalhost: true,
       preferGet: true,
       requestDelayMs: 0,
     });
@@ -134,6 +136,7 @@ async function assertPerHostConcurrencyLimit() {
       perHostConcurrency: 2,
       retryCount: 0,
       confirm404: false,
+      allowLocalhost: true,
       preferGet: true,
       requestDelayMs: 0,
     });

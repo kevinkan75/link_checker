@@ -91,6 +91,7 @@ async function assertBodyLimits() {
       maxPages: 1,
       retryCount: 0,
       confirm404: false,
+      allowLocalhost: true,
       preferGet: true,
       concurrency: 2,
       perHostConcurrency: 2,

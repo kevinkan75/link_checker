@@ -2,8 +2,10 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { lookup as dnsLookup } from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
+import net from "node:net";
 import tls from "node:tls";
 import { gunzipSync, inflateSync } from "node:zlib";
 import { createHash } from "node:crypto";
@@ -12,7 +14,7 @@ import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const TOOL_VERSION = "0.1.0";
-const REPORT_SCHEMA_VERSION = "1.1.0";
+const REPORT_SCHEMA_VERSION = "1.2.0";
 const DEFAULT_MAX_HTML_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_BODY_PREVIEW_BYTES = 4096;
 const DEFAULT_MAX_DOWNLOAD_PROBE_BYTES = 64 * 1024;
@@ -46,6 +48,7 @@ const ACCEPT_ENCODING_HEADER = "gzip, deflate";
 const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
 const SPA_LINK_MODES = new Set(["auto", "off", "strict"]);
 const TRACKING_QUERY_KEYS = new Set(["fbclid", "gclid", "msclkid", "yclid"]);
+const ALLOWED_REQUEST_PROTOCOLS = new Set(["http:", "https:"]);
 const BODY_SIGNATURE_SNIPPET_LENGTH = 240;
 const WAF_HEADER_NAMES = [
   "server",
@@ -111,6 +114,9 @@ const DEFAULTS = {
   canonicalStrategy: "safe",
   legacyTls: false,
   systemCa: false,
+  blockPrivateIp: true,
+  allowLocalhost: false,
+  allowPrivateIp: false,
   redactSensitiveQuery: true,
   redactQueryKeys: DEFAULT_REDACT_QUERY_KEYS,
   maxHtmlBytes: DEFAULT_MAX_HTML_BYTES,
@@ -504,6 +510,8 @@ class LinkChecker {
     this.options.maxBodyPreviewBytes = normalizeByteLimit(this.options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
     this.options.maxDownloadProbeBytes = normalizeByteLimit(this.options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
     this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+    this.securityPolicy = normalizeSecurityPolicy(this.options);
+    Object.assign(this.options, this.securityPolicy);
     this.connectionOptions = normalizeConnectionOptions(this.options);
     Object.assign(this.options, this.connectionOptions);
     this.agents = createConnectionAgents(this.connectionOptions);
@@ -993,6 +1001,7 @@ class LinkChecker {
       maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
       connectionOptions: this.connectionOptions,
       agents: this.agents,
+      securityPolicy: this.securityPolicy,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
     });
 
@@ -1055,6 +1064,7 @@ class LinkChecker {
         maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
         connectionOptions: this.connectionOptions,
         agents: this.agents,
+        securityPolicy: this.securityPolicy,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
 
@@ -1105,6 +1115,7 @@ class LinkChecker {
         maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
         connectionOptions: this.connectionOptions,
         agents: this.agents,
+        securityPolicy: this.securityPolicy,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
       result.confirmedWithReferer = source.page;
@@ -1147,6 +1158,7 @@ class LinkChecker {
           maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
           connectionOptions: this.connectionOptions,
           agents: this.agents,
+          securityPolicy: this.securityPolicy,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         });
         fallbackResult.normalizedFrom = url;
@@ -1291,6 +1303,7 @@ class LinkChecker {
       maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
       connectionOptions: this.connectionOptions,
       agents: this.agents,
+      securityPolicy: this.securityPolicy,
       scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
     });
 
@@ -1378,6 +1391,9 @@ class LinkChecker {
         maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
         maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
         maxSourcesPerUrl: this.options.maxSourcesPerUrl,
+        blockPrivateIp: this.options.blockPrivateIp,
+        allowLocalhost: this.options.allowLocalhost,
+        allowPrivateIp: this.options.allowPrivateIp,
         keepAlive: this.options.keepAlive,
         maxSockets: this.options.maxSockets,
         maxFreeSockets: this.options.maxFreeSockets,
@@ -1386,6 +1402,7 @@ class LinkChecker {
         externalRiskRulesSource: this.options.externalRiskRulesSource || null,
         siteLinkRulesSource: this.options.siteLinkRulesSource || null,
       },
+      securityPolicy: this.securityPolicy,
       summary: {
         pagesCrawled: this.crawledPages.size,
         urlsChecked: checked.length,
@@ -1660,6 +1677,16 @@ function normalizeConnectionOptions(options = {}) {
   };
 }
 
+function normalizeSecurityPolicy(options = {}) {
+  return {
+    blockPrivateIp: options.blockPrivateIp !== false,
+    allowLocalhost: options.allowLocalhost === true,
+    allowPrivateIp: options.allowPrivateIp === true,
+    metadataIpBlocked: true,
+    allowedProtocols: [...ALLOWED_REQUEST_PROTOCOLS].map((protocol) => protocol.replace(":", "")),
+  };
+}
+
 function createConnectionAgents(connectionOptions) {
   const agentOptions = {
     keepAlive: connectionOptions.keepAlive,
@@ -1802,6 +1829,7 @@ async function fetchUrl(url, {
   maxDownloadProbeBytes = DEFAULTS.maxDownloadProbeBytes,
   connectionOptions = normalizeConnectionOptions(DEFAULTS),
   agents = createConnectionAgents(connectionOptions),
+  securityPolicy = normalizeSecurityPolicy(DEFAULTS),
   scheduleRequest,
 }) {
   const started = performance.now();
@@ -1825,6 +1853,7 @@ async function fetchUrl(url, {
       maxDownloadProbeBytes,
       connectionOptions,
       agents,
+      securityPolicy,
       scheduleRequest,
       started,
     });
@@ -1857,6 +1886,7 @@ async function fetchUrlOnce(url, {
   maxDownloadProbeBytes,
   connectionOptions,
   agents,
+  securityPolicy,
   scheduleRequest,
   started,
 }) {
@@ -1876,6 +1906,7 @@ async function fetchUrlOnce(url, {
         maxDownloadProbeBytes,
         connectionOptions,
         agents,
+        securityPolicy,
         readBody: true,
         scheduleRequest,
         started,
@@ -1897,6 +1928,7 @@ async function fetchUrlOnce(url, {
         maxDownloadProbeBytes,
         connectionOptions,
         agents,
+        securityPolicy,
         readBody: false,
         scheduleRequest,
         started,
@@ -1917,6 +1949,7 @@ async function fetchUrlOnce(url, {
       maxDownloadProbeBytes,
       connectionOptions,
       agents,
+      securityPolicy,
       readBody: false,
       scheduleRequest,
       started,
@@ -1939,6 +1972,7 @@ async function fetchUrlOnce(url, {
       maxDownloadProbeBytes,
       connectionOptions,
       agents,
+      securityPolicy,
       readBody: false,
       scheduleRequest,
       started,
@@ -2061,6 +2095,262 @@ function enableSystemCa() {
   return true;
 }
 
+async function evaluateUrlSecurity(url, policy = normalizeSecurityPolicy(DEFAULTS), resolveHostname = dnsLookup) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return buildSecurityDecision(false, {
+      url,
+      reason: "blocked_invalid_url",
+      diagnosis: "URL is invalid and was not requested.",
+    });
+  }
+
+  if (!ALLOWED_REQUEST_PROTOCOLS.has(parsed.protocol)) {
+    return buildSecurityDecision(false, {
+      url,
+      reason: "blocked_scheme",
+      protocol: parsed.protocol,
+      diagnosis: `URL scheme ${parsed.protocol} is not allowed for HTTP scanning.`,
+    });
+  }
+
+  const hostname = normalizeSecurityHostname(parsed.hostname);
+  const hostnameClass = classifyHostname(hostname);
+  if (hostnameClass) {
+    return securityDecisionForAddress({
+      url,
+      hostname,
+      address: hostname,
+      family: hostnameClass.family,
+      classification: hostnameClass,
+      policy,
+    });
+  }
+
+  if (isLocalhostName(hostname)) {
+    if (policy.allowLocalhost) {
+      return buildSecurityDecision(true, { url, hostname, reason: null });
+    }
+    return buildSecurityDecision(false, {
+      url,
+      hostname,
+      reason: "blocked_localhost",
+      diagnosis: "Localhost hostnames are blocked by default. Use --allow-localhost only for trusted local scans.",
+    });
+  }
+
+  let resolved;
+  try {
+    resolved = await resolveHostname(hostname, { all: true, verbatim: true });
+  } catch {
+    return buildSecurityDecision(true, { url, hostname, reason: null });
+  }
+
+  for (const entry of resolved) {
+    const classification = classifyIpAddress(entry.address);
+    const decision = securityDecisionForAddress({
+      url,
+      hostname,
+      address: entry.address,
+      family: entry.family,
+      classification,
+      policy,
+    });
+    if (!decision.allowed) {
+      return decision;
+    }
+  }
+
+  return buildSecurityDecision(true, {
+    url,
+    hostname,
+    resolvedAddresses: resolved.map((entry) => entry.address),
+    reason: null,
+  });
+}
+
+function securityDecisionForAddress({ url, hostname, address, family, classification, policy }) {
+  if (!classification) {
+    return buildSecurityDecision(true, { url, hostname, address, family, reason: null });
+  }
+
+  const detail = {
+    url,
+    hostname,
+    address,
+    family,
+    addressType: classification.type,
+  };
+
+  if (classification.metadata) {
+    return buildSecurityDecision(false, {
+      ...detail,
+      reason: "blocked_metadata_ip",
+      diagnosis: "Metadata service IP addresses are always blocked.",
+    });
+  }
+
+  if (classification.loopback) {
+    if (policy.allowLocalhost || policy.blockPrivateIp === false) {
+      return buildSecurityDecision(true, { ...detail, reason: null });
+    }
+    return buildSecurityDecision(false, {
+      ...detail,
+      reason: "blocked_localhost",
+      diagnosis: "Loopback addresses are blocked by default. Use --allow-localhost only for trusted local scans.",
+    });
+  }
+
+  if (classification.privateLike) {
+    if (policy.allowPrivateIp || policy.blockPrivateIp === false) {
+      return buildSecurityDecision(true, { ...detail, reason: null });
+    }
+    return buildSecurityDecision(false, {
+      ...detail,
+      reason: `blocked_${classification.type}`,
+      diagnosis: "Private, link-local, reserved, and internal network addresses are blocked by default.",
+    });
+  }
+
+  return buildSecurityDecision(true, { ...detail, reason: null });
+}
+
+function buildSecurityDecision(allowed, detail = {}) {
+  return {
+    allowed,
+    ...detail,
+  };
+}
+
+function normalizeSecurityHostname(hostname) {
+  return String(hostname || "")
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/%.*$/, "")
+    .toLowerCase();
+}
+
+function isLocalhostName(hostname) {
+  return hostname === "localhost" || hostname.endsWith(".localhost");
+}
+
+function classifyHostname(hostname) {
+  if (net.isIP(hostname)) {
+    return classifyIpAddress(hostname);
+  }
+  return null;
+}
+
+function classifyIpAddress(address) {
+  const normalized = normalizeSecurityHostname(address);
+  if (net.isIP(normalized) === 4) {
+    return classifyIpv4Address(normalized);
+  }
+  if (net.isIP(normalized) === 6) {
+    return classifyIpv6Address(normalized);
+  }
+  return null;
+}
+
+function classifyIpv4Address(address) {
+  const parts = address.split(".").map((part) => Number.parseInt(part, 10));
+  const [a, b, c, d] = parts;
+  const base = { family: 4, type: "public", privateLike: false, loopback: false, metadata: false };
+
+  if (a === 169 && b === 254 && c === 169 && d === 254) {
+    return { ...base, type: "metadata_ip", privateLike: true, metadata: true };
+  }
+  if (a === 127) {
+    return { ...base, type: "localhost", privateLike: true, loopback: true };
+  }
+  if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) {
+    return { ...base, type: "private_ip", privateLike: true };
+  }
+  if (a === 169 && b === 254) {
+    return { ...base, type: "link_local_ip", privateLike: true };
+  }
+  if (a === 0 || (a === 100 && b >= 64 && b <= 127) || a >= 224 || address === "255.255.255.255") {
+    return { ...base, type: "reserved_ip", privateLike: true };
+  }
+  if ((a === 192 && b === 0 && c === 0)
+    || (a === 192 && b === 0 && c === 2)
+    || (a === 198 && (b === 18 || b === 19))
+    || (a === 198 && b === 51 && c === 100)
+    || (a === 203 && b === 0 && c === 113)) {
+    return { ...base, type: "reserved_ip", privateLike: true };
+  }
+
+  return base;
+}
+
+function classifyIpv6Address(address) {
+  const normalized = normalizeSecurityHostname(address);
+  const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i)?.[1];
+  if (mappedIpv4) {
+    const mapped = classifyIpv4Address(mappedIpv4);
+    return {
+      ...mapped,
+      family: 6,
+      type: mapped.metadata ? "metadata_ip" : mapped.loopback ? "localhost" : mapped.privateLike ? mapped.type : "public",
+      ipv4MappedAddress: mappedIpv4,
+    };
+  }
+  const mappedHexIpv4 = parseHexMappedIpv4(normalized);
+  if (mappedHexIpv4) {
+    const mapped = classifyIpv4Address(mappedHexIpv4);
+    return {
+      ...mapped,
+      family: 6,
+      type: mapped.metadata ? "metadata_ip" : mapped.loopback ? "localhost" : mapped.privateLike ? mapped.type : "public",
+      ipv4MappedAddress: mappedHexIpv4,
+    };
+  }
+
+  const firstHextet = Number.parseInt(normalized.split(":").find(Boolean) || "0", 16);
+  const base = { family: 6, type: "public", privateLike: false, loopback: false, metadata: false };
+
+  if (normalized === "::1") {
+    return { ...base, type: "localhost", privateLike: true, loopback: true };
+  }
+  if (normalized === "::") {
+    return { ...base, type: "reserved_ip", privateLike: true };
+  }
+  if ((firstHextet & 0xffc0) === 0xfe80) {
+    return { ...base, type: "link_local_ip", privateLike: true };
+  }
+  if ((firstHextet & 0xfe00) === 0xfc00) {
+    return { ...base, type: "private_ip", privateLike: true };
+  }
+  if ((firstHextet & 0xff00) === 0xff00 || normalized.startsWith("2001:db8:")) {
+    return { ...base, type: "reserved_ip", privateLike: true };
+  }
+
+  return base;
+}
+
+function parseHexMappedIpv4(address) {
+  if (!address.startsWith("::ffff:")) {
+    return null;
+  }
+  const parts = address.slice("::ffff:".length).split(":");
+  if (parts.length !== 2) {
+    return null;
+  }
+  const high = Number.parseInt(parts[0], 16);
+  const low = Number.parseInt(parts[1], 16);
+  if (![high, low].every((part) => Number.isInteger(part) && part >= 0 && part <= 0xffff)) {
+    return null;
+  }
+  return [
+    (high >> 8) & 0xff,
+    high & 0xff,
+    (low >> 8) & 0xff,
+    low & 0xff,
+  ].join(".");
+}
+
 async function request(url, method, {
   timeoutMs,
   maxRedirects,
@@ -2075,6 +2365,7 @@ async function request(url, method, {
   maxDownloadProbeBytes,
   connectionOptions,
   agents,
+  securityPolicy,
   readBody,
   scheduleRequest,
   started,
@@ -2085,6 +2376,23 @@ async function request(url, method, {
   const seenUrls = new Set([normalizeRedirectVisitUrl(currentUrl)]);
 
   while (true) {
+    const securityCheck = await evaluateUrlSecurity(currentUrl, securityPolicy);
+    if (!securityCheck.allowed) {
+      return buildSecurityBlockedResult({
+        url,
+        blockedUrl: currentUrl,
+        method,
+        currentMethod,
+        referer,
+        securityCheck,
+        redirectChain,
+        maxRedirects,
+        longRedirectThreshold,
+        canonicalStrategy,
+        started,
+      });
+    }
+
     const response = await scheduleRequest(currentUrl, () => rawRequest(currentUrl, currentMethod, {
       timeoutMs,
       userAgent,
@@ -2124,6 +2432,25 @@ async function request(url, method, {
         status: response.status,
         to: nextUrl,
       });
+
+      const redirectSecurityCheck = await evaluateUrlSecurity(nextUrl, securityPolicy);
+      if (!redirectSecurityCheck.allowed) {
+        await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
+        return buildSecurityBlockedResult({
+          url,
+          blockedUrl: nextUrl,
+          method,
+          currentMethod: getRedirectMethod(currentMethod, response.status),
+          referer,
+          securityCheck: redirectSecurityCheck,
+          redirectChain,
+          maxRedirects,
+          longRedirectThreshold,
+          canonicalStrategy,
+          started,
+          redirectStatus: response.status,
+        });
+      }
 
       if (redirectChain.length > maxRedirects) {
         await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
@@ -2680,11 +3007,84 @@ function buildRedirectFailureResult({
   return result;
 }
 
+function buildSecurityBlockedResult({
+  url,
+  blockedUrl,
+  method,
+  currentMethod,
+  referer,
+  securityCheck,
+  redirectChain,
+  maxRedirects,
+  longRedirectThreshold,
+  canonicalStrategy,
+  started,
+  redirectStatus = null,
+}) {
+  const redirectIssue = redirectChain.length > 0 ? `redirect_to_${securityCheck.reason}` : null;
+  const issueType = redirectIssue || securityCheck.reason || "blocked_by_security_policy";
+  const result = {
+    url,
+    canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
+    checkedAt: new Date().toISOString(),
+    ok: false,
+    status: redirectStatus,
+    method,
+    finalMethod: currentMethod,
+    finalUrl: blockedUrl,
+    contentType: null,
+    contentLength: null,
+    cacheHeaders: emptyCacheHeaders(),
+    server: null,
+    wafHeaders: {},
+    blockedReason: securityCheck.reason || "blocked_by_security_policy",
+    blockedRuleId: null,
+    bodySignature: null,
+    suspectedWaf: false,
+    suspectedBot: false,
+    requestReferer: referer || null,
+    bodyBytesRead: 0,
+    bodyTruncated: false,
+    elapsedMs: Math.round(performance.now() - started),
+    error: "Blocked by URL security policy.",
+    classification: "security_blocked",
+    issueType,
+    diagnosis: securityCheck.diagnosis || "URL was blocked by the configured security policy before an HTTP request was made.",
+    securityPolicy: {
+      allowed: false,
+      reason: securityCheck.reason || null,
+      url: securityCheck.url || blockedUrl,
+      hostname: securityCheck.hostname || null,
+      address: securityCheck.address || null,
+      addressFamily: securityCheck.family || null,
+      addressType: securityCheck.addressType || null,
+      protocol: securityCheck.protocol || null,
+    },
+  };
+
+  applyRedirectMetadata(result, {
+    originalUrl: url,
+    redirectChain,
+    maxRedirects,
+    longRedirectThreshold,
+  });
+
+  if (!result.redirectIssues.includes(issueType)) {
+    result.redirectIssues.push(issueType);
+  }
+  if (!result.redirectLabels.includes(issueType)) {
+    result.redirectLabels.push(issueType);
+  }
+
+  return result;
+}
+
 function shouldRetryResult(result) {
   if (
     result.ok
     || result.classification === "protected"
     || result.classification === "redirect_error"
+    || result.classification === "security_blocked"
     || result.status === 404
   ) {
     return false;
@@ -4652,6 +5052,12 @@ function getIssueTypeLabel(issueType) {
     redirect_to_error: "Redirects ending in errors",
     too_many_redirects: "Too many redirects",
     redirect_loop: "Redirect loops",
+    blocked_scheme: "Blocked scheme",
+    blocked_localhost: "Blocked localhost",
+    blocked_private_ip: "Blocked private IP",
+    blocked_link_local_ip: "Blocked link-local IP",
+    blocked_metadata_ip: "Blocked metadata IP",
+    blocked_reserved_ip: "Blocked reserved IP",
     timeout: "Timeout",
     network_error: "Network errors",
     unknown_error: "Unknown errors",
@@ -4694,6 +5100,9 @@ function formatIssueReason(result) {
     const provider = result.protection?.provider ? `: ${result.protection.provider}` : "";
     const status = result.status ? `HTTP ${result.status}` : "blocked";
     return `Blocked by protection layer${provider} (${status})`;
+  }
+  if (result.classification === "security_blocked") {
+    return `Blocked by security policy (${result.securityPolicy?.reason || result.issueType})`;
   }
   if (result.classification === "access_denied" || result.issueType === "access_denied") {
     return "Access denied / needs review (HTTP 403)";
@@ -4796,6 +5205,21 @@ function parseArgs(argv) {
     if (arg === "--system-ca") {
       options.systemCa = true;
       explicitOptions.add("systemCa");
+      continue;
+    }
+    if (arg === "--block-private-ip") {
+      options.blockPrivateIp = true;
+      explicitOptions.add("blockPrivateIp");
+      continue;
+    }
+    if (arg === "--allow-private-ip") {
+      options.allowPrivateIp = true;
+      explicitOptions.add("allowPrivateIp");
+      continue;
+    }
+    if (arg === "--allow-localhost") {
+      options.allowLocalhost = true;
+      explicitOptions.add("allowLocalhost");
       continue;
     }
     if (arg === "--keep-alive") {
@@ -5052,6 +5476,7 @@ function parseArgs(argv) {
   options.maxBodyPreviewBytes = normalizeByteLimit(options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
   options.maxDownloadProbeBytes = normalizeByteLimit(options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
   options.maxSourcesPerUrl = normalizeIntegerLimit(options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+  Object.assign(options, normalizeSecurityPolicy(options));
   Object.assign(options, normalizeConnectionOptions(options));
   return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource, siteLinkRulesSource };
 }
@@ -5222,6 +5647,9 @@ Options:
   --external-referer  Send the source page as Referer for external link checks.
   --legacy-tls        Allow legacy TLS ciphers for sites with weak DH parameters.
   --system-ca         Restart Node with --use-system-ca for OS/browser-trusted roots.
+  --block-private-ip  Block localhost, private, link-local, metadata, and reserved IPs. Default: on.
+  --allow-localhost   Allow localhost and loopback targets for trusted local scans.
+  --allow-private-ip  Allow private/internal IP targets except metadata service IPs.
   --confirm-404       Re-check same-site 404/410 results after the main scan. Default: on.
   --no-confirm-404    Disable the post-scan 404/410 confirmation stage.
   --redact-sensitive-query
@@ -5425,6 +5853,7 @@ export {
   applyConservativeDefaults,
   buildOutputManifest,
   canonicalizeUrl,
+  evaluateUrlSecurity,
   isSystemCaEnabled,
   redactSensitiveQueryValue,
 };

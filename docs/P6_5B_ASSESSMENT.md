@@ -17,6 +17,7 @@
 ## 現況
 
 - P6.5a 已完成輸出契約、redaction、sources/body limit 與 Header / Keep-Alive。
+- P6.5b-1 已完成 SSRF / URL security policy、redirect 後重檢、CLI fallback 與 security policy report 欄位。
 - WAF / Bot 診斷已有基礎欄位：`protection`、`suspectedWaf`、`suspectedBot`、body pattern 與 header evidence。
 - 404 confirmation 已避開 `protected` / suspected WAF / Bot 結果，避免把防護頁誤判為一般 404。
 - README 已明確說明目前不執行 robots.txt path enforcement，也沒有 `--authorized-scan` 宣告欄位。
@@ -26,21 +27,21 @@
 
 ### P6.5b-1：SSRF / URL security policy
 
-優先級：最高。
+狀態：已完成第一版。
 
 交付：
 
-- 預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與 blocked scheme。
-- request 前對 hostname 做 DNS resolve 後檢查。
-- redirect 後重新檢查 target URL 與 resolved IP。
-- CLI 提供 `--block-private-ip` 預設開啟、`--allow-localhost`、`--allow-private-ip`。
-- report 記錄 `securityPolicy` 與 per-result security issue labels。
+- 已預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與 blocked scheme。
+- 已在 request 前對 hostname 做 DNS resolve 後檢查。
+- 已在 redirect 後重新檢查 target URL 與 resolved IP。
+- CLI 已提供 `--block-private-ip` 預設開啟、`--allow-localhost`、`--allow-private-ip`。
+- report 已記錄 `securityPolicy` 與 per-result security issue labels。
 
 驗收：
 
 - `http://127.0.0.1`、`http://localhost`、`http://169.254.169.254` 預設不請求。
 - public hostname 解析到 private IP 時預設不請求。
-- `--allow-localhost` 不得自動允許所有 private IP。
+- `--allow-localhost` 不得自動允許所有 private IP；`--allow-private-ip` 不得自動允許 localhost。
 - redirect 到 private IP、metadata IP 或 blocked scheme 時停止 follow 並標記 security issue。
 - IPv6 loopback、link-local、unique local 與 IPv4-mapped IPv6 需納入測試。
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://local-link-checker.test/schemas/report.schema.json",
   "title": "Local Link Checker Scan Report",
-  "description": "Draft schema for the P6.5a scan report contract. This schema captures the minimum stable root, options, summary, checked, broken, and externalLinks shape without constraining every diagnostic field.",
+  "description": "Draft schema for the P6.5 scan report contract. This schema captures the minimum stable root, options, summary, checked, broken, and externalLinks shape without constraining every diagnostic field.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -19,7 +19,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "generator": {
       "type": "object",
@@ -47,6 +47,9 @@
     },
     "summary": {
       "$ref": "#/$defs/summary"
+    },
+    "securityPolicy": {
+      "$ref": "#/$defs/securityPolicy"
     },
     "checked": {
       "type": "array",
@@ -125,6 +128,29 @@
         },
         "keepAliveMsecs": {
           "$ref": "#/$defs/positiveInteger"
+        },
+        "blockPrivateIp": {
+          "type": "boolean"
+        },
+        "allowLocalhost": {
+          "type": "boolean"
+        },
+        "allowPrivateIp": {
+          "type": "boolean"
+        }
+      }
+    },
+    "securityPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "blockPrivateIp": { "type": "boolean" },
+        "allowLocalhost": { "type": "boolean" },
+        "allowPrivateIp": { "type": "boolean" },
+        "metadataIpBlocked": { "type": "boolean" },
+        "allowedProtocols": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     },
@@ -159,7 +185,11 @@
         "status": { "type": ["integer", "null"] },
         "checkedAt": { "type": ["string", "null"] },
         "bodyBytesRead": { "$ref": "#/$defs/nonNegativeInteger" },
-        "bodyTruncated": { "type": "boolean" }
+        "bodyTruncated": { "type": "boolean" },
+        "securityPolicy": {
+          "type": "object",
+          "additionalProperties": true
+        }
       }
     },
     "brokenItem": {
