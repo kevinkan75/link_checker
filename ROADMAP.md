@@ -6,11 +6,12 @@ P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二
 
 P6.5a 已完成輸出契約基線、redaction、sources 上限、response body limit 與 **Header / Accept-Encoding / Keep-Alive**。下一個主線收斂為 P6.5b 的稽查語意與誤判降低；Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
 
-目前 Roadmap 採納兩份分析文件：
+目前 Roadmap 採納下列分析與評估文件：
 
 - `Local_Link_Checker_分析文件_v5.1.md`：作為架構決策與 Roadmap 邊界。
 - `Local_Link_Checker_分析文件_v5.2.md`：作為工程落地補充，補安全、測試、schema、response limit、partial report、profile 與規則治理。
 - [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)：作為 P6.5a 實作前切分、風險與驗收建議；P6.5a 雖不改掃描語意，但因涉及 report 契約、redaction、body limit 與 Keep-Alive，實作風險以中等看待。
+- [docs/P6_5B_ASSESSMENT.md](docs/P6_5B_ASSESSMENT.md)：作為 P6.5b 實作前切分、風險與驗收建議；優先順序以 SSRF / URL security policy 為第一批。
 
 ## 階段總覽
 
@@ -20,7 +21,7 @@ P6.5a 已完成輸出契約基線、redaction、sources 上限、response body l
 | 1 | P6 前置 | 已完成 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
 | 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
 | 3 | P6.5a | 已完成 | schema/generator、manifest、redaction、response limit、sources 上限、Header / Accept-Encoding / Keep-Alive | robots / compliance 語意 |
-| 4 | P6.5b | P6.5a 後 | SSRF、WAF signature、Retry-After、partial report、robots summary、compliance | WAF/Bot 繞過 |
+| 4 | P6.5b | 待實作 | SSRF、partial report、robots / compliance、Retry-After、WAF schema | WAF/Bot 繞過 |
 | 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
 | 7 | P9 | 待規劃 | Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 空 UI 或未落地的展示層 |
@@ -261,21 +262,15 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6.5b：稽查語意與誤判降低
 
-狀態：P6.5a 後實作。此階段會新增 report 語意，需同步更新 CLI、GUI 顯示與 Analyzer fallback。
+狀態：待實作；實作前評估見 [docs/P6_5B_ASSESSMENT.md](docs/P6_5B_ASSESSMENT.md)。此階段會新增 report 語意、掃描安全邊界與合規紀錄，需同步更新 CLI、GUI 顯示與 Analyzer fallback。
 
-交付項：
+建議切分：
 
-1. WAF signature detection：保存 provider、header evidence、body signature rule id，不保存完整 body。
-2. confirmation WAF 感知：二次確認遇 suspected WAF / bot 時標示 `needs_review`。
-3. SSRF / URL security policy：預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與 blocked scheme。
-4. DNS resolve 後檢查：public hostname 若解析到 private / metadata IP，預設不請求；redirect 後也需重新檢查。
-5. Retry-After / host cooldown：尊重 429 / 503 的 `Retry-After`，但設定等待上限，且不阻塞其他 host。
-6. Partial report `runStatus`：GUI stop、queue stop、執行期錯誤需標記 `partial`、`stoppedByUser` 或 `failed`。
-7. `summary.robotsTxt`：記錄 start origin robots.txt、Crawl-delay、全站 Disallow、effective delay / concurrency。
-8. `compliance` root 欄位：記錄 purpose、scope、authorizedScanDeclared、robotsTxtPolicy、responseBodyStored、bodyHashEnabled。
-9. `--authorized-scan` / `--authorization-note` / `--no-robots`：只記錄使用者宣告與工具策略，不驗證授權。
-10. bodyHash 策略調整：預設正式 report 不保存內容指紋，僅 diagnostics opt-in 可啟用。
-11. host block-rate diagnostics：提供高 403 / 429 / suspected WAF 比例提示，但不自動 aggressive retry。
+1. P6.5b-1 SSRF / URL security policy：預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與 blocked scheme；request 前 DNS resolve 後檢查，redirect 後也重新檢查。
+2. P6.5b-2 `runStatus` / partial report：GUI stop、queue stop、執行期錯誤需標記 `partial`、`stoppedByUser` 或 `failed`，且 Analyzer / diff 不得誤判為完整結果。
+3. P6.5b-3 robots / compliance 記錄：`summary.robotsTxt`、`scanPolicy`、`compliance` root 欄位、`--authorized-scan` / `--authorization-note` / `--no-robots`；只記錄使用者宣告與工具策略，不驗證授權。
+4. P6.5b-4 Retry-After / host diagnostics：尊重 429 / 503 的 `Retry-After`，但設定等待上限，且不阻塞其他 host；提供高 403 / 429 / suspected WAF 比例提示。
+5. P6.5b-5 WAF signature schema 收斂：保存 provider、header evidence、body signature rule id，不保存完整 body；bodyHash 預設關閉，僅 diagnostics opt-in 可啟用。
 
 驗收：
 

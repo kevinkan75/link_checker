@@ -9,6 +9,7 @@
 - [P6_PREFLIGHT_ASSESSMENT.md](P6_PREFLIGHT_ASSESSMENT.md)：P6 實作前的前置完成度與測試補強評估。
 - [P6_IMPLEMENTATION_ANALYSIS.md](P6_IMPLEMENTATION_ANALYSIS.md)：P6 實作範圍、切分、驗收與風險分析。
 - [P6_5A_ASSESSMENT.md](P6_5A_ASSESSMENT.md)：P6.5a 實作前評估、切分、風險與驗收建議。
+- [P6_5B_ASSESSMENT.md](P6_5B_ASSESSMENT.md)：P6.5b 實作前評估、切分、風險與驗收建議。
 - [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)：已完成里程碑、驗收矩陣與設計理由。
 - [rules/cec-site-link-rules.json](rules/cec-site-link-rules.json)：CEC site link rules 範例。
 
@@ -22,3 +23,4 @@
 - P0-P5.5 完成紀錄集中在 `ROADMAP_HISTORY.md`。
 - P6 report-to-report diff 第一版已完成，實作入口是根目錄的 `report-diff.mjs`，測試入口是 `test-report-diff.mjs`。
 - P6.5a-1 輸出契約基線、P6.5a-2 redaction、P6.5a-3 sources/body limit 與 P6.5a-4 Header/Keep-Alive 已完成；後續主線為 P6.5b。
+- P6.5b 建議先做 SSRF / URL security policy，再做 partial report、robots / compliance、Retry-After / host diagnostics 與 WAF schema 收斂。

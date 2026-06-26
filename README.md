@@ -34,7 +34,7 @@
 
 ## 目前狀態與邊界
 
-目前已完成 P0-P6 的功能基線與 P6.5a 低風險穩定性修補。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
+目前已完成 P0-P6 的功能基線與 P6.5a 低風險穩定性修補；後續主線是 P6.5b 的稽查語意與誤判降低。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
 
 現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。JSON 輸出以內容欄位記錄 `schemaVersion` / `generator`，並以同目錄 `manifest.json` 追溯工具、schema、runtime 與輸出清單；一般日常輸出不預設在檔名加版本號。report、CSV 與事件 log 預設會遮罩高風險 query value，實際 request URL 不受遮罩影響。
 
@@ -463,7 +463,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版與 P6.5a 已完成，後續規劃 P6.5b。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版與 P6.5a 已完成，P6.5b 建議先做 SSRF / URL security policy。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
