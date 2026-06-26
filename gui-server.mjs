@@ -184,12 +184,26 @@ function createJob(input) {
   job.done = checker.run()
     .then((report) => {
       job.report = report;
-      job.state = checker.stopped ? "stopped" : "finished";
+      if (report.runStatus?.status === "failed") {
+        job.state = "failed";
+        job.error = report.runStatus.failureReason || "Scan failed";
+      } else {
+        job.state = report.runStatus?.status === "partial" || checker.stopped ? "stopped" : "finished";
+      }
       return saveJobArtifacts(job);
     })
     .then(() => {
       sendJobEvent(job, "status", reporter.snapshot());
-      sendJobEvent(job, "complete", buildCompletePayload(job));
+      if (job.state === "failed") {
+        sendJobEvent(job, "error", {
+          message: job.error,
+          logDir: job.logDir,
+          logRelativePath: job.logRelativePath,
+          logError: job.logError,
+        });
+      } else {
+        sendJobEvent(job, "complete", buildCompletePayload(job));
+      }
       return job;
     })
     .catch(async (error) => {

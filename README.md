@@ -34,7 +34,7 @@
 
 ## 目前狀態與邊界
 
-目前已完成 P0-P6 的功能基線、P6.5a 低風險穩定性修補與 P6.5b-1 SSRF / URL security policy。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
+目前已完成 P0-P6 的功能基線、P6.5a 低風險穩定性修補、P6.5b-1 SSRF / URL security policy 與 P6.5b-2 `runStatus` / partial report。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan 與 robots path enforcement 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
 
 現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。JSON 輸出以內容欄位記錄 `schemaVersion` / `generator`，並以同目錄 `manifest.json` 追溯工具、schema、runtime 與輸出清單；一般日常輸出不預設在檔名加版本號。report、CSV 與事件 log 預設會遮罩高風險 query value，實際 request URL 不受遮罩影響。
 
@@ -125,7 +125,7 @@ GUI 每次檢查結束後會自動保存記錄檔到 `logs/` 目錄，資料夾�
 
 GUI 自動保存的資料夾通常包含：
 
-- `report.json`：完整掃描報告，包含 options、summary、checked、broken、externalLinks 等資料。
+- `report.json`：完整掃描報告，包含 options、summary、checked、broken、externalLinks 與 `runStatus` 等資料。
 - `summary.json`：摘要與主要統計。
 - `broken.csv`：問題連結清單，可用 Excel 開啟。
 - `external-links.csv`：外連 inventory、分類、風險與來源頁。
@@ -468,7 +468,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a 與 P6.5b-1 已完成，後續規劃 partial report。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b-1 與 P6.5b-2 已完成，後續規劃 robots / compliance。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。

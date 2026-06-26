@@ -241,6 +241,17 @@ select:focus {
   color: var(--warn);
 }
 
+.run-status-banner {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid #eed2a5;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .summary-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

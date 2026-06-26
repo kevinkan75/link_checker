@@ -564,9 +564,13 @@ class LinkChecker {
     this.reporter = options.reporter || null;
     this.currentPages = new Map();
     this.stopped = false;
+    this.stoppedByUser = false;
+    this.stopReason = null;
+    this.runStartedAt = null;
   }
 
   async run() {
+    this.runStartedAt = new Date().toISOString();
     this.reporter?.start(this);
     const workers = Array.from(
       { length: this.options.concurrency },
@@ -575,6 +579,10 @@ class LinkChecker {
     try {
       await Promise.all(workers);
       await this.confirmNotFoundResults();
+      return this.buildReport();
+    } catch (error) {
+      this.validationError = this.validationError || error;
+      this.stopped = true;
       return this.buildReport();
     } finally {
       this.reporter?.stop();
@@ -613,8 +621,10 @@ class LinkChecker {
     );
   }
 
-  stop() {
+  stop(reason = "stopped_by_user") {
     this.stopped = true;
+    this.stopReason = reason;
+    this.stoppedByUser = reason === "stopped_by_user";
   }
 
   async processPage({ url, depth }) {
@@ -1338,6 +1348,7 @@ class LinkChecker {
     const checkedByKind = this.buildCheckedByKind(checked);
     const spaDetection = this.buildSpaDetectionSummary();
     const scanQuality = this.buildScanQuality(checked, spaDetection, checkedByKind);
+    const runStatus = this.buildRunStatus();
     const broken = checked
       .filter((result) => !result.ok)
       .map((result) => {
@@ -1354,7 +1365,9 @@ class LinkChecker {
     const report = {
       schemaVersion: REPORT_SCHEMA_VERSION,
       generator: buildReportGenerator(),
-      startedAt: new Date().toISOString(),
+      startedAt: runStatus.startedAt,
+      completedAt: runStatus.completedAt,
+      runStatus,
       startUrl: this.startUrl,
       options: {
         maxPages: this.options.maxPages,
@@ -1436,6 +1449,30 @@ class LinkChecker {
       externalLinks,
     };
     return redactReportForOutput(report, this.options);
+  }
+
+  buildRunStatus() {
+    const completedAt = new Date().toISOString();
+    const startedAt = this.runStartedAt || completedAt;
+    const status = this.validationError ? "failed" : (this.stopped ? "partial" : "complete");
+    const runStatus = {
+      status,
+      startedAt,
+      completedAt,
+      stoppedByUser: status === "partial" && this.stoppedByUser,
+      pendingPages: this.pageQueue.length,
+      pendingValidations: this.validationQueue.length,
+      activeValidationTasks: this.activeValidationTasks,
+    };
+
+    if (this.stopReason) {
+      runStatus.stopReason = this.stopReason;
+    }
+    if (this.validationError) {
+      runStatus.failureReason = this.validationError.message || String(this.validationError);
+    }
+
+    return runStatus;
   }
 
   buildSpaDetectionSummary() {
@@ -5677,6 +5714,12 @@ Options:
 function printSummary(report) {
   const summary = report.summary;
   console.log(`Start URL: ${report.startUrl}`);
+  if (report.runStatus?.status && report.runStatus.status !== "complete") {
+    console.log(`Run status: ${report.runStatus.status}`);
+    if (report.runStatus.failureReason) {
+      console.log(`Failure reason: ${report.runStatus.failureReason}`);
+    }
+  }
   console.log(`Pages crawled: ${summary.pagesCrawled}`);
   console.log(`URLs checked: ${summary.urlsChecked}`);
   if (summary.checkedByKind) {
@@ -5819,7 +5862,7 @@ async function main() {
     }
   }
 
-  process.exitCode = report.summary.brokenLinks > 0 ? 2 : 0;
+  process.exitCode = report.runStatus?.status === "failed" ? 1 : (report.summary.brokenLinks > 0 ? 2 : 0);
 }
 
 function restartWithSystemCa(args) {

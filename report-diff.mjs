@@ -160,6 +160,25 @@ function setDefined(target, key, value) {
   }
 }
 
+function normalizeRunStatus(report) {
+  const raw = report?.runStatus;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { status: "complete", legacyDefault: true };
+  }
+
+  const status = ["complete", "partial", "failed"].includes(raw.status) ? raw.status : "complete";
+  const runStatus = { status };
+  setDefined(runStatus, "startedAt", optionalString(raw.startedAt));
+  setDefined(runStatus, "completedAt", optionalString(raw.completedAt));
+  setDefined(runStatus, "stoppedByUser", optionalBoolean(raw.stoppedByUser));
+  setDefined(runStatus, "stopReason", optionalString(raw.stopReason));
+  setDefined(runStatus, "failureReason", optionalString(raw.failureReason));
+  setDefined(runStatus, "pendingPages", optionalNonNegativeInteger(raw.pendingPages));
+  setDefined(runStatus, "pendingValidations", optionalNonNegativeInteger(raw.pendingValidations));
+  setDefined(runStatus, "activeValidationTasks", optionalNonNegativeInteger(raw.activeValidationTasks));
+  return runStatus;
+}
+
 function getMatchKey(item) {
   if (typeof item?.canonicalUrl === "string" && item.canonicalUrl.length > 0) {
     return { value: item.canonicalUrl, source: "canonicalUrl" };
@@ -266,6 +285,9 @@ function buildReportRef(report, reportPath) {
   setDefined(ref, "startedAt", optionalString(report?.startedAt));
   setDefined(ref, "startUrl", optionalString(report?.startUrl));
   setDefined(ref, "schemaVersion", optionalString(report?.schemaVersion));
+  const runStatus = normalizeRunStatus(report);
+  delete runStatus.legacyDefault;
+  setDefined(ref, "runStatus", runStatus);
 
   if (report?.summary && typeof report.summary === "object" && !Array.isArray(report.summary)) {
     ref.summary = report.summary;
@@ -281,6 +303,15 @@ function normalizeReport(report, reportPath, reportLabel) {
 
   if (!report?.schemaVersion) {
     addWarning(warnings, "legacy_report", reportLabel, "Report has no schemaVersion; treating it as legacy.");
+  }
+  const runStatus = normalizeRunStatus(report);
+  if (!runStatus.legacyDefault && runStatus.status !== "complete") {
+    addWarning(
+      warnings,
+      "partial_report",
+      reportLabel,
+      `Report runStatus is ${runStatus.status}; diff results may not represent a complete scan.`
+    );
   }
 
   if (Array.isArray(report?.checked)) {

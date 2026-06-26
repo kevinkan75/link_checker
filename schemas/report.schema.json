@@ -9,6 +9,8 @@
     "schemaVersion",
     "generator",
     "startedAt",
+    "completedAt",
+    "runStatus",
     "startUrl",
     "options",
     "summary",
@@ -38,6 +40,13 @@
     "startedAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "runStatus": {
+      "$ref": "#/$defs/runStatus"
     },
     "startUrl": {
       "type": "string"
@@ -151,6 +160,51 @@
         "allowedProtocols": {
           "type": "array",
           "items": { "type": "string" }
+        }
+      }
+    },
+    "runStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "startedAt",
+        "completedAt",
+        "stoppedByUser",
+        "pendingPages",
+        "pendingValidations",
+        "activeValidationTasks"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["complete", "partial", "failed"]
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stoppedByUser": {
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string"
+        },
+        "failureReason": {
+          "type": "string"
+        },
+        "pendingPages": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "pendingValidations": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "activeValidationTasks": {
+          "$ref": "#/$defs/nonNegativeInteger"
         }
       }
     },

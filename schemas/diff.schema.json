@@ -147,9 +147,49 @@
         "schemaVersion": {
           "type": "string"
         },
+        "runStatus": {
+          "$ref": "#/$defs/runStatus"
+        },
         "summary": {
           "type": "object",
           "additionalProperties": true
+        }
+      }
+    },
+    "runStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["complete", "partial", "failed"]
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stoppedByUser": {
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string"
+        },
+        "failureReason": {
+          "type": "string"
+        },
+        "pendingPages": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "pendingValidations": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "activeValidationTasks": {
+          "$ref": "#/$defs/nonNegativeInteger"
         }
       }
     },

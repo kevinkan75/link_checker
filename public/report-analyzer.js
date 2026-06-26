@@ -12,6 +12,7 @@ const metricBrokenRate = document.querySelector("#metric-broken-rate");
 const brokenRateCard = document.querySelector("#broken-rate-card");
 const metricRedirects = document.querySelector("#metric-redirects");
 const metricSkipped = document.querySelector("#metric-skipped");
+const runStatusBanner = document.querySelector("#run-status-banner");
 const issueSummaryCount = document.querySelector("#issue-summary-count");
 const sourceSummaryCount = document.querySelector("#source-summary-count");
 const domainSummaryCount = document.querySelector("#domain-summary-count");
@@ -94,7 +95,7 @@ async function loadReportFile() {
     renderAnalysis(applyFilters(currentAnalysis));
     exportCsvButton.disabled = false;
     clearButton.disabled = false;
-    loadState.textContent = `${file.name} 已載入，${currentAnalysis.broken.length} 筆壞連結`;
+    loadState.textContent = `${file.name} 已載入，${currentAnalysis.broken.length} 筆壞連結${currentAnalysis.runStatus.status === "complete" ? "" : "，報告未完整完成"}`;
   } catch (error) {
     currentAnalysis = null;
     exportCsvButton.disabled = true;
@@ -110,6 +111,7 @@ function analyzeReport(report) {
   }
 
   const summary = report.summary && typeof report.summary === "object" ? report.summary : {};
+  const runStatus = normalizeRunStatus(report.runStatus);
   const broken = normalizeBrokenItems(report.broken || []);
   const checked = Array.isArray(report.checked) ? report.checked : [];
   const enrichedBroken = broken.map((item) => ({
@@ -132,6 +134,7 @@ function analyzeReport(report) {
 
   return {
     report,
+    runStatus,
     metrics,
     broken: enrichedBroken,
     issueCounts: countBy(enrichedBroken, "issueType"),
@@ -176,6 +179,23 @@ function normalizeBrokenItems(items) {
       sources,
     };
   }).filter((item) => item.url);
+}
+
+function normalizeRunStatus(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      status: "complete",
+      legacyDefault: true,
+    };
+  }
+
+  return {
+    status: ["complete", "partial", "failed"].includes(value.status) ? value.status : "complete",
+    stoppedByUser: value.stoppedByUser === true,
+    failureReason: typeof value.failureReason === "string" ? value.failureReason : "",
+    stopReason: typeof value.stopReason === "string" ? value.stopReason : "",
+    completedAt: typeof value.completedAt === "string" ? value.completedAt : "",
+  };
 }
 
 function normalizeConfirmation(value) {
@@ -307,6 +327,7 @@ function resetSelect(select, label) {
 }
 
 function renderAnalysis(analysis) {
+  renderRunStatus(analysis.runStatus);
   metricPages.textContent = formatNumber(analysis.metrics.pagesCrawled);
   metricChecked.textContent = formatNumber(analysis.metrics.urlsChecked);
   metricBroken.textContent = formatNumber(analysis.metrics.brokenLinks);
@@ -389,6 +410,7 @@ function renderBrokenTable(items) {
 }
 
 function renderEmpty(message = "請先上傳 report.json。") {
+  renderRunStatus(null);
   metricPages.textContent = "0";
   metricChecked.textContent = "0";
   metricBroken.textContent = "0";
@@ -404,6 +426,33 @@ function renderEmpty(message = "請先上傳 report.json。") {
   sourceList.innerHTML = '<p class="empty-note">載入報告後顯示來源頁。</p>';
   domainList.innerHTML = '<p class="empty-note">載入報告後顯示網域排行。</p>';
   linksTable.innerHTML = `<p class="empty-note issue-empty">${escapeHtml(message)}</p>`;
+}
+
+function renderRunStatus(runStatus) {
+  if (!runStatus || runStatus.status === "complete") {
+    runStatusBanner.hidden = true;
+    runStatusBanner.textContent = "";
+    return;
+  }
+
+  const label = runStatus.status === "failed" ? "執行失敗" : "部分報告";
+  const details = [];
+  if (runStatus.stoppedByUser) {
+    details.push("使用者停止");
+  }
+  if (runStatus.failureReason) {
+    details.push(runStatus.failureReason);
+  } else if (runStatus.stopReason) {
+    details.push(runStatus.stopReason);
+  }
+  if (runStatus.completedAt) {
+    details.push(`完成時間 ${runStatus.completedAt}`);
+  }
+
+  runStatusBanner.textContent = details.length > 0
+    ? `${label}：${details.join("；")}。統計可能未涵蓋完整網站。`
+    : `${label}：統計可能未涵蓋完整網站。`;
+  runStatusBanner.hidden = false;
 }
 
 function renderIssueItem(item) {

@@ -21,7 +21,7 @@
 - WAF / Bot 診斷已有基礎欄位：`protection`、`suspectedWaf`、`suspectedBot`、body pattern 與 header evidence。
 - 404 confirmation 已避開 `protected` / suspected WAF / Bot 結果，避免把防護頁誤判為一般 404。
 - README 已明確說明目前不執行 robots.txt path enforcement，也沒有 `--authorized-scan` 宣告欄位。
-- P6 diff normalization 已保留 partial report warning 的預留語意，但 scan report 尚未正式產生 `runStatus`。
+- P6.5b-2 已完成 `runStatus` / partial report，scan report 會正式產生 `runStatus`，diff 與 Report Analyzer 會提示 partial / failed report。
 
 ## 建議切分
 
@@ -45,16 +45,16 @@
 - redirect 到 private IP、metadata IP 或 blocked scheme 時停止 follow 並標記 security issue。
 - IPv6 loopback、link-local、unique local 與 IPv4-mapped IPv6 需納入測試。
 
-### P6.5b-2：runStatus / partial report
+### P6.5b-2：runStatus / partial report（已完成）
 
 優先級：高。
 
 交付：
 
-- report root 新增 `runStatus`，至少支援 `complete`、`partial`、`failed`。
-- GUI stop、queue stop、runtime error 需保存 partial report。
-- report 記錄 `stoppedByUser`、`failureReason`、`completedAt` 或等價欄位。
-- Analyzer / diff 讀到 partial report 時顯示 warning，不得當成完整掃描。
+- report root 已新增 `runStatus`，支援 `complete`、`partial`、`failed`。
+- GUI stop、queue stop、runtime error 會保存帶狀態的 report。
+- report 記錄 `stoppedByUser`、`stopReason`、`failureReason`、`completedAt` 等最小狀態欄位。
+- Analyzer / diff 讀到 partial / failed report 時顯示 warning，不當成完整掃描。
 
 驗收：
 
@@ -140,8 +140,8 @@
 - public hostname resolve 到 private IP 測試。
 - redirect 到 blocked target 測試。
 - IPv6 loopback / link-local / unique local 測試。
-- GUI stop partial report 測試。
-- diff / Analyzer partial report warning 測試。
+- GUI stop partial report 測試。（P6.5b-2 已完成核心 runStatus 覆蓋）
+- diff / Analyzer partial report warning 測試。（P6.5b-2 已完成）
 - robots missing / fetch error / full disallow 測試。
 - `--authorized-scan` 宣告欄位測試。
 - `Retry-After` capped wait 測試。
