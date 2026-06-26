@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
 import tls from "node:tls";
+import { gunzipSync, inflateSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { basename, dirname, join } from "node:path";
@@ -16,6 +17,7 @@ const DEFAULT_MAX_HTML_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_BODY_PREVIEW_BYTES = 4096;
 const DEFAULT_MAX_DOWNLOAD_PROBE_BYTES = 64 * 1024;
 const DEFAULT_MAX_SOURCES_PER_URL = 50;
+const DEFAULT_KEEP_ALIVE_MSECS = 1000;
 const REDACTED_QUERY_VALUE = "REDACTED";
 const DEFAULT_REDACT_QUERY_KEYS = [
   "access_token",
@@ -38,6 +40,9 @@ const DEFAULT_REDACT_QUERY_KEYS = [
   "token",
 ];
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const DOCUMENT_ACCEPT_HEADER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+const GENERIC_ACCEPT_HEADER = "*/*";
+const ACCEPT_ENCODING_HEADER = "gzip, deflate";
 const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
 const SPA_LINK_MODES = new Set(["auto", "off", "strict"]);
 const TRACKING_QUERY_KEYS = new Set(["fbclid", "gclid", "msclkid", "yclid"]);
@@ -112,6 +117,8 @@ const DEFAULTS = {
   maxBodyPreviewBytes: DEFAULT_MAX_BODY_PREVIEW_BYTES,
   maxDownloadProbeBytes: DEFAULT_MAX_DOWNLOAD_PROBE_BYTES,
   maxSourcesPerUrl: DEFAULT_MAX_SOURCES_PER_URL,
+  keepAlive: true,
+  keepAliveMsecs: DEFAULT_KEEP_ALIVE_MSECS,
   confirm404: true,
   confirmationMaxUrls: 100,
   confirmationMaxPerHost: 20,
@@ -497,6 +504,9 @@ class LinkChecker {
     this.options.maxBodyPreviewBytes = normalizeByteLimit(this.options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
     this.options.maxDownloadProbeBytes = normalizeByteLimit(this.options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
     this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+    this.connectionOptions = normalizeConnectionOptions(this.options);
+    Object.assign(this.options, this.connectionOptions);
+    this.agents = createConnectionAgents(this.connectionOptions);
     if (this.options.systemCa) {
       enableSystemCa();
     }
@@ -981,6 +991,8 @@ class LinkChecker {
       maxHtmlBytes: this.options.maxHtmlBytes,
       maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
       maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+      connectionOptions: this.connectionOptions,
+      agents: this.agents,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
     });
 
@@ -1041,6 +1053,8 @@ class LinkChecker {
         maxHtmlBytes: this.options.maxHtmlBytes,
         maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
         maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+        connectionOptions: this.connectionOptions,
+        agents: this.agents,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
 
@@ -1089,6 +1103,8 @@ class LinkChecker {
         maxHtmlBytes: this.options.maxHtmlBytes,
         maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
         maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+        connectionOptions: this.connectionOptions,
+        agents: this.agents,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
       result.confirmedWithReferer = source.page;
@@ -1129,6 +1145,8 @@ class LinkChecker {
           maxHtmlBytes: this.options.maxHtmlBytes,
           maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
           maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+          connectionOptions: this.connectionOptions,
+          agents: this.agents,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         });
         fallbackResult.normalizedFrom = url;
@@ -1271,6 +1289,8 @@ class LinkChecker {
       maxHtmlBytes: this.options.maxHtmlBytes,
       maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
       maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+      connectionOptions: this.connectionOptions,
+      agents: this.agents,
       scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
     });
 
@@ -1358,6 +1378,10 @@ class LinkChecker {
         maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
         maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
         maxSourcesPerUrl: this.options.maxSourcesPerUrl,
+        keepAlive: this.options.keepAlive,
+        maxSockets: this.options.maxSockets,
+        maxFreeSockets: this.options.maxFreeSockets,
+        keepAliveMsecs: this.options.keepAliveMsecs,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
         externalRiskRulesSource: this.options.externalRiskRulesSource || null,
         siteLinkRulesSource: this.options.siteLinkRulesSource || null,
@@ -1566,6 +1590,7 @@ function buildOutputManifest({
   options = {},
   generatedFiles,
 } = {}) {
+  const connectionOptions = normalizeConnectionOptions(options);
   return {
     toolVersion: TOOL_VERSION,
     schemaVersions: {
@@ -1575,6 +1600,7 @@ function buildOutputManifest({
     startUrl: redactSensitiveQueryValue(startUrl || null, options),
     optionsProfile: getOptionsProfile(options),
     runtimeVersion: getRuntimeVersion(),
+    connection: connectionOptions,
     generatedFiles: (generatedFiles || []).map((file) => ({
       path: file.path,
       kind: file.kind,
@@ -1607,6 +1633,44 @@ function normalizeIntegerLimit(value, fallback) {
     return fallback;
   }
   return Math.min(number, 100000);
+}
+
+function normalizeConnectionOptions(options = {}) {
+  const perHostConcurrency = Math.max(
+    1,
+    Number.parseInt(options.perHostConcurrency ?? DEFAULTS.perHostConcurrency, 10) || DEFAULTS.perHostConcurrency,
+  );
+  const maxSockets = Math.max(
+    1,
+    Number.parseInt(options.maxSockets ?? perHostConcurrency, 10) || perHostConcurrency,
+  );
+  const maxFreeSockets = Math.max(
+    1,
+    Number.parseInt(options.maxFreeSockets ?? perHostConcurrency, 10) || perHostConcurrency,
+  );
+  const keepAliveMsecs = Math.max(
+    1,
+    Number.parseInt(options.keepAliveMsecs ?? DEFAULTS.keepAliveMsecs, 10) || DEFAULTS.keepAliveMsecs,
+  );
+  return {
+    keepAlive: options.keepAlive !== false,
+    maxSockets,
+    maxFreeSockets,
+    keepAliveMsecs,
+  };
+}
+
+function createConnectionAgents(connectionOptions) {
+  const agentOptions = {
+    keepAlive: connectionOptions.keepAlive,
+    maxSockets: connectionOptions.maxSockets,
+    maxFreeSockets: connectionOptions.maxFreeSockets,
+    keepAliveMsecs: connectionOptions.keepAliveMsecs,
+  };
+  return {
+    http: new http.Agent(agentOptions),
+    https: new https.Agent(agentOptions),
+  };
 }
 
 function isSensitiveQueryKey(key, queryKeys = DEFAULT_REDACT_QUERY_KEYS) {
@@ -1736,6 +1800,8 @@ async function fetchUrl(url, {
   maxHtmlBytes = DEFAULTS.maxHtmlBytes,
   maxBodyPreviewBytes = DEFAULTS.maxBodyPreviewBytes,
   maxDownloadProbeBytes = DEFAULTS.maxDownloadProbeBytes,
+  connectionOptions = normalizeConnectionOptions(DEFAULTS),
+  agents = createConnectionAgents(connectionOptions),
   scheduleRequest,
 }) {
   const started = performance.now();
@@ -1757,6 +1823,8 @@ async function fetchUrl(url, {
       maxHtmlBytes,
       maxBodyPreviewBytes,
       maxDownloadProbeBytes,
+      connectionOptions,
+      agents,
       scheduleRequest,
       started,
     });
@@ -1787,6 +1855,8 @@ async function fetchUrlOnce(url, {
   maxHtmlBytes,
   maxBodyPreviewBytes,
   maxDownloadProbeBytes,
+  connectionOptions,
+  agents,
   scheduleRequest,
   started,
 }) {
@@ -1804,6 +1874,8 @@ async function fetchUrlOnce(url, {
         maxHtmlBytes,
         maxBodyPreviewBytes,
         maxDownloadProbeBytes,
+        connectionOptions,
+        agents,
         readBody: true,
         scheduleRequest,
         started,
@@ -1823,6 +1895,8 @@ async function fetchUrlOnce(url, {
         maxHtmlBytes,
         maxBodyPreviewBytes,
         maxDownloadProbeBytes,
+        connectionOptions,
+        agents,
         readBody: false,
         scheduleRequest,
         started,
@@ -1841,6 +1915,8 @@ async function fetchUrlOnce(url, {
       maxHtmlBytes,
       maxBodyPreviewBytes,
       maxDownloadProbeBytes,
+      connectionOptions,
+      agents,
       readBody: false,
       scheduleRequest,
       started,
@@ -1861,6 +1937,8 @@ async function fetchUrlOnce(url, {
       maxHtmlBytes,
       maxBodyPreviewBytes,
       maxDownloadProbeBytes,
+      connectionOptions,
+      agents,
       readBody: false,
       scheduleRequest,
       started,
@@ -1995,6 +2073,8 @@ async function request(url, method, {
   maxHtmlBytes,
   maxBodyPreviewBytes,
   maxDownloadProbeBytes,
+  connectionOptions,
+  agents,
   readBody,
   scheduleRequest,
   started,
@@ -2011,6 +2091,8 @@ async function request(url, method, {
       acceptLanguage,
       referer,
       legacyTls,
+      connectionOptions,
+      agents,
     }));
 
     if (isRedirectStatus(response.status)) {
@@ -2105,21 +2187,27 @@ async function request(url, method, {
   }
 }
 
-async function rawRequest(url, method, { timeoutMs, userAgent, acceptLanguage, referer, legacyTls }) {
+async function rawRequest(url, method, {
+  timeoutMs,
+  userAgent,
+  acceptLanguage,
+  referer,
+  legacyTls,
+  connectionOptions,
+  agents,
+}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const headers = {
-    "user-agent": userAgent,
-    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "accept-language": acceptLanguage,
-  };
-  if (referer) {
-    headers.referer = referer;
-  }
+  const headers = buildRequestHeaders(url, {
+    userAgent,
+    acceptLanguage,
+    referer,
+    connectionOptions,
+  });
 
   try {
     if (legacyTls) {
-      return await legacyTlsRequest(url, method, { timeoutMs, headers });
+      return await legacyTlsRequest(url, method, { timeoutMs, headers, agents });
     }
 
     return await fetch(url, {
@@ -2133,7 +2221,28 @@ async function rawRequest(url, method, { timeoutMs, userAgent, acceptLanguage, r
   }
 }
 
-function legacyTlsRequest(url, method, { timeoutMs, headers }) {
+function buildRequestHeaders(url, { userAgent, acceptLanguage, referer, connectionOptions }) {
+  const headers = {
+    "user-agent": userAgent,
+    "accept": getAcceptHeaderForUrl(url),
+    "accept-language": acceptLanguage,
+    "accept-encoding": ACCEPT_ENCODING_HEADER,
+  };
+  if (referer) {
+    headers.referer = referer;
+  }
+  if (connectionOptions?.keepAlive === false) {
+    headers.connection = "close";
+  }
+  return headers;
+}
+
+function getAcceptHeaderForUrl(url) {
+  const kind = classifyUrlKind(url);
+  return kind.page ? DOCUMENT_ACCEPT_HEADER : GENERIC_ACCEPT_HEADER;
+}
+
+function legacyTlsRequest(url, method, { timeoutMs, headers, agents }) {
   const parsed = new URL(url);
   const client = parsed.protocol === "http:" ? http : https;
 
@@ -2142,6 +2251,7 @@ function legacyTlsRequest(url, method, { timeoutMs, headers }) {
       method,
       headers,
       timeout: timeoutMs,
+      agent: parsed.protocol === "http:" ? agents?.http : agents?.https,
     };
 
     if (parsed.protocol === "https:") {
@@ -2179,13 +2289,13 @@ class LegacyResponse {
   }
 
   async text() {
-    return (await this.buffer()).toString("utf8");
+    return decodeResponseBuffer(await this.buffer(), this.headers).toString("utf8");
   }
 
   async readText(maxBytes) {
     const { buffer, bytesRead, truncated } = await this.readBuffer(maxBytes);
     return {
-      text: buffer.toString("utf8"),
+      text: decodeResponseBuffer(buffer, this.headers).toString("utf8"),
       bytesRead,
       truncated,
     };
@@ -2253,6 +2363,21 @@ class LegacyResponse {
     }
     return this.bufferPromise;
   }
+}
+
+function decodeResponseBuffer(buffer, headers) {
+  const encoding = String(headers.get("content-encoding") || "").toLowerCase().trim();
+  try {
+    if (encoding === "gzip" || encoding === "x-gzip") {
+      return gunzipSync(buffer);
+    }
+    if (encoding === "deflate") {
+      return inflateSync(buffer);
+    }
+  } catch {
+    return buffer;
+  }
+  return buffer;
 }
 
 function createAbortError() {
@@ -4673,6 +4798,16 @@ function parseArgs(argv) {
       explicitOptions.add("systemCa");
       continue;
     }
+    if (arg === "--keep-alive") {
+      options.keepAlive = true;
+      explicitOptions.add("keepAlive");
+      continue;
+    }
+    if (arg === "--no-keep-alive") {
+      options.keepAlive = false;
+      explicitOptions.add("keepAlive");
+      continue;
+    }
     if (arg === "--confirm-404") {
       options.confirm404 = true;
       explicitOptions.add("confirm404");
@@ -4917,6 +5052,7 @@ function parseArgs(argv) {
   options.maxBodyPreviewBytes = normalizeByteLimit(options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
   options.maxDownloadProbeBytes = normalizeByteLimit(options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
   options.maxSourcesPerUrl = normalizeIntegerLimit(options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+  Object.assign(options, normalizeConnectionOptions(options));
   return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource, siteLinkRulesSource };
 }
 
@@ -5068,6 +5204,7 @@ Options:
   --accept-language <value>
                        Accept-Language header. Default: ${DEFAULTS.acceptLanguage}
   --user-agent <value> User-Agent header.
+  --no-keep-alive    Send Connection: close and disable legacy HTTP agent keep-alive.
   --domain-rules <file-or-url>
                        JSON domain category rules: [{ "category": "...", "domains": ["example.com"] }].
   --external-risk-rules <file-or-url>

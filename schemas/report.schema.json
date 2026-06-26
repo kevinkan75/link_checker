@@ -113,6 +113,18 @@
         },
         "maxSourcesPerUrl": {
           "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "keepAlive": {
+          "type": "boolean"
+        },
+        "maxSockets": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "maxFreeSockets": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "keepAliveMsecs": {
+          "$ref": "#/$defs/positiveInteger"
         }
       }
     },

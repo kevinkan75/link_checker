@@ -4,7 +4,7 @@
 
 P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP、SPA / Nuxt 站台抽取前置改善，以及 report-to-report diff 第一版。
 
-P6.5a 已完成輸出契約基線、redaction、sources 上限與 response body limit；剩餘主線收斂為 **Header / Accept-Encoding / Keep-Alive**。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
+P6.5a 已完成輸出契約基線、redaction、sources 上限、response body limit 與 **Header / Accept-Encoding / Keep-Alive**。下一個主線收斂為 P6.5b 的稽查語意與誤判降低；Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
 
 目前 Roadmap 採納兩份分析文件：
 
@@ -19,7 +19,7 @@ P6.5a 已完成輸出契約基線、redaction、sources 上限與 response body 
 | 0 | Stage 0 | 已收斂 | README、CSV BOM、GUI/CLI 落差提示、`sourceCount` 說明 | schema、robots、cache、incremental scan、Keep-Alive |
 | 1 | P6 前置 | 已完成 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
 | 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
-| 3 | P6.5a | 進行中 | 已完成 schema/generator、manifest、redaction、response limit、sources 上限；剩餘 Header / Accept-Encoding / Keep-Alive | robots / compliance 語意 |
+| 3 | P6.5a | 已完成 | schema/generator、manifest、redaction、response limit、sources 上限、Header / Accept-Encoding / Keep-Alive | robots / compliance 語意 |
 | 4 | P6.5b | P6.5a 後 | SSRF、WAF signature、Retry-After、partial report、robots summary、compliance | WAF/Bot 繞過 |
 | 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
@@ -44,6 +44,7 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 - P6.5a-1：scan report `schemaVersion` / `generator`、`schemas/report.schema.json`、CLI / GUI `manifest.json`。
 - P6.5a-2：輸出層 sensitive query redaction，套用於 report、CSV、events log、manifest 與 GUI 保存檔。
 - P6.5a-3：`maxSourcesPerUrl`、`sourcesTruncated`、`bodyBytesRead` / `bodyTruncated` 與 body byte limit。
+- P6.5a-4：Accept header 分流、gzip / deflate、`--no-keep-alive` 與 per-host concurrency 驗證。
 - Packaging 小修：portable 打包流程已在 `build-portable.ps1` 中加入本機自簽 Authenticode 步驟，並匯出 `LinkChecker-local-code-signing.cer` 供內部手動信任匯入；此為 local self-signed，不等同正式公開信任 code signing。
 
 ## 全域原則
@@ -234,7 +235,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6.5a：低風險穩定性修補
 
-狀態：進行中；P6.5a-1、P6.5a-2、P6.5a-3 已完成。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
+狀態：已完成；P6.5a-1、P6.5a-2、P6.5a-3、P6.5a-4 均已完成。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
 
 實作前評估見 [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)。執行時需拆成契約/manifest、redaction/CSV、sources/body limit、Header/Keep-Alive 四批；不得一次混合所有交付項。
 
@@ -249,14 +250,11 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 7. `maxSourcesPerUrl`：輸出保留有限來源，並輸出完整 `sourceCount` 與 `sourcesTruncated`。
 8. Response size limit：加入 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`，並輸出 `bodyTruncated` / `bodyBytesRead`。
 9. response body 及早釋放：抽取、診斷或 probe 完成後不保留完整 body。
+10. Accept header 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
+11. Accept-Encoding：實測並啟用 `gzip` / `deflate`，暫不啟用 `br`。
+12. Keep-Alive connection pool：受 global concurrency 與 per-host concurrency 約束，提供 `--no-keep-alive` 回退，並記錄 effective 設定。
 
-剩餘：
-
-1. Accept header 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
-2. Accept-Encoding 實測：先確認 `gzip` / `deflate`，`br` 必須確認 client 支援後才啟用。
-3. Keep-Alive connection pool：受 global concurrency 與 per-host concurrency 約束，提供 `--no-keep-alive` 回退。
-
-剩餘驗收：
+驗收：
 
 - 啟用 Accept-Encoding 後，壓縮 HTML 仍可正常抽取連結。
 - 啟用 Keep-Alive 後，同一 host in-flight request 不超過 `perHostConcurrency`。

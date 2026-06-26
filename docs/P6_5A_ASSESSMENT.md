@@ -19,6 +19,7 @@
 - P6.5a-1 已讓 scan report root 加入 `schemaVersion` / `generator`。
 - P6.5a-2 已加入輸出層 URL query redaction，預設套用於 report、CSV、events log、manifest 與 GUI 保存檔。
 - P6.5a-3 已加入 `maxSourcesPerUrl` 與 body byte limit，避免 sources 與大型 response 無限制膨脹。
+- P6.5a-4 已加入 Accept header 分流、`gzip` / `deflate`、`--no-keep-alive` 與 per-host concurrency 驗證。
 - `schemas/` 目前已有 `diff.schema.json` 與 P6.5a-1 的 `report.schema.json` 草案。
 - GUI 會保存 `summary.json`、`report.json`、`broken.csv`、`external-links.csv`、`external-summary.json`、`events.log`、`README.txt` 與 `manifest.json`。
 - CSV 目前已輸出 UTF-8 BOM，P6.5a 需補回歸測試而非重做格式。
@@ -83,12 +84,14 @@
 
 ### P6.5a-4：Header / Accept-Encoding / Keep-Alive
 
+狀態：已完成第一版。
+
 交付：
 
-- Accept header 依 request intent 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
-- Accept-Encoding 先確認 `gzip` / `deflate`；`br` 只有在 client runtime 實測支援後才啟用。
+- Accept header 已依 request intent 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
+- Accept-Encoding 已啟用並測試 `gzip` / `deflate`；`br` 暫不啟用。
 - Keep-Alive connection pool 受 global concurrency 與 per-host concurrency 約束。
-- 提供 `--no-keep-alive` 回退，並在 report options / manifest 記錄 effective 設定。
+- 已提供 `--no-keep-alive` 回退，並在 report options / manifest 記錄 effective 設定。
 
 驗收：
 

@@ -46,6 +46,8 @@ function assertManifest(manifest) {
   assert(manifest.schemaVersions?.report === REPORT_SCHEMA_VERSION, "Unexpected manifest report schema version.");
   assert(manifest.runtimeVersion?.node === process.version, "Unexpected manifest runtime node version.");
   assert(manifest.optionsProfile === "normal", "Unexpected manifest optionsProfile.");
+  assert(manifest.connection?.keepAlive === true, "Manifest should record effective keepAlive setting.");
+  assert(Number.isInteger(manifest.connection?.maxSockets), "Manifest should record effective maxSockets.");
   assert(Array.isArray(manifest.generatedFiles), "generatedFiles must be an array.");
   assert(manifest.generatedFiles.some((file) => (
     file.path === "report.json"

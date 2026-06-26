@@ -257,8 +257,11 @@ P6.5a-1 起，scan report 使用 `schemaVersion: "1.1.0"`，`generator.name` 為
 - SPA：`spaLinks`
 - output safety：`redactSensitiveQuery`、`redactQueryKeys`
 - output limits：`maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`、`maxSourcesPerUrl`
+- network：`keepAlive`、`maxSockets`、`maxFreeSockets`、`keepAliveMsecs`
 
 P6.5a-2 起，report、CSV、events log 與 manifest 中的 URL 顯示值會依 `redactQueryKeys` 遮罩敏感 query value。此遮罩只作用於輸出層，實際 request URL、inventory key 與 fetch cache 不使用遮罩後 URL。
+
+P6.5a-4 起，request `Accept` 依 URL intent 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。`Accept-Encoding` 啟用 `gzip` / `deflate`，`br` 暫不啟用。Keep-Alive 預設開啟，仍由 global concurrency 與 `perHostConcurrency` 控制併發；`--no-keep-alive` 會送出 `Connection: close` 並停用 legacy HTTP agent keep-alive。
 
 ### 7.2 summary
 

@@ -902,6 +902,7 @@ function parseJobOptions(input) {
     externalReferer: Boolean(input.externalReferer ?? baseOptions.externalReferer),
     legacyTls: Boolean(input.legacyTls ?? baseOptions.legacyTls),
     systemCa: Boolean(input.systemCa ?? baseOptions.systemCa),
+    keepAlive: input.keepAlive !== false,
     redactSensitiveQuery: input.redactSensitiveQuery !== false,
     redactQueryKeys: Array.isArray(input.redactQueryKeys) ? input.redactQueryKeys : baseOptions.redactQueryKeys,
     maxHtmlBytes: clampInteger(input.maxHtmlBytes, baseOptions.maxHtmlBytes, 0, 512 * 1024 * 1024),
