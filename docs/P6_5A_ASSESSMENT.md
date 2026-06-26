@@ -18,11 +18,11 @@
 - P6 diff 已有 `schemaVersion` / `generator`，且能把缺少 `schemaVersion` 的舊 report 視為 legacy。
 - P6.5a-1 已讓 scan report root 加入 `schemaVersion` / `generator`。
 - P6.5a-2 已加入輸出層 URL query redaction，預設套用於 report、CSV、events log、manifest 與 GUI 保存檔。
+- P6.5a-3 已加入 `maxSourcesPerUrl` 與 body byte limit，避免 sources 與大型 response 無限制膨脹。
 - `schemas/` 目前已有 `diff.schema.json` 與 P6.5a-1 的 `report.schema.json` 草案。
 - GUI 會保存 `summary.json`、`report.json`、`broken.csv`、`external-links.csv`、`external-summary.json`、`events.log`、`README.txt` 與 `manifest.json`。
 - CSV 目前已輸出 UTF-8 BOM，P6.5a 需補回歸測試而非重做格式。
-- response body 目前仍有完整讀入路徑，例如 `response.text()` 與 legacy TLS Buffer 聚合；這是 P6.5a 最大工程風險。
-- report 端已用 `stripBody()` 避免保存完整 body，但這不等於讀取時有 byte limit。
+- response body 已有 capped reader；後續仍可依實測調整預設 bytes。
 
 ## 建議切分
 
@@ -64,13 +64,15 @@
 
 ### P6.5a-3：sources 上限與 body limit
 
+狀態：已完成第一版。
+
 交付：
 
-- 新增 `maxSourcesPerUrl`，保留 `sourceCount`，超過上限時輸出 `sourcesTruncated=true`。
-- 新增 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`。
-- 超過上限時輸出 `bodyTruncated` / `bodyBytesRead`。
-- 將 HTML 抽取、diagnostic body、download probe 改成有 byte cap 的讀取路徑。
-- response body 抽取或診斷完成後及早釋放。
+- 已新增 `maxSourcesPerUrl`，保留 `sourceCount`，超過上限時輸出 `sourcesTruncated=true`。
+- 已新增 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`。
+- 超過上限時會輸出 `bodyTruncated` / `bodyBytesRead`。
+- HTML 抽取、diagnostic body、download probe 已改成有 byte cap 的讀取路徑。
+- response body 抽取或診斷完成後會及早釋放或取消。
 
 驗收：
 

@@ -256,6 +256,7 @@ P6.5a-1 起，scan report 使用 `schemaVersion: "1.1.0"`，`generator.name` 為
 - rules：`domainCategoryRulesSource`、`externalRiskRulesSource`、`siteLinkRulesSource`
 - SPA：`spaLinks`
 - output safety：`redactSensitiveQuery`、`redactQueryKeys`
+- output limits：`maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`、`maxSourcesPerUrl`
 
 P6.5a-2 起，report、CSV、events log 與 manifest 中的 URL 顯示值會依 `redactQueryKeys` 遮罩敏感 query value。此遮罩只作用於輸出層，實際 request URL、inventory key 與 fetch cache 不使用遮罩後 URL。
 
@@ -321,7 +322,7 @@ P5.5 diagnostics：
 
 - URL：`url`、`canonicalUrl`、`normalizedFrom`、`finalUrl`
 - request：`checkedAt`、`method`、`finalMethod`、`requestReferer`
-- response：`ok`、`status`、`contentType`、`contentLength`
+- response：`ok`、`status`、`contentType`、`contentLength`、`bodyBytesRead`、`bodyTruncated`
 - cache：`cacheHeaders`
 - redirect：`redirected`、`redirectCount`、`redirectChain`、`redirectType`、`redirectIssues`、`redirectLabels`
 - protection：`wafHeaders`、`blockedReason`、`blockedRuleId`、`suspectedWaf`、`suspectedBot`
@@ -331,7 +332,7 @@ P5.5 diagnostics：
 
 ### 7.4 broken[]
 
-`broken[]` 是 `checked[]` 中 `ok !== true` 的子集，並補上 `sources`。它是 UI / CSV 的主要壞連結入口。
+`broken[]` 是 `checked[]` 中 `ok !== true` 的子集，並補上 `sourceCount`、`sourcesTruncated` 與截斷後的 `sources`。它是 UI / CSV 的主要壞連結入口。
 
 ### 7.5 externalLinks[]
 
@@ -340,6 +341,7 @@ P5.5 diagnostics：
 - identity：`url`、`canonicalUrl`、`hostname`、`registrableDomain`
 - classification：`type`、`categories`、`categorySources`
 - `sources`
+- `sourcesTruncated`
 - optional checked result fields：`checked`、`status`、`ok`、`method`、`checkedAt`、`finalUrl`
 - redirect / protection / issue fields
 - `externalRisk`

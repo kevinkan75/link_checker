@@ -168,6 +168,7 @@ GUI 尚未提供規則檔輸入欄位；若需要外連治理規則或站台特�
 .\check-links.cmd https://example.com --output report.json
 .\check-links.cmd https://example.com --domain-rules rules.json
 .\check-links.cmd https://example.com --redact-query-keys ticket,caseId
+.\check-links.cmd https://example.com --max-html-bytes 5242880 --max-sources-per-url 50
 ```
 
 - `--max-pages <n>`：最多爬行幾個同網域頁面，預設 `100`。
@@ -193,6 +194,10 @@ GUI 尚未提供規則檔輸入欄位；若需要外連治理規則或站台特�
 - `--spa-links <auto|off|strict>`：從 SPA / Nuxt inline payload 抽取明確 URL 與 `/` 開頭 path，預設 `auto`；`off` 可回到舊行為，`strict` 只做 literal 抽取。
 - `--redact-sensitive-query` / `--no-redact-sensitive-query`：輸出檔是否遮罩高風險 query value，預設開啟。
 - `--redact-query-keys <list>`：額外遮罩的 query key，以逗號分隔；預設已包含 token、session、auth、password、email、jwt、signature、api_key 等常見敏感 key。
+- `--max-html-bytes <n>`：HTML/body 抽取最多讀取 bytes，預設 `5242880`。
+- `--max-body-preview-bytes <n>`：HTTP error HTML 診斷 preview 最多讀取 bytes，預設 `4096`。
+- `--max-download-probe-bytes <n>`：不需要 body 的下載/媒體 probe 最多 drain bytes，預設 `65536`，超過即取消 body。
+- `--max-sources-per-url <n>`：每個 URL 輸出最多保存幾筆來源，預設 `50`；完整數量仍保留在 `sourceCount`。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
 - `--confirm-404` / `--no-confirm-404`：是否在主掃描後集中複查同站 `404 / 410`。預設開啟；關閉時 report 仍會標示 confirmation 未啟用。
 - `--conservative`：套用低併發、隨機延遲、偏好 `GET` 與外部連結 `Referer` 的保守檢查設定。
@@ -411,7 +416,7 @@ JSON report 會保留來源類型，例如 `html_attribute`、`script_literal`�
 - 問題連結分類統計
 - 每個問題連結的 HTTP 狀態或錯誤訊息
 - 問題連結是在哪些頁面與標籤屬性中發現
-- 外連的 `sourceCount` 代表同一 canonical URL 被多少來源引用；目前保存完整 `sources`，後續若加入 `sourcesTruncated` 會依 roadmap 放在 P6.5a。
+- `sourceCount` 代表同一 canonical URL 被多少來源引用；`sources` 預設最多保存 `50` 筆，超過時會輸出 `sourcesTruncated=true`。
 - 若網站回應像 Cloudflare、Akamai、Imperva、Sucuri 等防護頁，會標示為被防護層阻擋
 - 同站 `404 / 410` 的二次確認統計：已恢復、需複查、確認不存在
 
@@ -455,7 +460,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a-1 輸出契約基線與 P6.5a-2 redaction 已完成，後續規劃 sources/body limit 與 Header/Keep-Alive。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版與 P6.5a-1/2/3 已完成，後續規劃 Header/Keep-Alive。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。

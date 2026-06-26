@@ -12,6 +12,10 @@ import { pathToFileURL } from "node:url";
 
 const TOOL_VERSION = "0.1.0";
 const REPORT_SCHEMA_VERSION = "1.1.0";
+const DEFAULT_MAX_HTML_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_BODY_PREVIEW_BYTES = 4096;
+const DEFAULT_MAX_DOWNLOAD_PROBE_BYTES = 64 * 1024;
+const DEFAULT_MAX_SOURCES_PER_URL = 50;
 const REDACTED_QUERY_VALUE = "REDACTED";
 const DEFAULT_REDACT_QUERY_KEYS = [
   "access_token",
@@ -104,6 +108,10 @@ const DEFAULTS = {
   systemCa: false,
   redactSensitiveQuery: true,
   redactQueryKeys: DEFAULT_REDACT_QUERY_KEYS,
+  maxHtmlBytes: DEFAULT_MAX_HTML_BYTES,
+  maxBodyPreviewBytes: DEFAULT_MAX_BODY_PREVIEW_BYTES,
+  maxDownloadProbeBytes: DEFAULT_MAX_DOWNLOAD_PROBE_BYTES,
+  maxSourcesPerUrl: DEFAULT_MAX_SOURCES_PER_URL,
   confirm404: true,
   confirmationMaxUrls: 100,
   confirmationMaxPerHost: 20,
@@ -485,6 +493,10 @@ class LinkChecker {
     this.options = { ...DEFAULTS, ...options };
     this.options.redactSensitiveQuery = this.options.redactSensitiveQuery !== false;
     this.options.redactQueryKeys = normalizeRedactQueryKeys(this.options.redactQueryKeys);
+    this.options.maxHtmlBytes = normalizeByteLimit(this.options.maxHtmlBytes, DEFAULTS.maxHtmlBytes);
+    this.options.maxBodyPreviewBytes = normalizeByteLimit(this.options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
+    this.options.maxDownloadProbeBytes = normalizeByteLimit(this.options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
+    this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
     if (this.options.systemCa) {
       enableSystemCa();
     }
@@ -966,6 +978,9 @@ class LinkChecker {
       preferGet: this.options.preferGet,
       canonicalStrategy: this.options.canonicalStrategy,
       legacyTls: this.options.legacyTls,
+      maxHtmlBytes: this.options.maxHtmlBytes,
+      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
     });
 
@@ -1023,6 +1038,9 @@ class LinkChecker {
         preferGet: this.options.preferGet,
         canonicalStrategy: this.options.canonicalStrategy,
         legacyTls: this.options.legacyTls,
+        maxHtmlBytes: this.options.maxHtmlBytes,
+        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
 
@@ -1068,6 +1086,9 @@ class LinkChecker {
         preferGet: this.options.preferGet,
         canonicalStrategy: this.options.canonicalStrategy,
         legacyTls: this.options.legacyTls,
+        maxHtmlBytes: this.options.maxHtmlBytes,
+        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       });
       result.confirmedWithReferer = source.page;
@@ -1105,6 +1126,9 @@ class LinkChecker {
           preferGet: this.options.preferGet,
           canonicalStrategy: this.options.canonicalStrategy,
           legacyTls: this.options.legacyTls,
+          maxHtmlBytes: this.options.maxHtmlBytes,
+          maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+          maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         });
         fallbackResult.normalizedFrom = url;
@@ -1244,6 +1268,9 @@ class LinkChecker {
       preferGet: true,
       canonicalStrategy: this.options.canonicalStrategy,
       legacyTls: this.options.legacyTls,
+      maxHtmlBytes: this.options.maxHtmlBytes,
+      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
       scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
     });
 
@@ -1280,10 +1307,15 @@ class LinkChecker {
     const scanQuality = this.buildScanQuality(checked, spaDetection, checkedByKind);
     const broken = checked
       .filter((result) => !result.ok)
-      .map((result) => ({
-        ...result,
-        sources: this.getSourcesForResult(result).map(({ key, ...source }) => source),
-      }))
+      .map((result) => {
+        const sourceProjection = projectSourcesForOutput(this.getSourcesForResult(result), this.options.maxSourcesPerUrl);
+        return {
+          ...result,
+          sourceCount: sourceProjection.sourceCount,
+          sourcesTruncated: sourceProjection.sourcesTruncated,
+          sources: sourceProjection.sources,
+        };
+      })
       .sort((a, b) => a.url.localeCompare(b.url));
 
     const report = {
@@ -1322,6 +1354,10 @@ class LinkChecker {
         spaLinks: this.options.spaLinks,
         redactSensitiveQuery: this.options.redactSensitiveQuery,
         redactQueryKeys: this.options.redactQueryKeys,
+        maxHtmlBytes: this.options.maxHtmlBytes,
+        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+        maxSourcesPerUrl: this.options.maxSourcesPerUrl,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
         externalRiskRulesSource: this.options.externalRiskRulesSource || null,
         siteLinkRulesSource: this.options.siteLinkRulesSource || null,
@@ -1471,6 +1507,7 @@ class LinkChecker {
           sourceCount,
           externalRiskRules: this.externalRiskRules,
         });
+        const sourceProjection = projectSourcesForOutput(item.sources, this.options.maxSourcesPerUrl);
         return {
           ...item,
           checked: Boolean(result),
@@ -1496,7 +1533,8 @@ class LinkChecker {
           bodySignature: result?.bodySignature || null,
           externalRisk,
           sourceCount,
-          sources: item.sources.map(({ key, fallbackUrls, ...source }) => source),
+          sourcesTruncated: sourceProjection.sourcesTruncated,
+          sources: sourceProjection.sources,
         };
       })
       .sort((a, b) => a.url.localeCompare(b.url));
@@ -1553,6 +1591,22 @@ function normalizeRedactQueryKeys(value) {
     .map((item) => String(item || "").trim().toLowerCase())
     .filter(Boolean))]
     .sort();
+}
+
+function normalizeByteLimit(value, fallback) {
+  const number = Number.parseInt(value, 10);
+  if (!Number.isFinite(number) || number < 0) {
+    return fallback;
+  }
+  return Math.min(number, 512 * 1024 * 1024);
+}
+
+function normalizeIntegerLimit(value, fallback) {
+  const number = Number.parseInt(value, 10);
+  if (!Number.isFinite(number) || number < 0) {
+    return fallback;
+  }
+  return Math.min(number, 100000);
 }
 
 function isSensitiveQueryKey(key, queryKeys = DEFAULT_REDACT_QUERY_KEYS) {
@@ -1654,6 +1708,18 @@ function redactOutputValue(value, options) {
   return value;
 }
 
+function projectSourcesForOutput(sources = [], maxSourcesPerUrl = DEFAULT_MAX_SOURCES_PER_URL) {
+  const limit = Math.max(0, Number.isFinite(maxSourcesPerUrl) ? Math.floor(maxSourcesPerUrl) : DEFAULT_MAX_SOURCES_PER_URL);
+  const projected = sources
+    .slice(0, limit)
+    .map(({ key, fallbackUrls, ...source }) => source);
+  return {
+    sourceCount: sources.length,
+    sourcesTruncated: sources.length > projected.length,
+    sources: projected,
+  };
+}
+
 async function fetchUrl(url, {
   requireBody,
   forceGet = false,
@@ -1667,6 +1733,9 @@ async function fetchUrl(url, {
   preferGet = false,
   canonicalStrategy = DEFAULTS.canonicalStrategy,
   legacyTls = false,
+  maxHtmlBytes = DEFAULTS.maxHtmlBytes,
+  maxBodyPreviewBytes = DEFAULTS.maxBodyPreviewBytes,
+  maxDownloadProbeBytes = DEFAULTS.maxDownloadProbeBytes,
   scheduleRequest,
 }) {
   const started = performance.now();
@@ -1685,6 +1754,9 @@ async function fetchUrl(url, {
       preferGet,
       canonicalStrategy,
       legacyTls,
+      maxHtmlBytes,
+      maxBodyPreviewBytes,
+      maxDownloadProbeBytes,
       scheduleRequest,
       started,
     });
@@ -1712,6 +1784,9 @@ async function fetchUrlOnce(url, {
   preferGet,
   canonicalStrategy,
   legacyTls,
+  maxHtmlBytes,
+  maxBodyPreviewBytes,
+  maxDownloadProbeBytes,
   scheduleRequest,
   started,
 }) {
@@ -1726,6 +1801,9 @@ async function fetchUrlOnce(url, {
         referer,
         canonicalStrategy,
         legacyTls,
+        maxHtmlBytes,
+        maxBodyPreviewBytes,
+        maxDownloadProbeBytes,
         readBody: true,
         scheduleRequest,
         started,
@@ -1742,6 +1820,9 @@ async function fetchUrlOnce(url, {
         referer,
         canonicalStrategy,
         legacyTls,
+        maxHtmlBytes,
+        maxBodyPreviewBytes,
+        maxDownloadProbeBytes,
         readBody: false,
         scheduleRequest,
         started,
@@ -1757,6 +1838,9 @@ async function fetchUrlOnce(url, {
       referer,
       canonicalStrategy,
       legacyTls,
+      maxHtmlBytes,
+      maxBodyPreviewBytes,
+      maxDownloadProbeBytes,
       readBody: false,
       scheduleRequest,
       started,
@@ -1774,6 +1858,9 @@ async function fetchUrlOnce(url, {
       referer,
       canonicalStrategy,
       legacyTls,
+      maxHtmlBytes,
+      maxBodyPreviewBytes,
+      maxDownloadProbeBytes,
       readBody: false,
       scheduleRequest,
       started,
@@ -1905,6 +1992,9 @@ async function request(url, method, {
   referer,
   canonicalStrategy,
   legacyTls,
+  maxHtmlBytes,
+  maxBodyPreviewBytes,
+  maxDownloadProbeBytes,
   readBody,
   scheduleRequest,
   started,
@@ -1934,6 +2024,9 @@ async function request(url, method, {
           referer,
           started,
           canonicalStrategy,
+          maxHtmlBytes,
+          maxBodyPreviewBytes,
+          maxDownloadProbeBytes,
           redirectChain,
           maxRedirects,
           longRedirectThreshold,
@@ -1951,7 +2044,7 @@ async function request(url, method, {
       });
 
       if (redirectChain.length > maxRedirects) {
-        await releaseResponseBody(response);
+        await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
         return buildRedirectFailureResult({
           url,
           finalUrl: nextUrl,
@@ -1970,7 +2063,7 @@ async function request(url, method, {
 
       const visitUrl = normalizeRedirectVisitUrl(nextUrl);
       if (seenUrls.has(visitUrl)) {
-        await releaseResponseBody(response);
+        await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
         return buildRedirectFailureResult({
           url,
           finalUrl: nextUrl,
@@ -1987,7 +2080,7 @@ async function request(url, method, {
         });
       }
 
-      await releaseResponseBody(response);
+      await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
       seenUrls.add(visitUrl);
       currentUrl = nextUrl;
       currentMethod = getRedirectMethod(currentMethod, response.status);
@@ -2002,6 +2095,9 @@ async function request(url, method, {
       referer,
       started,
       canonicalStrategy,
+      maxHtmlBytes,
+      maxBodyPreviewBytes,
+      maxDownloadProbeBytes,
       redirectChain,
       maxRedirects,
       longRedirectThreshold,
@@ -2086,9 +2182,64 @@ class LegacyResponse {
     return (await this.buffer()).toString("utf8");
   }
 
+  async readText(maxBytes) {
+    const { buffer, bytesRead, truncated } = await this.readBuffer(maxBytes);
+    return {
+      text: buffer.toString("utf8"),
+      bytesRead,
+      truncated,
+    };
+  }
+
   async arrayBuffer() {
     const buffer = await this.buffer();
     return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  }
+
+  readBuffer(maxBytes) {
+    const limit = Math.max(0, Number.isFinite(maxBytes) ? Math.floor(maxBytes) : Number.MAX_SAFE_INTEGER);
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      let bytesRead = 0;
+      let truncated = false;
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve({ buffer: Buffer.concat(chunks), bytesRead, truncated });
+      };
+
+      this.response.on("data", (chunk) => {
+        if (settled) {
+          return;
+        }
+        const buffer = Buffer.from(chunk);
+        if (bytesRead + buffer.length <= limit) {
+          chunks.push(buffer);
+          bytesRead += buffer.length;
+          return;
+        }
+
+        const remaining = Math.max(0, limit - bytesRead);
+        if (remaining > 0) {
+          chunks.push(buffer.subarray(0, remaining));
+          bytesRead += remaining;
+        }
+        truncated = true;
+        this.response.destroy();
+        finish();
+      });
+      this.response.on("end", finish);
+      this.response.on("error", (error) => {
+        if (truncated || settled) {
+          return;
+        }
+        settled = true;
+        reject(error);
+      });
+    });
   }
 
   buffer() {
@@ -2118,6 +2269,9 @@ async function buildResponseResult(response, {
   referer,
   started,
   canonicalStrategy,
+  maxHtmlBytes,
+  maxBodyPreviewBytes,
+  maxDownloadProbeBytes,
   redirectChain,
   maxRedirects,
   longRedirectThreshold,
@@ -2143,16 +2297,26 @@ async function buildResponseResult(response, {
     suspectedWaf: false,
     suspectedBot: false,
     requestReferer: referer || null,
+    bodyBytesRead: 0,
+    bodyTruncated: false,
     elapsedMs: Math.round(performance.now() - started),
     error: null,
   };
 
   if (readBody) {
-    result.body = await response.text();
+    const body = await readResponseText(response, maxHtmlBytes);
+    result.body = body.text;
+    result.bodyBytesRead = body.bytesRead;
+    result.bodyTruncated = body.truncated;
   } else if (!result.ok && isHtml(contentType)) {
-    result.diagnosticBody = (await response.text()).slice(0, 4096);
+    const body = await readResponseText(response, maxBodyPreviewBytes);
+    result.diagnosticBody = body.text;
+    result.bodyBytesRead = body.bytesRead;
+    result.bodyTruncated = body.truncated;
   } else {
-    await releaseResponseBody(response);
+    const release = await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
+    result.bodyBytesRead = release.bytesRead;
+    result.bodyTruncated = release.truncated;
   }
 
   const signature = buildBodySignature(result.body || result.diagnosticBody || "");
@@ -2171,21 +2335,74 @@ async function buildResponseResult(response, {
   return result;
 }
 
+async function readResponseText(response, maxBytes) {
+  if (typeof response.readText === "function") {
+    return response.readText(maxBytes);
+  }
+  if (!response.body) {
+    return { text: "", bytesRead: 0, truncated: false };
+  }
+
+  const limit = Math.max(0, Number.isFinite(maxBytes) ? Math.floor(maxBytes) : Number.MAX_SAFE_INTEGER);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytesRead = 0;
+  let truncated = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      const chunk = Buffer.from(value);
+      if (bytesRead + chunk.length <= limit) {
+        chunks.push(chunk);
+        bytesRead += chunk.length;
+        continue;
+      }
+
+      const remaining = Math.max(0, limit - bytesRead);
+      if (remaining > 0) {
+        chunks.push(chunk.subarray(0, remaining));
+        bytesRead += remaining;
+      }
+      truncated = true;
+      await reader.cancel();
+      break;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return {
+    text: Buffer.concat(chunks).toString("utf8"),
+    bytesRead,
+    truncated,
+  };
+}
+
 async function releaseResponseBody(response, { maxDrainBytes = 64 * 1024 } = {}) {
   if (!response.body) {
-    return;
+    return { bytesRead: 0, truncated: false };
   }
 
   try {
     const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
     if (Number.isFinite(contentLength) && contentLength <= maxDrainBytes) {
       await response.arrayBuffer();
-      return;
+      return { bytesRead: contentLength, truncated: false };
     }
 
     await response.body.cancel();
+    return {
+      bytesRead: 0,
+      truncated: true,
+    };
   } catch {
     // Cleanup is best-effort; keep the original HTTP result intact.
+    return { bytesRead: 0, truncated: false };
   }
 }
 
@@ -4632,6 +4849,22 @@ function parseArgs(argv) {
       explicitOptions.add("redactQueryKeys");
       continue;
     }
+    if (arg === "--max-html-bytes") {
+      options.maxHtmlBytes = readNonNegativeInteger(args.shift(), "--max-html-bytes");
+      continue;
+    }
+    if (arg === "--max-body-preview-bytes") {
+      options.maxBodyPreviewBytes = readNonNegativeInteger(args.shift(), "--max-body-preview-bytes");
+      continue;
+    }
+    if (arg === "--max-download-probe-bytes") {
+      options.maxDownloadProbeBytes = readNonNegativeInteger(args.shift(), "--max-download-probe-bytes");
+      continue;
+    }
+    if (arg === "--max-sources-per-url") {
+      options.maxSourcesPerUrl = readNonNegativeInteger(args.shift(), "--max-sources-per-url");
+      continue;
+    }
     if (arg === "--output" || arg === "-o") {
       output = args.shift();
       if (!output) {
@@ -4680,6 +4913,10 @@ function parseArgs(argv) {
   options.spaLinks = normalizeSpaLinkMode(options.spaLinks);
   options.redactSensitiveQuery = options.redactSensitiveQuery !== false;
   options.redactQueryKeys = normalizeRedactQueryKeys(options.redactQueryKeys);
+  options.maxHtmlBytes = normalizeByteLimit(options.maxHtmlBytes, DEFAULTS.maxHtmlBytes);
+  options.maxBodyPreviewBytes = normalizeByteLimit(options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
+  options.maxDownloadProbeBytes = normalizeByteLimit(options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
+  options.maxSourcesPerUrl = normalizeIntegerLimit(options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
   return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource, siteLinkRulesSource };
 }
 
@@ -4856,6 +5093,14 @@ Options:
                       Disable sensitive query masking in outputs.
   --redact-query-keys <list>
                       Additional comma-separated query keys to mask in outputs.
+  --max-html-bytes <n>
+                      Maximum bytes to read for HTML/body extraction. Default: ${DEFAULTS.maxHtmlBytes}
+  --max-body-preview-bytes <n>
+                      Maximum bytes to read for error diagnostic body preview. Default: ${DEFAULTS.maxBodyPreviewBytes}
+  --max-download-probe-bytes <n>
+                      Maximum bytes to drain for non-body download/media probes. Default: ${DEFAULTS.maxDownloadProbeBytes}
+  --max-sources-per-url <n>
+                      Maximum source records saved per URL in outputs. Default: ${DEFAULTS.maxSourcesPerUrl}
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -4941,8 +5186,9 @@ function printSummary(report) {
     for (const source of item.sources.slice(0, 3)) {
       console.log(`  found on ${source.page} (${source.tag}[${source.attribute}])`);
     }
-    if (item.sources.length > 3) {
-      console.log(`  and ${item.sources.length - 3} more source(s)`);
+    const totalSources = item.sourceCount ?? item.sources.length;
+    if (totalSources > 3) {
+      console.log(`  and ${totalSources - 3} more source(s)`);
     }
   }
 }

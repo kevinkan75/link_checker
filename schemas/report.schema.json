@@ -101,6 +101,18 @@
           "items": {
             "type": "string"
           }
+        },
+        "maxHtmlBytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "maxBodyPreviewBytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "maxDownloadProbeBytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "maxSourcesPerUrl": {
+          "$ref": "#/$defs/nonNegativeInteger"
         }
       }
     },
@@ -133,7 +145,9 @@
         "canonicalUrl": { "type": ["string", "null"] },
         "ok": { "type": "boolean" },
         "status": { "type": ["integer", "null"] },
-        "checkedAt": { "type": ["string", "null"] }
+        "checkedAt": { "type": ["string", "null"] },
+        "bodyBytesRead": { "$ref": "#/$defs/nonNegativeInteger" },
+        "bodyTruncated": { "type": "boolean" }
       }
     },
     "brokenItem": {
@@ -143,6 +157,8 @@
       "properties": {
         "url": { "type": "string" },
         "ok": { "type": "boolean" },
+        "sourceCount": { "$ref": "#/$defs/nonNegativeInteger" },
+        "sourcesTruncated": { "type": "boolean" },
         "sources": {
           "type": "array",
           "items": {
@@ -163,6 +179,7 @@
         "registrableDomain": { "type": ["string", "null"] },
         "type": { "type": "string" },
         "sourceCount": { "$ref": "#/$defs/nonNegativeInteger" },
+        "sourcesTruncated": { "type": "boolean" },
         "sources": {
           "type": "array",
           "items": {
