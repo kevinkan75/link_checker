@@ -10,6 +10,7 @@ P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二
 
 - `Local_Link_Checker_分析文件_v5.1.md`：作為架構決策與 Roadmap 邊界。
 - `Local_Link_Checker_分析文件_v5.2.md`：作為工程落地補充，補安全、測試、schema、response limit、partial report、profile 與規則治理。
+- [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)：作為 P6.5a 實作前切分、風險與驗收建議；P6.5a 雖不改掃描語意，但因涉及 report 契約、redaction、body limit 與 Keep-Alive，實作風險以中等看待。
 
 ## 階段總覽
 
@@ -231,6 +232,8 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 ## P6.5a：低風險穩定性修補
 
 狀態：下一個主線。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
+
+實作前評估見 [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)。執行時需拆成契約/manifest、redaction/CSV、sources/body limit、Header/Keep-Alive 四批；不得一次混合所有交付項。
 
 交付項：
 
