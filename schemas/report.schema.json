@@ -13,6 +13,8 @@
     "runStatus",
     "startUrl",
     "options",
+    "scanPolicy",
+    "compliance",
     "summary",
     "broken",
     "checked",
@@ -59,6 +61,12 @@
     },
     "securityPolicy": {
       "$ref": "#/$defs/securityPolicy"
+    },
+    "scanPolicy": {
+      "$ref": "#/$defs/scanPolicy"
+    },
+    "compliance": {
+      "$ref": "#/$defs/compliance"
     },
     "checked": {
       "type": "array",
@@ -146,6 +154,15 @@
         },
         "allowPrivateIp": {
           "type": "boolean"
+        },
+        "robotsTxt": {
+          "type": "boolean"
+        },
+        "authorizedScan": {
+          "type": "boolean"
+        },
+        "authorizationNote": {
+          "type": ["string", "null"]
         }
       }
     },
@@ -161,6 +178,57 @@
           "type": "array",
           "items": { "type": "string" }
         }
+      }
+    },
+    "scanPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["robotsTxt"],
+      "properties": {
+        "robotsTxt": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status", "mode", "pathEnforcement"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "robots_compliant",
+                "robots_not_found",
+                "robots_fetch_error",
+                "robots_override_authorized",
+                "robots_disallow_override_without_declaration",
+                "robots_respected_path_skip",
+                "robots_disabled"
+              ]
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["record_only", "disabled"]
+            },
+            "pathEnforcement": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["purpose", "scope", "authorizedScanDeclared", "robotsTxtPolicy", "robotsTxtEnforced"],
+      "properties": {
+        "purpose": { "type": "string" },
+        "scope": {
+          "type": "string",
+          "enum": ["same_origin", "same_site", "same_origin_with_external_validation", "mixed", "unknown"]
+        },
+        "authorizedScanDeclared": { "type": "boolean" },
+        "authorizationNote": { "type": ["string", "null"] },
+        "robotsTxtPolicy": { "type": "string" },
+        "robotsTxtEnforced": { "type": "boolean" },
+        "responseBodyStored": { "type": "boolean" },
+        "bodyHashEnabled": { "type": "boolean" }
       }
     },
     "runStatus": {
@@ -217,7 +285,8 @@
         "brokenLinks",
         "skippedExternal",
         "externalLinks",
-        "externalDomains"
+        "externalDomains",
+        "robotsTxt"
       ],
       "properties": {
         "pagesCrawled": { "$ref": "#/$defs/nonNegativeInteger" },
@@ -225,7 +294,31 @@
         "brokenLinks": { "$ref": "#/$defs/nonNegativeInteger" },
         "skippedExternal": { "$ref": "#/$defs/nonNegativeInteger" },
         "externalLinks": { "$ref": "#/$defs/nonNegativeInteger" },
-        "externalDomains": { "$ref": "#/$defs/nonNegativeInteger" }
+        "externalDomains": { "$ref": "#/$defs/nonNegativeInteger" },
+        "robotsTxt": {
+          "$ref": "#/$defs/robotsTxtSummary"
+        }
+      }
+    },
+    "robotsTxtSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["enabled", "url", "status", "appliesTo", "pathEnforcement"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "url": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["not_attempted", "disabled", "ok", "not_found", "http_error", "fetch_error", "blocked_by_security_policy"]
+        },
+        "appliesTo": { "type": "string" },
+        "pathEnforcement": { "type": "boolean" },
+        "httpStatus": { "type": ["integer", "null"] },
+        "fetchedAt": { "type": ["string", "null"], "format": "date-time" },
+        "crawlDelaySeconds": { "type": ["number", "null"] },
+        "disallowRules": { "$ref": "#/$defs/nonNegativeInteger" },
+        "allowRules": { "$ref": "#/$defs/nonNegativeInteger" },
+        "fullDisallow": { "type": "boolean" }
       }
     },
     "checkedItem": {

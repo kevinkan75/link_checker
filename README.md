@@ -34,7 +34,7 @@
 
 ## 目前狀態與邊界
 
-目前已完成 P0-P6 的功能基線、P6.5a 低風險穩定性修補、P6.5b-1 SSRF / URL security policy 與 P6.5b-2 `runStatus` / partial report。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan 與 robots path enforcement 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
+目前已完成 P0-P6 的功能基線、P6.5a 低風險穩定性修補、P6.5b-1 SSRF / URL security policy、P6.5b-2 `runStatus` / partial report 與 P6.5b-3 robots / compliance 記錄。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan 與 robots path enforcement 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
 
 現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。JSON 輸出以內容欄位記錄 `schemaVersion` / `generator`，並以同目錄 `manifest.json` 追溯工具、schema、runtime 與輸出清單；一般日常輸出不預設在檔名加版本號。report、CSV 與事件 log 預設會遮罩高風險 query value，實際 request URL 不受遮罩影響。
 
@@ -195,6 +195,9 @@ GUI 尚未提供規則檔輸入欄位；若需要外連治理規則或站台特�
 - `--block-private-ip`：阻擋 localhost、private、link-local、metadata 與 reserved IP，預設開啟。
 - `--allow-localhost`：允許 localhost / loopback 目標，只建議用於可信任的本機掃描。
 - `--allow-private-ip`：允許內網/private IP 目標，但不包含 localhost，metadata service IP 仍會阻擋。
+- `--authorized-scan`：記錄使用者宣告已取得掃描授權；工具不驗證授權。
+- `--authorization-note <text>`：把授權背景或內部工單備註寫入 report 的 `compliance`。
+- `--no-robots`：不讀取 start origin 的 `robots.txt` audit metadata。
 - `--domain-rules <file-or-url>`：載入網域分類規則 JSON，可用本機檔案或 URL。
 - `--external-risk-rules <file-or-url>`：載入外連治理規則 JSON，可用白名單、黑名單與觀察名單調整 `externalRisk`。
 - `--site-link-rules <file-or-url>`：載入 SPA/CMS payload 欄位推導規則，例如從 `linkUrl`、`youtubeId` 或站台 route 欄位產生可檢查 URL。
@@ -468,7 +471,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b-1 與 P6.5b-2 已完成，後續規劃 robots / compliance。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b-1、P6.5b-2 與 P6.5b-3 已完成，後續規劃 Retry-After / host diagnostics。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
@@ -482,4 +485,4 @@ dist\LinkChecker-portable.zip
 
 當結果顯示「Blocked by protection layer」或 GUI 顯示「防護阻擋」時，通常代表網站前方的防護服務拒絕程式化請求。這不一定是連結失效，建議用一般瀏覽器人工確認，或請網站管理方允許檢查來源。
 
-目前版本不會執行 robots.txt path enforcement，也沒有 `--authorized-scan` 宣告欄位；相關合規紀錄與掃描策略會依 roadmap 放在 P6.5b 後續處理。
+目前版本會記錄 start origin 的 robots.txt、`scanPolicy` 與 `compliance`，並支援 `--authorized-scan` / `--authorization-note` / `--no-robots`。這些欄位只記錄工具行為與使用者宣告，不代表工具已驗證授權；robots.txt path enforcement 仍放在後續 `--respect-robots` 階段。

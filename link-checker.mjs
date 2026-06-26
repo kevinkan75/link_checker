@@ -117,6 +117,9 @@ const DEFAULTS = {
   blockPrivateIp: true,
   allowLocalhost: false,
   allowPrivateIp: false,
+  robotsTxt: true,
+  authorizedScan: false,
+  authorizationNote: null,
   redactSensitiveQuery: true,
   redactQueryKeys: DEFAULT_REDACT_QUERY_KEYS,
   maxHtmlBytes: DEFAULT_MAX_HTML_BYTES,
@@ -512,6 +515,8 @@ class LinkChecker {
     this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
     this.securityPolicy = normalizeSecurityPolicy(this.options);
     Object.assign(this.options, this.securityPolicy);
+    this.complianceOptions = normalizeComplianceOptions(this.options);
+    Object.assign(this.options, this.complianceOptions);
     this.connectionOptions = normalizeConnectionOptions(this.options);
     Object.assign(this.options, this.connectionOptions);
     this.agents = createConnectionAgents(this.connectionOptions);
@@ -567,16 +572,20 @@ class LinkChecker {
     this.stoppedByUser = false;
     this.stopReason = null;
     this.runStartedAt = null;
+    this.robotsTxt = buildInitialRobotsTxtSummary(this.startOrigin, this.options);
+    this.scanPolicy = buildScanPolicy(this.robotsTxt, this.options);
+    this.compliance = buildComplianceRecord(this.scanPolicy, this.options);
   }
 
   async run() {
     this.runStartedAt = new Date().toISOString();
     this.reporter?.start(this);
-    const workers = Array.from(
-      { length: this.options.concurrency },
-      () => this.pageWorker(),
-    );
     try {
+      await this.inspectRobotsTxt();
+      const workers = Array.from(
+        { length: this.options.concurrency },
+        () => this.pageWorker(),
+      );
       await Promise.all(workers);
       await this.confirmNotFoundResults();
       return this.buildReport();
@@ -625,6 +634,48 @@ class LinkChecker {
     this.stopped = true;
     this.stopReason = reason;
     this.stoppedByUser = reason === "stopped_by_user";
+  }
+
+  async inspectRobotsTxt() {
+    if (!this.options.robotsTxt) {
+      this.robotsTxt = buildInitialRobotsTxtSummary(this.startOrigin, this.options);
+      this.updatePolicyRecords();
+      return;
+    }
+
+    const robotsUrl = new URL("/robots.txt", this.startOrigin).toString();
+    try {
+      const result = await fetchUrl(robotsUrl, {
+        requireBody: true,
+        forceGet: true,
+        timeoutMs: this.options.timeoutMs,
+        retryCount: 0,
+        maxRedirects: this.options.maxRedirects,
+        longRedirectThreshold: this.options.longRedirectThreshold,
+        userAgent: this.options.userAgent,
+        acceptLanguage: this.options.acceptLanguage,
+        referer: this.startUrl,
+        preferGet: true,
+        canonicalStrategy: this.options.canonicalStrategy,
+        legacyTls: this.options.legacyTls,
+        maxHtmlBytes: Math.min(this.options.maxHtmlBytes, 256 * 1024),
+        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+        connectionOptions: this.connectionOptions,
+        agents: this.agents,
+        securityPolicy: this.securityPolicy,
+        scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
+      });
+      this.robotsTxt = buildRobotsTxtSummary(robotsUrl, result, this.options);
+    } catch (error) {
+      this.robotsTxt = buildRobotsTxtFetchErrorSummary(robotsUrl, error, this.options);
+    }
+    this.updatePolicyRecords();
+  }
+
+  updatePolicyRecords() {
+    this.scanPolicy = buildScanPolicy(this.robotsTxt, this.options);
+    this.compliance = buildComplianceRecord(this.scanPolicy, this.options);
   }
 
   async processPage({ url, depth }) {
@@ -1407,6 +1458,9 @@ class LinkChecker {
         blockPrivateIp: this.options.blockPrivateIp,
         allowLocalhost: this.options.allowLocalhost,
         allowPrivateIp: this.options.allowPrivateIp,
+        robotsTxt: this.options.robotsTxt,
+        authorizedScan: this.options.authorizedScan,
+        authorizationNote: this.options.authorizationNote,
         keepAlive: this.options.keepAlive,
         maxSockets: this.options.maxSockets,
         maxFreeSockets: this.options.maxFreeSockets,
@@ -1416,6 +1470,8 @@ class LinkChecker {
         siteLinkRulesSource: this.options.siteLinkRulesSource || null,
       },
       securityPolicy: this.securityPolicy,
+      scanPolicy: this.scanPolicy,
+      compliance: this.compliance,
       summary: {
         pagesCrawled: this.crawledPages.size,
         urlsChecked: checked.length,
@@ -1443,6 +1499,7 @@ class LinkChecker {
         inventorySummary,
         spaDetection,
         scanQuality,
+        robotsTxt: this.robotsTxt,
       },
       broken,
       checked,
@@ -1721,6 +1778,221 @@ function normalizeSecurityPolicy(options = {}) {
     allowPrivateIp: options.allowPrivateIp === true,
     metadataIpBlocked: true,
     allowedProtocols: [...ALLOWED_REQUEST_PROTOCOLS].map((protocol) => protocol.replace(":", "")),
+  };
+}
+
+function normalizeComplianceOptions(options = {}) {
+  const authorizationNote = typeof options.authorizationNote === "string"
+    ? options.authorizationNote.trim().slice(0, 500)
+    : null;
+  return {
+    robotsTxt: options.robotsTxt !== false,
+    authorizedScan: options.authorizedScan === true,
+    authorizationNote: authorizationNote || null,
+  };
+}
+
+function buildInitialRobotsTxtSummary(startOrigin, options = DEFAULTS) {
+  const enabled = options.robotsTxt !== false;
+  return {
+    enabled,
+    url: new URL("/robots.txt", startOrigin).toString(),
+    status: enabled ? "not_attempted" : "disabled",
+    httpStatus: null,
+    fetchedAt: null,
+    appliesTo: "start_origin",
+    pathEnforcement: false,
+    userAgent: options.userAgent || DEFAULTS.userAgent,
+    matchedUserAgent: null,
+    crawlDelaySeconds: null,
+    disallowRules: 0,
+    allowRules: 0,
+    sitemapUrls: [],
+    fullDisallow: false,
+    bodyBytesRead: 0,
+    bodyTruncated: false,
+    error: null,
+  };
+}
+
+function buildRobotsTxtSummary(robotsUrl, result, options = DEFAULTS) {
+  const summary = {
+    ...buildInitialRobotsTxtSummary(new URL(robotsUrl).origin, options),
+    url: robotsUrl,
+    fetchedAt: new Date().toISOString(),
+    httpStatus: result.status ?? null,
+    bodyBytesRead: result.bodyBytesRead ?? 0,
+    bodyTruncated: result.bodyTruncated === true,
+  };
+
+  if (result.classification === "security_blocked") {
+    return {
+      ...summary,
+      status: "blocked_by_security_policy",
+      error: result.issueType || result.securityPolicy?.reason || "security_blocked",
+    };
+  }
+
+  if (result.status === 404 || result.status === 410) {
+    return {
+      ...summary,
+      status: "not_found",
+    };
+  }
+
+  if (!result.ok) {
+    return {
+      ...summary,
+      status: result.status ? "http_error" : "fetch_error",
+      error: result.error || result.diagnosis || null,
+    };
+  }
+
+  const parsed = parseRobotsTxt(result.body || "", options.userAgent || DEFAULTS.userAgent);
+  return {
+    ...summary,
+    status: "ok",
+    matchedUserAgent: parsed.matchedUserAgent,
+    crawlDelaySeconds: parsed.crawlDelaySeconds,
+    disallowRules: parsed.disallowRules,
+    allowRules: parsed.allowRules,
+    sitemapUrls: parsed.sitemapUrls,
+    fullDisallow: parsed.fullDisallow,
+  };
+}
+
+function buildRobotsTxtFetchErrorSummary(robotsUrl, error, options = DEFAULTS) {
+  return {
+    ...buildInitialRobotsTxtSummary(new URL(robotsUrl).origin, options),
+    url: robotsUrl,
+    status: "fetch_error",
+    fetchedAt: new Date().toISOString(),
+    error: error.message || String(error),
+  };
+}
+
+function parseRobotsTxt(text, userAgent) {
+  const userAgentText = String(userAgent || "").toLowerCase();
+  const groups = [];
+  let currentGroup = null;
+  const sitemapUrls = [];
+
+  for (const rawLine of String(text || "").split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*/, "").trim();
+    if (!line) {
+      continue;
+    }
+    const separator = line.indexOf(":");
+    if (separator < 0) {
+      continue;
+    }
+    const key = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+    if (key === "sitemap") {
+      if (value) {
+        sitemapUrls.push(value);
+      }
+      continue;
+    }
+    if (key === "user-agent") {
+      currentGroup = { userAgents: [value.toLowerCase()], rules: [], crawlDelaySeconds: null };
+      groups.push(currentGroup);
+      continue;
+    }
+    if (!currentGroup) {
+      continue;
+    }
+    if (key === "allow" || key === "disallow") {
+      currentGroup.rules.push({ type: key, path: value });
+      continue;
+    }
+    if (key === "crawl-delay") {
+      const seconds = Number.parseFloat(value);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        currentGroup.crawlDelaySeconds = seconds;
+      }
+    }
+  }
+
+  const matchedGroups = groups.filter((group) => (
+    group.userAgents.some((agent) => agent === "*" || (agent && userAgentText.includes(agent)))
+  ));
+  const selectedGroups = matchedGroups.length > 0 ? matchedGroups : groups.filter((group) => group.userAgents.includes("*"));
+  const rules = selectedGroups.flatMap((group) => group.rules);
+  const crawlDelaySeconds = selectedGroups
+    .map((group) => group.crawlDelaySeconds)
+    .find((value) => Number.isFinite(value)) ?? null;
+  const matchedUserAgent = selectedGroups
+    .flatMap((group) => group.userAgents)
+    .sort((left, right) => (left === "*" ? 1 : 0) - (right === "*" ? 1 : 0))[0] || null;
+
+  return {
+    matchedUserAgent,
+    crawlDelaySeconds,
+    disallowRules: rules.filter((rule) => rule.type === "disallow" && rule.path !== "").length,
+    allowRules: rules.filter((rule) => rule.type === "allow" && rule.path !== "").length,
+    sitemapUrls: [...new Set(sitemapUrls)].slice(0, 20),
+    fullDisallow: rules.some((rule) => rule.type === "disallow" && rule.path === "/"),
+  };
+}
+
+function buildScanPolicy(robotsTxt, options = DEFAULTS) {
+  const robotsStatus = getRobotsPolicyStatus(robotsTxt, options);
+  return {
+    robotsTxt: {
+      status: robotsStatus,
+      mode: options.robotsTxt === false ? "disabled" : "record_only",
+      pathEnforcement: false,
+      fetched: Boolean(robotsTxt?.fetchedAt),
+      robotsTxtStatus: robotsTxt?.status || "not_attempted",
+      robotsTxtUrl: robotsTxt?.url || null,
+      fullDisallow: robotsTxt?.fullDisallow === true,
+      crawlDelaySeconds: robotsTxt?.crawlDelaySeconds ?? null,
+    },
+    effectiveRateLimit: {
+      perHostConcurrency: options.perHostConcurrency,
+      requestDelayMs: options.requestDelayMs,
+      requestDelayMinMs: options.requestDelayMinMs,
+      requestDelayMaxMs: options.requestDelayMaxMs,
+      crawlDelayApplied: false,
+    },
+    notes: [
+      options.robotsTxt === false
+        ? "robots.txt fetch disabled by user option."
+        : "robots.txt is recorded for audit context; path enforcement is not enabled in P6.5b-3.",
+    ],
+  };
+}
+
+function getRobotsPolicyStatus(robotsTxt, options = DEFAULTS) {
+  if (options.robotsTxt === false || robotsTxt?.status === "disabled") {
+    return "robots_disabled";
+  }
+  if (robotsTxt?.status === "not_found") {
+    return "robots_not_found";
+  }
+  if (robotsTxt?.status && robotsTxt.status !== "ok") {
+    return "robots_fetch_error";
+  }
+  if (robotsTxt?.fullDisallow) {
+    return options.authorizedScan
+      ? "robots_override_authorized"
+      : "robots_disallow_override_without_declaration";
+  }
+  return "robots_compliant";
+}
+
+function buildComplianceRecord(scanPolicy, options = DEFAULTS) {
+  return {
+    purpose: "link_integrity_check",
+    scope: options.checkExternal ? "same_origin_with_external_validation" : "same_origin",
+    authorizedScanDeclared: options.authorizedScan === true,
+    authorizationNote: options.authorizationNote || null,
+    robotsTxtPolicy: scanPolicy?.robotsTxt?.status || "robots_fetch_error",
+    robotsTxtEnforced: false,
+    responseBodyStored: false,
+    bodyHashEnabled: false,
+    disclaimer: "This record stores user declarations and tool behavior only; it does not verify scan authorization.",
   };
 }
 
@@ -5259,6 +5531,24 @@ function parseArgs(argv) {
       explicitOptions.add("allowLocalhost");
       continue;
     }
+    if (arg === "--authorized-scan") {
+      options.authorizedScan = true;
+      explicitOptions.add("authorizedScan");
+      continue;
+    }
+    if (arg === "--authorization-note") {
+      options.authorizationNote = args.shift();
+      if (!options.authorizationNote || options.authorizationNote.startsWith("-")) {
+        throw new Error("--authorization-note requires a value");
+      }
+      explicitOptions.add("authorizationNote");
+      continue;
+    }
+    if (arg === "--no-robots") {
+      options.robotsTxt = false;
+      explicitOptions.add("robotsTxt");
+      continue;
+    }
     if (arg === "--keep-alive") {
       options.keepAlive = true;
       explicitOptions.add("keepAlive");
@@ -5514,6 +5804,7 @@ function parseArgs(argv) {
   options.maxDownloadProbeBytes = normalizeByteLimit(options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
   options.maxSourcesPerUrl = normalizeIntegerLimit(options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
   Object.assign(options, normalizeSecurityPolicy(options));
+  Object.assign(options, normalizeComplianceOptions(options));
   Object.assign(options, normalizeConnectionOptions(options));
   return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource, siteLinkRulesSource };
 }
@@ -5687,6 +5978,10 @@ Options:
   --block-private-ip  Block localhost, private, link-local, metadata, and reserved IPs. Default: on.
   --allow-localhost   Allow localhost and loopback targets for trusted local scans.
   --allow-private-ip  Allow private/internal IP targets except metadata service IPs.
+  --authorized-scan   Record that the user declares they are authorized to scan this site.
+  --authorization-note <text>
+                      Optional authorization context saved in report compliance metadata.
+  --no-robots         Do not fetch robots.txt audit metadata.
   --confirm-404       Re-check same-site 404/410 results after the main scan. Default: on.
   --no-confirm-404    Disable the post-scan 404/410 confirmation stage.
   --redact-sensitive-query
@@ -5733,6 +6028,9 @@ function printSummary(report) {
   console.log(`Broken links: ${summary.brokenLinks}`);
   console.log(`External links found: ${summary.externalLinks || 0}`);
   console.log(`External domains found: ${summary.externalDomains || 0}`);
+  if (summary.robotsTxt) {
+    console.log(`robots.txt: ${summary.robotsTxt.status} (${report.scanPolicy?.robotsTxt?.status || "unknown"})`);
+  }
   if (summary.spaDetection?.detected) {
     console.log(`SPA/framework signals: ${summary.spaDetection.framework} (${summary.spaDetection.signals.join(", ")})`);
   }

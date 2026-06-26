@@ -20,8 +20,9 @@
 - P6.5b-1 已完成 SSRF / URL security policy、redirect 後重檢、CLI fallback 與 security policy report 欄位。
 - WAF / Bot 診斷已有基礎欄位：`protection`、`suspectedWaf`、`suspectedBot`、body pattern 與 header evidence。
 - 404 confirmation 已避開 `protected` / suspected WAF / Bot 結果，避免把防護頁誤判為一般 404。
-- README 已明確說明目前不執行 robots.txt path enforcement，也沒有 `--authorized-scan` 宣告欄位。
+- README 已明確說明目前只記錄 robots / compliance，不執行 robots.txt path enforcement，也不驗證使用者授權。
 - P6.5b-2 已完成 `runStatus` / partial report，scan report 會正式產生 `runStatus`，diff 與 Report Analyzer 會提示 partial / failed report。
+- P6.5b-3 已完成 robots / compliance 記錄，scan report 會正式產生 `summary.robotsTxt`、`scanPolicy` 與 `compliance`。
 
 ## 建議切分
 
@@ -62,16 +63,16 @@
 - runtime error report 不應被 Analyzer / diff 誤判為完整結果。
 - 舊 report 沒有 `runStatus` 時仍可讀，並視為 legacy complete。
 
-### P6.5b-3：robots / compliance 記錄
+### P6.5b-3：robots / compliance 記錄（已完成）
 
 優先級：高，但需保守。
 
 交付：
 
-- `summary.robotsTxt` 記錄 start origin robots.txt 狀態、Crawl-delay、全站 Disallow。
-- `scanPolicy` 記錄 robots fetch 結果、是否停用 robots 記錄、是否有使用者授權宣告。
-- report root 新增 `compliance`，記錄 purpose、scope、authorizedScanDeclared、robotsTxtPolicy、responseBodyStored、bodyHashEnabled。
-- CLI 提供 `--authorized-scan`、`--authorization-note`、`--no-robots`。
+- `summary.robotsTxt` 已記錄 start origin robots.txt 狀態、Crawl-delay、全站 Disallow、Allow / Disallow rule count 與 Sitemap。
+- `scanPolicy` 已記錄 robots fetch 結果、是否停用 robots 記錄、是否僅 record-only。
+- report root 已新增 `compliance`，記錄 purpose、scope、authorizedScanDeclared、robotsTxtPolicy、responseBodyStored、bodyHashEnabled 與授權免責說明。
+- CLI 與 GUI 已提供 `--authorized-scan` / 授權宣告、`--authorization-note` / 授權備註、`--no-robots` / 不抓 robots.txt。
 
 驗收：
 
@@ -142,8 +143,8 @@
 - IPv6 loopback / link-local / unique local 測試。
 - GUI stop partial report 測試。（P6.5b-2 已完成核心 runStatus 覆蓋）
 - diff / Analyzer partial report warning 測試。（P6.5b-2 已完成）
-- robots missing / fetch error / full disallow 測試。
-- `--authorized-scan` 宣告欄位測試。
+- robots missing / fetch error / full disallow 測試。（P6.5b-3 已完成核心覆蓋）
+- `--authorized-scan` 宣告欄位測試。（P6.5b-3 已完成）
 - `Retry-After` capped wait 測試。
 - host cooldown 不阻塞其他 host 測試。
 - WAF signature classification 測試。

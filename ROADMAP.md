@@ -4,7 +4,7 @@
 
 P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP、SPA / Nuxt 站台抽取前置改善，以及 report-to-report diff 第一版。
 
-P6.5a 已完成輸出契約基線、redaction、sources 上限、response body limit 與 **Header / Accept-Encoding / Keep-Alive**。P6.5b-1 SSRF / URL security policy 與 P6.5b-2 `runStatus` / partial report 已完成；下一個主線收斂為 P6.5b-3 robots / compliance 記錄。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
+P6.5a 已完成輸出契約基線、redaction、sources 上限、response body limit 與 **Header / Accept-Encoding / Keep-Alive**。P6.5b-1 SSRF / URL security policy、P6.5b-2 `runStatus` / partial report 與 P6.5b-3 robots / compliance 記錄已完成；下一個主線收斂為 P6.5b-4 Retry-After / host diagnostics。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
 
 目前 Roadmap 採納下列分析與評估文件：
 
@@ -21,7 +21,7 @@ P6.5a 已完成輸出契約基線、redaction、sources 上限、response body l
 | 1 | P6 前置 | 已完成 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
 | 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
 | 3 | P6.5a | 已完成 | schema/generator、manifest、redaction、response limit、sources 上限、Header / Accept-Encoding / Keep-Alive | robots / compliance 語意 |
-| 4 | P6.5b | 進行中 | SSRF 與 partial report 已完成；後續 robots / compliance、Retry-After、WAF schema | WAF/Bot 繞過 |
+| 4 | P6.5b | 進行中 | SSRF、partial report、robots / compliance 已完成；後續 Retry-After、WAF schema | WAF/Bot 繞過 |
 | 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
 | 7 | P9 | 待規劃 | Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 空 UI 或未落地的展示層 |
@@ -262,26 +262,26 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6.5b：稽查語意與誤判降低
 
-狀態：進行中；P6.5b-1 與 P6.5b-2 已完成。實作前評估見 [docs/P6_5B_ASSESSMENT.md](docs/P6_5B_ASSESSMENT.md)。此階段會新增 report 語意、掃描安全邊界與合規紀錄，需同步更新 CLI、GUI 顯示與 Analyzer fallback。
+狀態：進行中；P6.5b-1、P6.5b-2 與 P6.5b-3 已完成。實作前評估見 [docs/P6_5B_ASSESSMENT.md](docs/P6_5B_ASSESSMENT.md)。此階段會新增 report 語意、掃描安全邊界與合規紀錄，需同步更新 CLI、GUI 顯示與 Analyzer fallback。
 
 建議切分：
 
 1. P6.5b-1 SSRF / URL security policy：已完成；預設阻擋 localhost、private IP、link-local、metadata IP、reserved IP 與 blocked scheme；request 前 DNS resolve 後檢查，redirect 後也重新檢查。
 2. P6.5b-2 `runStatus` / partial report：已完成；GUI stop、queue stop、執行期錯誤會標記 `partial`、`stoppedByUser` 或 `failed`，且 Analyzer / diff 會提示非完整結果。
-3. P6.5b-3 robots / compliance 記錄：`summary.robotsTxt`、`scanPolicy`、`compliance` root 欄位、`--authorized-scan` / `--authorization-note` / `--no-robots`；只記錄使用者宣告與工具策略，不驗證授權。
+3. P6.5b-3 robots / compliance 記錄：已完成；`summary.robotsTxt`、`scanPolicy`、`compliance` root 欄位、`--authorized-scan` / `--authorization-note` / `--no-robots`；只記錄使用者宣告與工具策略，不驗證授權。
 4. P6.5b-4 Retry-After / host diagnostics：尊重 429 / 503 的 `Retry-After`，但設定等待上限，且不阻塞其他 host；提供高 403 / 429 / suspected WAF 比例提示。
 5. P6.5b-5 WAF signature schema 收斂：保存 provider、header evidence、body signature rule id，不保存完整 body；bodyHash 預設關閉，僅 diagnostics opt-in 可啟用。
 
 驗收：
 
-- robots.txt 不存在或讀取失敗時，掃描不中斷且 report 有明確 `scanPolicy`。
+- robots.txt 不存在或讀取失敗時，掃描不中斷且 report 有明確 `scanPolicy`。（P6.5b-3 已完成）
 - `http://127.0.0.1`、`http://localhost`、`http://169.254.169.254` 預設不請求。
 - public hostname 解析到 private IP 時預設不請求；`--allow-localhost` 不得自動允許所有 private IP，`--allow-private-ip` 也不得自動允許 localhost。
 - redirect 到 private IP、metadata IP 或 blocked scheme 時停止 follow 並標記 security issue。
 - 429 / 503 的 `Retry-After` 不得讓掃描長時間卡住，也不得阻塞其他 host。
 - GUI stop 後保存 partial report，且不得被 Analyzer / diff 誤判為完整結果。（P6.5b-2 已完成）
 - 全站 Disallow 且無 Crawl-delay 時，最低降頻為 `effectiveDelayMs >= 2000`、`effectivePerHostConcurrency <= 1`。
-- 未帶 `--authorized-scan` 時，report 不得宣稱已授權。
+- 未帶 `--authorized-scan` 時，report 不得宣稱已授權。（P6.5b-3 已完成）
 - external host 不套用同站授權 override 語意。
 - WAF body signature 命中時，不應被歸入一般 404。
 - `bodyHashEnabled=false` 必須是預設。
@@ -455,7 +455,7 @@ CLI 可新增：
 
 | 類別 | 細項 | 落點 |
 | --- | --- | --- |
-| schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / redaction / body limit / `sourcesTruncated`、`1.2.0` 新增 `securityPolicy` 與 `runStatus`，後續擴充 robots / compliance / protection 結構 | P6.5a / P6.5b |
+| schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / redaction / body limit / `sourcesTruncated`、`1.2.0` 新增 `securityPolicy`、`runStatus`、robots / compliance 記錄，後續擴充 protection 結構 | P6.5a / P6.5b |
 | output versioning | 日常輸出檔名穩定；`report.json`、`summary.json`、`external-summary.json`、`diff.json` 使用內容版本欄位；CSV 不新增版本欄位 | P6.5a |
 | output manifest | 每次輸出建立 `manifest.json`，記錄 `toolVersion`、`schemaVersions`、`generatedAt`、`startUrl`、`optionsProfile`、`runtimeVersion`、generated files | P6.5a |
 | normalization | `load report -> detect schemaVersion -> normalize to internal ReportModel`，避免 GUI / Analyzer 散落 fallback 邏輯 | P6 / P9 |
@@ -466,7 +466,7 @@ CLI 可新增：
 | redaction CLI | `--redact-sensitive-query` 預設開啟、`--no-redact-sensitive-query`、`--redact-query-keys <list>` | P6.5a |
 | body / source limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes`、`--max-sources-per-url` | P6.5a |
 | keep-alive CLI | `--no-keep-alive`，並記錄 `keepAlive`、`maxSockets`、`maxFreeSockets`、`keepAliveMsecs` | P6.5a |
-| report fields | `securityPolicy`、`redaction`、`bodyLimits`、`runStatus`、`hostDiagnostics`、`rulesVersion`、`profileExpandedOptions` | P6.5 / P9 |
+| report fields | `securityPolicy`、`redaction`、`bodyLimits`、`runStatus`、`scanPolicy`、`compliance`、`hostDiagnostics`、`rulesVersion`、`profileExpandedOptions` | P6.5 / P9 |
 | redirect security labels | `scheme_downgrade_redirect`、`redirect_to_private_ip`、`redirect_to_blocked_scheme`、`redirect_to_metadata_ip` | P6.5b |
 | DNS / TLS issue types | `dns_not_found`、`connection_refused`、`timeout`、`tls_error`、`tls_cert_expired` | P6.5b |
 | IDN / IPv6 | canonical 比對使用 normalized hostname；security policy 需支援 punycode、`[::1]`、IPv6 unique local / link-local 判斷 | P6.5b |

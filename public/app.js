@@ -19,6 +19,9 @@ const externalRefererInput = document.querySelector("#external-referer");
 const confirm404Input = document.querySelector("#confirm-404");
 const legacyTlsInput = document.querySelector("#legacy-tls");
 const systemCaInput = document.querySelector("#system-ca");
+const authorizedScanInput = document.querySelector("#authorized-scan");
+const noRobotsInput = document.querySelector("#no-robots");
+const authorizationNoteInput = document.querySelector("#authorization-note");
 const presetButtons = document.querySelectorAll("[data-preset]");
 const advancedSummary = document.querySelector("#advanced-summary");
 const advancedValidation = document.querySelector("#advanced-validation");
@@ -92,6 +95,9 @@ const defaultSettings = {
   confirm404: true,
   legacyTls: false,
   systemCa: false,
+  authorizedScan: false,
+  noRobots: false,
+  authorizationNote: "",
 };
 const presets = {
   fast: { ...defaultSettings },
@@ -158,6 +164,9 @@ presetButtons.forEach((button) => {
   externalRefererInput,
   legacyTlsInput,
   systemCaInput,
+  authorizedScanInput,
+  noRobotsInput,
+  authorizationNoteInput,
 ].forEach((input) => {
   input.addEventListener("input", () => {
     setActivePreset(null);
@@ -320,6 +329,9 @@ function applySettings(settings) {
   confirm404Input.checked = settings.confirm404;
   legacyTlsInput.checked = settings.legacyTls;
   systemCaInput.checked = settings.systemCa;
+  authorizedScanInput.checked = settings.authorizedScan;
+  noRobotsInput.checked = settings.noRobots;
+  authorizationNoteInput.value = settings.authorizationNote;
 }
 
 function setActivePreset(name) {
@@ -443,6 +455,9 @@ function getCheckOptions() {
     confirm404: confirm404Input.checked,
     legacyTls: legacyTlsInput.checked,
     systemCa: systemCaInput.checked,
+    robotsTxt: !noRobotsInput.checked,
+    authorizedScan: authorizedScanInput.checked,
+    authorizationNote: authorizationNoteInput.value.trim(),
   };
 }
 

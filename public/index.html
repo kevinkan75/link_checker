@@ -163,6 +163,16 @@
                     <span>System CA</span>
                   </label>
 
+                  <label class="toggle-field option-toggle">
+                    <input id="authorized-scan" name="authorizedScan" type="checkbox">
+                    <span>宣告已授權掃描</span>
+                  </label>
+
+                  <label class="toggle-field option-toggle">
+                    <input id="no-robots" name="noRobots" type="checkbox">
+                    <span>不抓 robots.txt</span>
+                  </label>
+
                   <label class="language-field">
                     <span>語言標頭</span>
                     <input id="accept-language" name="acceptLanguage" type="text" value="zh-TW,zh;q=0.9,en;q=0.8">
@@ -171,6 +181,11 @@
                   <label class="language-field user-agent-field">
                     <span>User-Agent</span>
                     <input id="user-agent" name="userAgent" type="text" value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LocalLinkChecker/1.0">
+                  </label>
+
+                  <label class="language-field user-agent-field">
+                    <span>授權備註</span>
+                    <input id="authorization-note" name="authorizationNote" type="text" maxlength="500" placeholder="選填，僅寫入 report">
                   </label>
                 </div>
               </section>

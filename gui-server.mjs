@@ -919,6 +919,11 @@ function parseJobOptions(input) {
     blockPrivateIp: input.blockPrivateIp !== false,
     allowLocalhost: Boolean(input.allowLocalhost ?? baseOptions.allowLocalhost),
     allowPrivateIp: Boolean(input.allowPrivateIp ?? baseOptions.allowPrivateIp),
+    robotsTxt: input.robotsTxt !== false,
+    authorizedScan: Boolean(input.authorizedScan ?? baseOptions.authorizedScan),
+    authorizationNote: typeof input.authorizationNote === "string" && input.authorizationNote.trim()
+      ? input.authorizationNote.trim().slice(0, 500)
+      : baseOptions.authorizationNote,
     keepAlive: input.keepAlive !== false,
     redactSensitiveQuery: input.redactSensitiveQuery !== false,
     redactQueryKeys: Array.isArray(input.redactQueryKeys) ? input.redactQueryKeys : baseOptions.redactQueryKeys,
