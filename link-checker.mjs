@@ -7,8 +7,11 @@ import https from "node:https";
 import tls from "node:tls";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
+import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+const TOOL_VERSION = "0.1.0";
+const REPORT_SCHEMA_VERSION = "1.1.0";
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
 const SPA_LINK_MODES = new Set(["auto", "off", "strict"]);
@@ -1255,6 +1258,8 @@ class LinkChecker {
       .sort((a, b) => a.url.localeCompare(b.url));
 
     return {
+      schemaVersion: REPORT_SCHEMA_VERSION,
+      generator: buildReportGenerator(),
       startedAt: new Date().toISOString(),
       startUrl: this.startUrl,
       options: {
@@ -1464,6 +1469,48 @@ class LinkChecker {
       })
       .sort((a, b) => a.url.localeCompare(b.url));
   }
+}
+
+function buildReportGenerator() {
+  return {
+    name: "link-checker.mjs",
+    version: TOOL_VERSION,
+  };
+}
+
+function getOptionsProfile(options = {}) {
+  return options.conservativeMode ? "conservative" : "normal";
+}
+
+function getRuntimeVersion() {
+  return {
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+  };
+}
+
+function buildOutputManifest({
+  generatedAt = new Date().toISOString(),
+  startUrl,
+  options = {},
+  generatedFiles,
+} = {}) {
+  return {
+    toolVersion: TOOL_VERSION,
+    schemaVersions: {
+      report: REPORT_SCHEMA_VERSION,
+    },
+    generatedAt,
+    startUrl: startUrl || null,
+    optionsProfile: getOptionsProfile(options),
+    runtimeVersion: getRuntimeVersion(),
+    generatedFiles: (generatedFiles || []).map((file) => ({
+      path: file.path,
+      kind: file.kind,
+      schemaVersion: file.schemaVersion || null,
+    })),
+  };
 }
 
 async function fetchUrl(url, {
@@ -4764,6 +4811,19 @@ async function main() {
 
   if (parsed.output) {
     await writeFile(parsed.output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    const manifest = buildOutputManifest({
+      generatedAt: new Date().toISOString(),
+      startUrl: report.startUrl,
+      options: report.options,
+      generatedFiles: [
+        {
+          path: basename(parsed.output),
+          kind: "report",
+          schemaVersion: report.schemaVersion,
+        },
+      ],
+    });
+    await writeFile(join(dirname(parsed.output), "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   }
 
   if (parsed.json) {
@@ -4800,7 +4860,17 @@ function restartWithSystemCa(args) {
   });
 }
 
-export { BROWSER_USER_AGENT, DEFAULTS, LinkChecker, applyConservativeDefaults, canonicalizeUrl, isSystemCaEnabled };
+export {
+  BROWSER_USER_AGENT,
+  DEFAULTS,
+  REPORT_SCHEMA_VERSION,
+  TOOL_VERSION,
+  LinkChecker,
+  applyConservativeDefaults,
+  buildOutputManifest,
+  canonicalizeUrl,
+  isSystemCaEnabled,
+};
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {

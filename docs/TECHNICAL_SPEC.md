@@ -228,6 +228,8 @@ Report root：
 
 ```js
 {
+  schemaVersion,
+  generator,
   startedAt,
   startUrl,
   options,
@@ -237,6 +239,8 @@ Report root：
   externalLinks
 }
 ```
+
+P6.5a-1 起，scan report 使用 `schemaVersion: "1.1.0"`，`generator.name` 為 `link-checker.mjs`。最低契約草案位於 `schemas/report.schema.json`。
 
 ### 7.1 options
 
@@ -365,6 +369,9 @@ GUI 完成後會保存：
 - `events.log`
 - `external-links.csv`
 - `external-summary.json`
+- `manifest.json`
+
+CLI 使用 `--output <file>` 時會寫出指定 report，並在同目錄建立 `manifest.json`。
 
 ## 9. Exit Codes
 
@@ -419,4 +426,3 @@ Package 包含：
 - `ROADMAP.md`
 - `docs/`
 - `Start Link Checker.exe`
-

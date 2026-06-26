@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local-link-checker.test/schemas/report.schema.json",
+  "title": "Local Link Checker Scan Report",
+  "description": "Draft schema for the P6.5a scan report contract. This schema captures the minimum stable root, options, summary, checked, broken, and externalLinks shape without constraining every diagnostic field.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "generator",
+    "startedAt",
+    "startUrl",
+    "options",
+    "summary",
+    "broken",
+    "checked",
+    "externalLinks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.1.0"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "link-checker.mjs"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "startUrl": {
+      "type": "string"
+    },
+    "options": {
+      "$ref": "#/$defs/options"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "checked": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/checkedItem"
+      }
+    },
+    "broken": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/brokenItem"
+      }
+    },
+    "externalLinks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/externalLink"
+      }
+    }
+  },
+  "$defs": {
+    "options": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "maxPages",
+        "maxDepth",
+        "concurrency",
+        "perHostConcurrency",
+        "timeoutMs",
+        "retryCount",
+        "checkExternal",
+        "canonicalStrategy"
+      ],
+      "properties": {
+        "maxPages": { "$ref": "#/$defs/nonNegativeInteger" },
+        "maxDepth": { "$ref": "#/$defs/nonNegativeInteger" },
+        "concurrency": { "$ref": "#/$defs/positiveInteger" },
+        "perHostConcurrency": { "$ref": "#/$defs/positiveInteger" },
+        "timeoutMs": { "$ref": "#/$defs/positiveInteger" },
+        "retryCount": { "$ref": "#/$defs/nonNegativeInteger" },
+        "checkExternal": { "type": "boolean" },
+        "canonicalStrategy": {
+          "type": "string",
+          "enum": ["safe", "moderate", "aggressive"]
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "pagesCrawled",
+        "urlsChecked",
+        "brokenLinks",
+        "skippedExternal",
+        "externalLinks",
+        "externalDomains"
+      ],
+      "properties": {
+        "pagesCrawled": { "$ref": "#/$defs/nonNegativeInteger" },
+        "urlsChecked": { "$ref": "#/$defs/nonNegativeInteger" },
+        "brokenLinks": { "$ref": "#/$defs/nonNegativeInteger" },
+        "skippedExternal": { "$ref": "#/$defs/nonNegativeInteger" },
+        "externalLinks": { "$ref": "#/$defs/nonNegativeInteger" },
+        "externalDomains": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    },
+    "checkedItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["url", "ok"],
+      "properties": {
+        "url": { "type": "string" },
+        "canonicalUrl": { "type": ["string", "null"] },
+        "ok": { "type": "boolean" },
+        "status": { "type": ["integer", "null"] },
+        "checkedAt": { "type": ["string", "null"] }
+      }
+    },
+    "brokenItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["url", "ok", "sources"],
+      "properties": {
+        "url": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "externalLink": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["url", "hostname", "type", "sourceCount", "sources"],
+      "properties": {
+        "url": { "type": "string" },
+        "canonicalUrl": { "type": ["string", "null"] },
+        "hostname": { "type": "string" },
+        "registrableDomain": { "type": ["string", "null"] },
+        "type": { "type": "string" },
+        "sourceCount": { "$ref": "#/$defs/nonNegativeInteger" },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

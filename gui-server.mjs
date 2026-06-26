@@ -6,7 +6,14 @@ import { createServer } from "node:http";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { DEFAULTS, LinkChecker, applyConservativeDefaults, isSystemCaEnabled } from "./link-checker.mjs";
+import {
+  DEFAULTS,
+  REPORT_SCHEMA_VERSION,
+  LinkChecker,
+  applyConservativeDefaults,
+  buildOutputManifest,
+  isSystemCaEnabled,
+} from "./link-checker.mjs";
 
 const ROOT_DIR = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(ROOT_DIR, "public");
@@ -421,14 +428,34 @@ async function saveJobArtifacts(job) {
     job.logRelativePath = relative(ROOT_DIR, logDir);
 
     const summary = buildLogSummary(job);
+    const externalSummary = buildExternalSummary(job.report);
+    const generatedFiles = [
+      { path: "summary.json", kind: "summary", schemaVersion: summary.schemaVersion || null },
+      { path: "report.json", kind: "report", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
+      { path: "broken.csv", kind: "csv", schemaVersion: null },
+      { path: "external-links.csv", kind: "csv", schemaVersion: null },
+      { path: "external-summary.json", kind: "external-summary", schemaVersion: externalSummary.schemaVersion || null },
+      { path: "events.log", kind: "log", schemaVersion: null },
+      { path: "README.txt", kind: "readme", schemaVersion: null },
+    ];
+    const manifest = buildOutputManifest({
+      generatedAt: summary.finishedAt,
+      startUrl: job.report?.startUrl || job.startUrl,
+      options: job.report?.options || job.options,
+      generatedFiles: [
+        ...generatedFiles,
+        { path: "manifest.json", kind: "manifest", schemaVersion: null },
+      ],
+    });
     await Promise.all([
       writeJsonFile(join(logDir, "summary.json"), summary),
       writeJsonFile(join(logDir, "report.json"), job.report || summary),
       writeFile(join(logDir, "broken.csv"), makeBrokenCsv(job.report?.broken || []), "utf8"),
       writeFile(join(logDir, "external-links.csv"), makeExternalLinksCsv(job.report?.externalLinks || []), "utf8"),
-      writeJsonFile(join(logDir, "external-summary.json"), buildExternalSummary(job.report)),
+      writeJsonFile(join(logDir, "external-summary.json"), externalSummary),
       writeFile(join(logDir, "events.log"), makeEventsLog(job.events), "utf8"),
       writeFile(join(logDir, "README.txt"), makeLogReadme(job, summary), "utf8"),
+      writeJsonFile(join(logDir, "manifest.json"), manifest),
     ]);
   } catch (error) {
     job.logError = error.message;
@@ -457,6 +484,8 @@ async function createLogDirectory(job) {
 
 function buildLogSummary(job) {
   return {
+    schemaVersion: job.report?.schemaVersion || REPORT_SCHEMA_VERSION,
+    generator: job.report?.generator || null,
     jobId: job.id,
     state: job.state,
     startUrl: job.startUrl,
@@ -472,6 +501,7 @@ function buildLogSummary(job) {
       externalLinksCsv: "external-links.csv",
       externalSummary: "external-summary.json",
       events: "events.log",
+      manifest: "manifest.json",
     },
   };
 }
@@ -625,6 +655,8 @@ function makeExternalLinksCsv(items) {
 function buildExternalSummary(report) {
   const externalLinks = report?.externalLinks || [];
   return {
+    schemaVersion: report?.schemaVersion || REPORT_SCHEMA_VERSION,
+    generator: report?.generator || null,
     totalLinks: externalLinks.length,
     totalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
     byType: countByValue(externalLinks.map((item) => item.type || "unknown")),
@@ -795,6 +827,7 @@ function makeLogReadme(job, summary) {
     "- external-links.csv: External link inventory, usable in Excel",
     "- external-summary.json: External link summary by domain, type, and category",
     "- events.log: 檢查過程事件紀錄",
+    "- manifest.json: Generated file manifest and schema/runtime metadata",
   ];
 
   if (job.error) {

@@ -34,9 +34,9 @@
 
 ## 目前狀態與邊界
 
-目前已完成 P0-P6 的功能基線。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement、partial report schema、`manifest.json` 與 scan report `schemaVersion` 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
+目前已完成 P0-P6 的功能基線，並完成 P6.5a-1 的輸出契約基線。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
 
-現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。後續版本資訊會依 [ROADMAP.md](ROADMAP.md) 放入 JSON 內容與每次輸出的 manifest；一般日常輸出不預設在檔名加版本號。
+現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。JSON 輸出以內容欄位記錄 `schemaVersion` / `generator`，並以同目錄 `manifest.json` 追溯工具、schema、runtime 與輸出清單；一般日常輸出不預設在檔名加版本號。
 
 工具會嘗試降低誤判並保存防護層診斷，但不繞過 WAF/Bot 防護，也不驗證使用者是否取得掃描授權。若網站政策、robots.txt、登入權限或防護服務限制自動化請求，結果仍需人工判讀。
 
@@ -127,8 +127,9 @@ GUI 自動保存的資料夾通常包含：
 - `external-links.csv`：外連 inventory、分類、風險與來源頁。
 - `external-summary.json`：外連網域、類型、分類與治理風險摘要。
 - `events.log`：檢查過程事件紀錄。
+- `manifest.json`：同一次輸出的工具版本、schema 版本、runtime 與檔案清單。
 
-CLI 使用 `--output <file>` 時只輸出指定的完整 JSON report；目前沒有獨立的 CSV / summary 轉換指令，需要這些檔案時請使用 GUI 自動保存。
+CLI 使用 `--output <file>` 時會輸出指定的完整 JSON report，並在同目錄建立 `manifest.json`；目前沒有獨立的 CSV / summary 轉換指令，需要這些檔案時請使用 GUI 自動保存。
 
 ## CLI / GUI 功能差異
 
@@ -451,7 +452,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版已完成，後續規劃 P6.5a 的 schema / generator / manifest 版本策略。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版與 P6.5a-1 輸出契約基線已完成，後續規劃 P6.5a redaction、body limit 與 Header/Keep-Alive。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。

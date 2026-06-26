@@ -16,9 +16,9 @@
 ## 現況
 
 - P6 diff 已有 `schemaVersion` / `generator`，且能把缺少 `schemaVersion` 的舊 report 視為 legacy。
-- scan report root 尚未加入 `schemaVersion` / `generator`。
-- `schemas/` 目前已有 `diff.schema.json`，尚未有 `report.schema.json`。
-- GUI 會保存 `summary.json`、`report.json`、`broken.csv`、`external-links.csv`、`external-summary.json`、`events.log` 與 `README.txt`，尚未產生 `manifest.json`。
+- P6.5a-1 已讓 scan report root 加入 `schemaVersion` / `generator`。
+- `schemas/` 目前已有 `diff.schema.json` 與 P6.5a-1 的 `report.schema.json` 草案。
+- GUI 會保存 `summary.json`、`report.json`、`broken.csv`、`external-links.csv`、`external-summary.json`、`events.log`、`README.txt` 與 `manifest.json`。
 - CSV 目前已輸出 UTF-8 BOM，P6.5a 需補回歸測試而非重做格式。
 - response body 目前仍有完整讀入路徑，例如 `response.text()` 與 legacy TLS Buffer 聚合；這是 P6.5a 最大工程風險。
 - report 端已用 `stripBody()` 避免保存完整 body，但這不等於讀取時有 byte limit。
@@ -27,11 +27,13 @@
 
 ### P6.5a-1：契約與輸出版本化
 
+狀態：已完成第一版。
+
 交付：
 
-- scan report root 新增 `schemaVersion` / `generator`。
-- 新增 `schemas/report.schema.json` 草案，先約束 root、options、summary、checked、broken、externalLinks 的最低契約。
-- CLI / GUI 產出同目錄 `manifest.json`，記錄工具版本、schema versions、generatedAt、startUrl、optionsProfile、runtimeVersion 與 generated files。
+- scan report root 已新增 `schemaVersion` / `generator`。
+- 已新增 `schemas/report.schema.json` 草案，先約束 root、options、summary、checked、broken、externalLinks 的最低契約。
+- CLI / GUI 已產出同目錄 `manifest.json`，記錄工具版本、schema versions、generatedAt、startUrl、optionsProfile、runtimeVersion 與 generated files。
 - 保持 `report.json`、`summary.json`、`external-summary.json`、`diff.json` 檔名穩定。
 
 驗收：
