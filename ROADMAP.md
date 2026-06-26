@@ -4,7 +4,7 @@
 
 P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP、SPA / Nuxt 站台抽取前置改善，以及 report-to-report diff 第一版。
 
-下一個主線維持 **P6.5a 低風險穩定性修補**。P6.5a-1 輸出契約基線、P6.5a-2 redaction 與 P6.5a-3 sources/body limit 已完成；後續繼續 Header/Keep-Alive。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
+P6.5a 已完成輸出契約基線、redaction、sources 上限與 response body limit；剩餘主線收斂為 **Header / Accept-Encoding / Keep-Alive**。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
 
 目前 Roadmap 採納兩份分析文件：
 
@@ -19,7 +19,7 @@ P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二
 | 0 | Stage 0 | 已收斂 | README、CSV BOM、GUI/CLI 落差提示、`sourceCount` 說明 | schema、robots、cache、incremental scan、Keep-Alive |
 | 1 | P6 前置 | 已完成 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
 | 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
-| 3 | P6.5a | 進行中 | schema/generator、manifest、redaction、response limit、sources 上限已完成；後續 Header/Keep-Alive | robots / compliance 語意 |
+| 3 | P6.5a | 進行中 | 已完成 schema/generator、manifest、redaction、response limit、sources 上限；剩餘 Header / Accept-Encoding / Keep-Alive | robots / compliance 語意 |
 | 4 | P6.5b | P6.5a 後 | SSRF、WAF signature、Retry-After、partial report、robots summary、compliance | WAF/Bot 繞過 |
 | 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
@@ -41,6 +41,9 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 - P5.5b：`--site-link-rules`、CEC 規則範例、CMS 欄位推導與 `site_rule_derived`。
 - P5.5c：內容/外連/文件/媒體/asset 分流統計與簡易 validation priority。
 - P6：`report-diff.mjs` 第一版，支援 URL、external risk 與 summary diagnostics 的 report-to-report diff，並以 5 組 fixtures 驗收。
+- P6.5a-1：scan report `schemaVersion` / `generator`、`schemas/report.schema.json`、CLI / GUI `manifest.json`。
+- P6.5a-2：輸出層 sensitive query redaction，套用於 report、CSV、events log、manifest 與 GUI 保存檔。
+- P6.5a-3：`maxSourcesPerUrl`、`sourcesTruncated`、`bodyBytesRead` / `bodyTruncated` 與 body byte limit。
 - Packaging 小修：portable 打包流程已在 `build-portable.ps1` 中加入本機自簽 Authenticode 步驟，並匯出 `LinkChecker-local-code-signing.cer` 供內部手動信任匯入；此為 local self-signed，不等同正式公開信任 code signing。
 
 ## 全域原則
@@ -66,7 +69,7 @@ P0-P5.5 詳細設計與驗收紀錄已移至 [docs/ROADMAP_HISTORY.md](docs/ROAD
 - 日常輸出檔名保持穩定，避免腳本、GUI 與使用者流程每次都要追新檔名。
 - 版本資訊放在 JSON 內容與每次輸出的 `manifest.json`。只有 release / package 產物才採檔名版本化。
 - CSV 不新增每列版本欄位；需要追溯工具、schema、runtime 與輸出清單時，以同目錄 manifest 為準。
-- P6 可先替新產出的 `diff.json` 加 `schemaVersion` / `generator`；既有掃描 report 的版本化與 manifest 統一放 P6.5a。
+- `diff.json` 與 scan report 都已輸出 `schemaVersion` / `generator`；版本追溯以內容欄位與 `manifest.json` 為準。
 
 ## 採納決策與落點
 
@@ -115,7 +118,7 @@ v5.2 提到 Stage 0 可含 Header、Keep-Alive、sources 上限、body 釋放；
 1. README 已補 GUI/CLI 功能差異、WAF/robots/人工確認限制與多網站監看提示。
 2. GUI 自動輸出的 `broken.csv`、`external-links.csv` 已包含 UTF-8 BOM，方便 Excel 直接開啟中文。
 3. README 已用 GUI/CLI 差異表標示 CLI 已有但 GUI 尚未提供的選項，例如 `--external-risk-rules`、`--site-link-rules`、`--spa-links`。
-4. README 已說明 `sourceCount` 語意；`sourcesTruncated` 機制留到 P6.5a。
+4. README 已說明 `sourceCount` / `sourcesTruncated` 語意；輸出 sources 上限已在 P6.5a-3 完成。
 
 Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、cache、incremental scan，也不得改變 `checked[]`、`broken[]`、`externalLinks[]` 既有欄位語意。
 
@@ -231,33 +234,30 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6.5a：低風險穩定性修補
 
-狀態：進行中；P6.5a-1 輸出契約基線、P6.5a-2 redaction 與 P6.5a-3 sources/body limit 已完成。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
+狀態：進行中；P6.5a-1、P6.5a-2、P6.5a-3 已完成。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
 
 實作前評估見 [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)。執行時需拆成契約/manifest、redaction/CSV、sources/body limit、Header/Keep-Alive 四批；不得一次混合所有交付項。
 
-交付項：
+已完成：
 
-1. `schemaVersion` / `generator`：新增 report root 欄位；舊 report 視為 legacy / `1.0.0`。
-2. `schemas/report.schema.json` 草案：約束 root、options、summary、checked、broken、externalLinks 的最低契約。
+1. `schemaVersion` / `generator`：scan report root 已新增欄位；舊 report 仍視為 legacy / `1.0.0`。
+2. `schemas/report.schema.json` 草案：已約束 root、options、summary、checked、broken、externalLinks 的最低契約。
 3. 產出檔版本策略：`report.json`、`summary.json`、`external-summary.json`、`diff.json` 以內容欄位記錄 schema / generator；日常檔名不加版本號。
-4. 每次輸出建立 `manifest.json`：記錄 `toolVersion`、`schemaVersions`、`generatedAt`、`startUrl`、`optionsProfile`、`runtimeVersion` 與 generated files。
-5. URL query redaction：預設遮罩 token、session、auth、password、email、jwt、signature、api_key 等 query value。
-6. Response size limit：加入 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`，並輸出 `bodyTruncated` / `bodyBytesRead`。
-7. CSV BOM 回歸測試：維持 `broken.csv`、`external-links.csv` 可用 Excel 直接開啟中文。
-8. `maxSourcesPerUrl`：預設保存有限來源，輸出 `sourceCount` 與 `sourcesTruncated`。
-9. response body 及早釋放：抽取或診斷完成後不保留完整 body。
-10. Accept header 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
-11. Accept-Encoding 實測：先確認 `gzip` / `deflate`，`br` 必須確認 client 支援後才啟用。
-12. Keep-Alive connection pool：受 global concurrency 與 per-host concurrency 約束，提供 `--no-keep-alive` 回退。
+4. `manifest.json`：CLI / GUI 每次輸出已記錄 `toolVersion`、`schemaVersions`、`generatedAt`、`startUrl`、`optionsProfile`、`runtimeVersion` 與 generated files。
+5. URL query redaction：report、CSV、events log、manifest 與 GUI 保存檔預設遮罩高風險 query value；實際 request 不受遮罩影響。
+6. CSV BOM 回歸測試：維持 `broken.csv`、`external-links.csv` 可用 Excel 直接開啟中文。
+7. `maxSourcesPerUrl`：輸出保留有限來源，並輸出完整 `sourceCount` 與 `sourcesTruncated`。
+8. Response size limit：加入 `maxHtmlBytes`、`maxBodyPreviewBytes`、`maxDownloadProbeBytes`，並輸出 `bodyTruncated` / `bodyBytesRead`。
+9. response body 及早釋放：抽取、診斷或 probe 完成後不保留完整 body。
 
-驗收：
+剩餘：
 
-- 加入 `schemaVersion` 後，舊 report 仍可被 P6 diff normalization 讀取。
-- `report.json`、`summary.json`、`external-summary.json` 與 `diff.json` 檔名保持穩定，版本差異可由內容欄位與 `manifest.json` 追溯。
-- `manifest.json` 需能列出同一次輸出的檔案、schema version、工具版本與 runtime version。
-- report、CSV、events log 不輸出未遮罩的高風險 query value；實際 request 不受遮罩影響。
-- 大型 HTML / PDF / media 不會被完整讀入記憶體；超過上限時 report 標記 truncated。
-- 同一 URL 來源超過上限時，`sourceCount` 正確且 `sourcesTruncated=true`。
+1. Accept header 分流：page-like 使用 document request Accept，asset/media/document 使用 `*/*`。
+2. Accept-Encoding 實測：先確認 `gzip` / `deflate`，`br` 必須確認 client 支援後才啟用。
+3. Keep-Alive connection pool：受 global concurrency 與 per-host concurrency 約束，提供 `--no-keep-alive` 回退。
+
+剩餘驗收：
+
 - 啟用 Accept-Encoding 後，壓縮 HTML 仍可正常抽取連結。
 - 啟用 Keep-Alive 後，同一 host in-flight request 不超過 `perHostConcurrency`。
 
@@ -462,7 +462,7 @@ CLI 可新增：
 
 | 類別 | 細項 | 落點 |
 | --- | --- | --- |
-| schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / `sourcesTruncated`、`1.2.0` 新增 robots / compliance / protection 結構 | P6.5a / P6.5b |
+| schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / redaction / body limit / `sourcesTruncated`、`1.2.0` 新增 robots / compliance / protection 結構 | P6.5a / P6.5b |
 | output versioning | 日常輸出檔名穩定；`report.json`、`summary.json`、`external-summary.json`、`diff.json` 使用內容版本欄位；CSV 不新增版本欄位 | P6.5a |
 | output manifest | 每次輸出建立 `manifest.json`，記錄 `toolVersion`、`schemaVersions`、`generatedAt`、`startUrl`、`optionsProfile`、`runtimeVersion`、generated files | P6.5a |
 | normalization | `load report -> detect schemaVersion -> normalize to internal ReportModel`，避免 GUI / Analyzer 散落 fallback 邏輯 | P6 / P9 |
@@ -471,7 +471,7 @@ CLI 可新增：
 | compliance scope | `same_origin`、`same_site`、`same_origin_with_external_validation`、`mixed`、`unknown` | P6.5b |
 | security CLI | `--block-private-ip` 預設開啟、`--allow-private-ip`、`--allow-localhost`、metadata IP 永遠阻擋 | P6.5b |
 | redaction CLI | `--redact-sensitive-query` 預設開啟、`--no-redact-sensitive-query`、`--redact-query-keys <list>` | P6.5a |
-| body limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes` | P6.5a |
+| body / source limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes`、`--max-sources-per-url` | P6.5a |
 | keep-alive CLI | `--no-keep-alive`，並記錄 `keepAlive`、`maxSockets`、`maxFreeSockets`、`keepAliveMsecs` | P6.5a |
 | report fields | `securityPolicy`、`redaction`、`bodyLimits`、`runStatus`、`hostDiagnostics`、`rulesVersion`、`profileExpandedOptions` | P6.5 / P9 |
 | redirect security labels | `scheme_downgrade_redirect`、`redirect_to_private_ip`、`redirect_to_blocked_scheme`、`redirect_to_metadata_ip` | P6.5b |
