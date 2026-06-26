@@ -4,7 +4,7 @@
 
 P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二次確認、外連風險治理 MVP、SPA / Nuxt 站台抽取前置改善，以及 report-to-report diff 第一版。
 
-下一個主線維持 **P6.5a 低風險穩定性修補**。P6.5a-1 輸出契約基線已完成；後續繼續 redaction、sources/body limit 與 Header/Keep-Alive。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
+下一個主線維持 **P6.5a 低風險穩定性修補**。P6.5a-1 輸出契約基線與 P6.5a-2 redaction 已完成；後續繼續 sources/body limit 與 Header/Keep-Alive。Stage 0 若再發現 GUI/CLI 落差，可穿插小修，但不得改掃描語意或既有 report 主契約。
 
 目前 Roadmap 採納兩份分析文件：
 
@@ -19,7 +19,7 @@ P0-P6 已完成，包含本機服務生命週期、URL inventory、404 / 410 二
 | 0 | Stage 0 | 已收斂 | README、CSV BOM、GUI/CLI 落差提示、`sourceCount` 說明 | schema、robots、cache、incremental scan、Keep-Alive |
 | 1 | P6 前置 | 已完成 | golden fixtures、diff schema 草案、report normalization 原則 | 掃描行為變更 |
 | 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | TTL cache、incremental scan、robots enforcement、adaptive backoff |
-| 3 | P6.5a | 進行中 | schema/generator、manifest 已完成；後續 redaction、response limit、sources 上限、Header/Keep-Alive | robots / compliance 語意 |
+| 3 | P6.5a | 進行中 | schema/generator、manifest、redaction 已完成；後續 response limit、sources 上限、Header/Keep-Alive | robots / compliance 語意 |
 | 4 | P6.5b | P6.5a 後 | SSRF、WAF signature、Retry-After、partial report、robots summary、compliance | WAF/Bot 繞過 |
 | 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
@@ -231,7 +231,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6.5a：低風險穩定性修補
 
-狀態：進行中；P6.5a-1 輸出契約基線已完成。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
+狀態：進行中；P6.5a-1 輸出契約基線與 P6.5a-2 redaction 已完成。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
 
 實作前評估見 [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)。執行時需拆成契約/manifest、redaction/CSV、sources/body limit、Header/Keep-Alive 四批；不得一次混合所有交付項。
 

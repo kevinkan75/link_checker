@@ -12,6 +12,27 @@ import { pathToFileURL } from "node:url";
 
 const TOOL_VERSION = "0.1.0";
 const REPORT_SCHEMA_VERSION = "1.1.0";
+const REDACTED_QUERY_VALUE = "REDACTED";
+const DEFAULT_REDACT_QUERY_KEYS = [
+  "access_token",
+  "apikey",
+  "api_key",
+  "auth",
+  "authorization",
+  "email",
+  "id_token",
+  "jwt",
+  "password",
+  "passwd",
+  "pwd",
+  "refresh_token",
+  "secret",
+  "session",
+  "sessionid",
+  "signature",
+  "sig",
+  "token",
+];
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
 const SPA_LINK_MODES = new Set(["auto", "off", "strict"]);
@@ -81,6 +102,8 @@ const DEFAULTS = {
   canonicalStrategy: "safe",
   legacyTls: false,
   systemCa: false,
+  redactSensitiveQuery: true,
+  redactQueryKeys: DEFAULT_REDACT_QUERY_KEYS,
   confirm404: true,
   confirmationMaxUrls: 100,
   confirmationMaxPerHost: 20,
@@ -369,34 +392,38 @@ class ProgressReporter {
   }
 
   pageStarted(url, depth) {
-    this.currentUrl = url;
-    this.logVerbose(`[page] depth ${depth} ${url}`);
+    this.currentUrl = this.redact(url);
+    this.logVerbose(`[page] depth ${depth} ${this.redact(url)}`);
   }
 
   pageLinksFound(url, count) {
-    this.logVerbose(`[links] ${count} found on ${url}`);
+    this.logVerbose(`[links] ${count} found on ${this.redact(url)}`);
   }
 
   pageQueued(url, depth) {
-    this.logVerbose(`[queue] depth ${depth} ${url}`);
+    this.logVerbose(`[queue] depth ${depth} ${this.redact(url)}`);
   }
 
   externalSkipped(url, sourcePage) {
-    this.logVerbose(`[skip] external ${url} found on ${sourcePage}`);
+    this.logVerbose(`[skip] external ${this.redact(url)} found on ${this.redact(sourcePage)}`);
   }
 
   requestQueued(url, method) {
     this.pendingRequests += 1;
-    this.currentUrl = url;
-    this.logVerbose(`[request] ${method} ${url}`);
+    this.currentUrl = this.redact(url);
+    this.logVerbose(`[request] ${method} ${this.redact(url)}`);
   }
 
   requestFinished(result) {
     this.finishedRequests += 1;
-    this.currentUrl = result.url;
+    this.currentUrl = this.redact(result.url);
     const status = formatIssueReason(result);
     const marker = result.ok ? "ok" : "broken";
-    this.logVerbose(`[${marker}] ${status} ${result.url}`);
+    this.logVerbose(`[${marker}] ${status} ${this.redact(result.url)}`);
+  }
+
+  redact(value) {
+    return redactSensitiveQueryValue(value, this.checker?.options || DEFAULTS);
   }
 
   render() {
@@ -456,6 +483,8 @@ class LinkChecker {
   constructor(startUrl, options = {}) {
     this.startUrl = normalizeUrl(startUrl);
     this.options = { ...DEFAULTS, ...options };
+    this.options.redactSensitiveQuery = this.options.redactSensitiveQuery !== false;
+    this.options.redactQueryKeys = normalizeRedactQueryKeys(this.options.redactQueryKeys);
     if (this.options.systemCa) {
       enableSystemCa();
     }
@@ -1257,7 +1286,7 @@ class LinkChecker {
       }))
       .sort((a, b) => a.url.localeCompare(b.url));
 
-    return {
+    const report = {
       schemaVersion: REPORT_SCHEMA_VERSION,
       generator: buildReportGenerator(),
       startedAt: new Date().toISOString(),
@@ -1291,6 +1320,8 @@ class LinkChecker {
         confirmationDelayMinMs: this.options.confirmationDelayMinMs,
         confirmationDelayMaxMs: this.options.confirmationDelayMaxMs,
         spaLinks: this.options.spaLinks,
+        redactSensitiveQuery: this.options.redactSensitiveQuery,
+        redactQueryKeys: this.options.redactQueryKeys,
         domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
         externalRiskRulesSource: this.options.externalRiskRulesSource || null,
         siteLinkRulesSource: this.options.siteLinkRulesSource || null,
@@ -1327,6 +1358,7 @@ class LinkChecker {
       checked,
       externalLinks,
     };
+    return redactReportForOutput(report, this.options);
   }
 
   buildSpaDetectionSummary() {
@@ -1502,7 +1534,7 @@ function buildOutputManifest({
       report: REPORT_SCHEMA_VERSION,
     },
     generatedAt,
-    startUrl: startUrl || null,
+    startUrl: redactSensitiveQueryValue(startUrl || null, options),
     optionsProfile: getOptionsProfile(options),
     runtimeVersion: getRuntimeVersion(),
     generatedFiles: (generatedFiles || []).map((file) => ({
@@ -1511,6 +1543,115 @@ function buildOutputManifest({
       schemaVersion: file.schemaVersion || null,
     })),
   };
+}
+
+function normalizeRedactQueryKeys(value) {
+  const values = Array.isArray(value)
+    ? value
+    : String(value || "").split(",");
+  return [...new Set(values
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean))]
+    .sort();
+}
+
+function isSensitiveQueryKey(key, queryKeys = DEFAULT_REDACT_QUERY_KEYS) {
+  const normalized = String(key || "").trim().toLowerCase();
+  return queryKeys.includes(normalized)
+    || /(?:^|[_-])(token|session|auth|password|passwd|pwd|email|jwt|signature|secret|sig)(?:$|[_-])/i.test(normalized)
+    || /api[_-]?key/i.test(normalized);
+}
+
+function redactSensitiveQueryValue(value, options = DEFAULTS) {
+  if (typeof value !== "string" || options?.redactSensitiveQuery === false) {
+    return value;
+  }
+
+  const queryKeys = normalizeRedactQueryKeys(options.redactQueryKeys || DEFAULT_REDACT_QUERY_KEYS);
+  const exact = redactUrlLikeValue(value, queryKeys);
+  if (exact !== value) {
+    return exact;
+  }
+
+  const withAbsoluteUrlsRedacted = value.replace(/https?:\/\/[^\s"'<>]+/gi, (match) => {
+    const suffixMatch = /[),.;!?]+$/.exec(match);
+    const suffix = suffixMatch ? suffixMatch[0] : "";
+    const core = suffix ? match.slice(0, -suffix.length) : match;
+    return `${redactUrlLikeValue(core, queryKeys)}${suffix}`;
+  });
+  return withAbsoluteUrlsRedacted.replace(/(^|[\s(])([/?][^\s"'<>]+)/g, (match, prefix, urlLike) => {
+    const suffixMatch = /[),.;!?]+$/.exec(urlLike);
+    const suffix = suffixMatch ? suffixMatch[0] : "";
+    const core = suffix ? urlLike.slice(0, -suffix.length) : urlLike;
+    return `${prefix}${redactUrlLikeValue(core, queryKeys)}${suffix}`;
+  });
+}
+
+function redactUrlLikeValue(value, queryKeys) {
+  const text = String(value);
+  const isAbsolute = /^https?:\/\//i.test(text);
+  const isQueryOnly = text.startsWith("?");
+  const isRootRelative = text.startsWith("/");
+  const isRelativeWithQuery = text.includes("?") && !/\s/.test(text);
+
+  if (!isAbsolute && !isQueryOnly && !isRootRelative && !isRelativeWithQuery) {
+    return text;
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(text, "http://redaction.local");
+  } catch {
+    return text;
+  }
+  if (!parsed.search) {
+    return text;
+  }
+
+  const params = new URLSearchParams();
+  let changed = false;
+  for (const [key, paramValue] of parsed.searchParams.entries()) {
+    if (isSensitiveQueryKey(key, queryKeys)) {
+      params.append(key, REDACTED_QUERY_VALUE);
+      changed = true;
+    } else {
+      params.append(key, paramValue);
+    }
+  }
+  if (!changed) {
+    return text;
+  }
+
+  parsed.search = params.toString();
+  if (isAbsolute) {
+    return parsed.toString();
+  }
+  if (isQueryOnly) {
+    return `${parsed.search}${parsed.hash}`;
+  }
+  if (isRootRelative) {
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  }
+  return `${parsed.pathname.replace(/^\//, "")}${parsed.search}${parsed.hash}`;
+}
+
+function redactReportForOutput(report, options) {
+  return redactOutputValue(report, options);
+}
+
+function redactOutputValue(value, options) {
+  if (typeof value === "string") {
+    return redactSensitiveQueryValue(value, options);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactOutputValue(item, options));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactOutputValue(item, options)]),
+    );
+  }
+  return value;
 }
 
 async function fetchUrl(url, {
@@ -4325,6 +4466,16 @@ function parseArgs(argv) {
       explicitOptions.add("confirm404");
       continue;
     }
+    if (arg === "--redact-sensitive-query") {
+      options.redactSensitiveQuery = true;
+      explicitOptions.add("redactSensitiveQuery");
+      continue;
+    }
+    if (arg === "--no-redact-sensitive-query") {
+      options.redactSensitiveQuery = false;
+      explicitOptions.add("redactSensitiveQuery");
+      continue;
+    }
     if (arg === "--json") {
       json = true;
       continue;
@@ -4467,6 +4618,20 @@ function parseArgs(argv) {
       options.canonicalStrategy = normalizeCanonicalStrategy(value);
       continue;
     }
+    if (arg === "--redact-query-keys") {
+      const value = args.shift();
+      if (!value || value.startsWith("-")) {
+        throw new Error("--redact-query-keys requires a comma-separated list");
+      }
+      options.redactQueryKeys = [
+        ...new Set([
+          ...DEFAULT_REDACT_QUERY_KEYS,
+          ...normalizeRedactQueryKeys(value),
+        ]),
+      ].sort();
+      explicitOptions.add("redactQueryKeys");
+      continue;
+    }
     if (arg === "--output" || arg === "-o") {
       output = args.shift();
       if (!output) {
@@ -4513,6 +4678,8 @@ function parseArgs(argv) {
   options.confirmationDelayMaxMs = Math.max(0, Math.min(options.confirmationDelayMaxMs, 60000));
   options.canonicalStrategy = normalizeCanonicalStrategy(options.canonicalStrategy);
   options.spaLinks = normalizeSpaLinkMode(options.spaLinks);
+  options.redactSensitiveQuery = options.redactSensitiveQuery !== false;
+  options.redactQueryKeys = normalizeRedactQueryKeys(options.redactQueryKeys);
   return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource, siteLinkRulesSource };
 }
 
@@ -4683,6 +4850,12 @@ Options:
   --system-ca         Restart Node with --use-system-ca for OS/browser-trusted roots.
   --confirm-404       Re-check same-site 404/410 results after the main scan. Default: on.
   --no-confirm-404    Disable the post-scan 404/410 confirmation stage.
+  --redact-sensitive-query
+                      Mask high-risk query values in report, CSV, and logs. Default: on.
+  --no-redact-sensitive-query
+                      Disable sensitive query masking in outputs.
+  --redact-query-keys <list>
+                      Additional comma-separated query keys to mask in outputs.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -4870,6 +5043,7 @@ export {
   buildOutputManifest,
   canonicalizeUrl,
   isSystemCaEnabled,
+  redactSensitiveQueryValue,
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

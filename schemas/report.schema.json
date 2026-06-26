@@ -92,6 +92,15 @@
         "canonicalStrategy": {
           "type": "string",
           "enum": ["safe", "moderate", "aggressive"]
+        },
+        "redactSensitiveQuery": {
+          "type": "boolean"
+        },
+        "redactQueryKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

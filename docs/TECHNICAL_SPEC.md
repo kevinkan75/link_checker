@@ -255,6 +255,9 @@ P6.5a-1 起，scan report 使用 `schemaVersion: "1.1.0"`，`generator.name` 為
 - confirmation：`confirm404`、confirmation limits and delays
 - rules：`domainCategoryRulesSource`、`externalRiskRulesSource`、`siteLinkRulesSource`
 - SPA：`spaLinks`
+- output safety：`redactSensitiveQuery`、`redactQueryKeys`
+
+P6.5a-2 起，report、CSV、events log 與 manifest 中的 URL 顯示值會依 `redactQueryKeys` 遮罩敏感 query value。此遮罩只作用於輸出層，實際 request URL、inventory key 與 fetch cache 不使用遮罩後 URL。
 
 ### 7.2 summary
 

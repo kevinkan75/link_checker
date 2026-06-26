@@ -34,9 +34,9 @@
 
 ## 目前狀態與邊界
 
-目前已完成 P0-P6 的功能基線，並完成 P6.5a-1 的輸出契約基線。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
+目前已完成 P0-P6 的功能基線，並完成 P6.5a-1 輸出契約基線與 P6.5a-2 輸出敏感 query 遮罩。P6 提供 `report-diff.mjs`，可讀取兩份既有 `report.json` 並產生 `diff.json`，用來比較 URL 狀態、外連治理風險與 summary diagnostics。TTL cache、incremental scan、robots path enforcement 與 partial report schema 仍依 [ROADMAP.md](ROADMAP.md) 放在後續階段。
 
-現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。JSON 輸出以內容欄位記錄 `schemaVersion` / `generator`，並以同目錄 `manifest.json` 追溯工具、schema、runtime 與輸出清單；一般日常輸出不預設在檔名加版本號。
+現階段輸出檔名保持穩定，例如 `report.json`、`summary.json`、`broken.csv`、`external-links.csv`。JSON 輸出以內容欄位記錄 `schemaVersion` / `generator`，並以同目錄 `manifest.json` 追溯工具、schema、runtime 與輸出清單；一般日常輸出不預設在檔名加版本號。report、CSV 與事件 log 預設會遮罩高風險 query value，實際 request URL 不受遮罩影響。
 
 工具會嘗試降低誤判並保存防護層診斷，但不繞過 WAF/Bot 防護，也不驗證使用者是否取得掃描授權。若網站政策、robots.txt、登入權限或防護服務限制自動化請求，結果仍需人工判讀。
 
@@ -167,6 +167,7 @@ GUI 尚未提供規則檔輸入欄位；若需要外連治理規則或站台特�
 .\check-links.cmd https://example.com --verbose
 .\check-links.cmd https://example.com --output report.json
 .\check-links.cmd https://example.com --domain-rules rules.json
+.\check-links.cmd https://example.com --redact-query-keys ticket,caseId
 ```
 
 - `--max-pages <n>`：最多爬行幾個同網域頁面，預設 `100`。
@@ -190,6 +191,8 @@ GUI 尚未提供規則檔輸入欄位；若需要外連治理規則或站台特�
 - `--site-link-rules <file-or-url>`：載入 SPA/CMS payload 欄位推導規則，例如從 `linkUrl`、`youtubeId` 或站台 route 欄位產生可檢查 URL。
 - `--canonical-strategy <safe|moderate|aggressive>`：設定報告中 `canonicalUrl` 的正規化策略，預設 `safe`；此設定不改變實際請求 URL。
 - `--spa-links <auto|off|strict>`：從 SPA / Nuxt inline payload 抽取明確 URL 與 `/` 開頭 path，預設 `auto`；`off` 可回到舊行為，`strict` 只做 literal 抽取。
+- `--redact-sensitive-query` / `--no-redact-sensitive-query`：輸出檔是否遮罩高風險 query value，預設開啟。
+- `--redact-query-keys <list>`：額外遮罩的 query key，以逗號分隔；預設已包含 token、session、auth、password、email、jwt、signature、api_key 等常見敏感 key。
 - `--external`：也檢查外部網域連結；預設只檢查站內連結並略過外部連結。
 - `--confirm-404` / `--no-confirm-404`：是否在主掃描後集中複查同站 `404 / 410`。預設開啟；關閉時 report 仍會標示 confirmation 未啟用。
 - `--conservative`：套用低併發、隨機延遲、偏好 `GET` 與外部連結 `Referer` 的保守檢查設定。
@@ -452,7 +455,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版與 P6.5a-1 輸出契約基線已完成，後續規劃 P6.5a redaction、body limit 與 Header/Keep-Alive。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a-1 輸出契約基線與 P6.5a-2 redaction 已完成，後續規劃 sources/body limit 與 Header/Keep-Alive。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。

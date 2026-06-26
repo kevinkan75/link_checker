@@ -17,6 +17,7 @@
 
 - P6 diff 已有 `schemaVersion` / `generator`，且能把缺少 `schemaVersion` 的舊 report 視為 legacy。
 - P6.5a-1 已讓 scan report root 加入 `schemaVersion` / `generator`。
+- P6.5a-2 已加入輸出層 URL query redaction，預設套用於 report、CSV、events log、manifest 與 GUI 保存檔。
 - `schemas/` 目前已有 `diff.schema.json` 與 P6.5a-1 的 `report.schema.json` 草案。
 - GUI 會保存 `summary.json`、`report.json`、`broken.csv`、`external-links.csv`、`external-summary.json`、`events.log`、`README.txt` 與 `manifest.json`。
 - CSV 目前已輸出 UTF-8 BOM，P6.5a 需補回歸測試而非重做格式。
@@ -45,13 +46,15 @@
 
 ### P6.5a-2：輸出安全與相容性
 
+狀態：已完成第一版。
+
 交付：
 
-- 建立集中式 URL query redaction helper。
+- 已建立集中式 URL query redaction helper。
 - 預設遮罩 token、session、auth、password、email、jwt、signature、api_key 等高風險 query value。
-- redaction 套用於 report、CSV、events log 與 GUI 保存檔。
-- 實際 request URL、canonical key 與比對邏輯不可使用遮罩後 URL。
-- 補 CSV BOM 回歸測試。
+- redaction 已套用於 report、CSV、events log、manifest 與 GUI 保存檔。
+- 實際 request URL、canonical key 與比對邏輯不使用遮罩後 URL。
+- 已補 CSV BOM 與 redaction 回歸測試。
 
 驗收：
 

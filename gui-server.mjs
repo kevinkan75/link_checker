@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import {
   DEFAULTS,
@@ -13,6 +13,7 @@ import {
   applyConservativeDefaults,
   buildOutputManifest,
   isSystemCaEnabled,
+  redactSensitiveQueryValue,
 } from "./link-checker.mjs";
 
 const ROOT_DIR = fileURLToPath(new URL(".", import.meta.url));
@@ -73,32 +74,36 @@ class GuiReporter {
   }
 
   pageStarted(url, depth) {
-    this.currentUrl = url;
-    this.emitLog("page", `Depth ${depth}: ${url}`);
+    this.currentUrl = this.redact(url);
+    this.emitLog("page", `Depth ${depth}: ${this.redact(url)}`);
   }
 
   pageLinksFound(url, count) {
-    this.emitLog("links", `${count} links found on ${url}`);
+    this.emitLog("links", `${count} links found on ${this.redact(url)}`);
   }
 
   pageQueued(url, depth) {
-    this.emitLog("queue", `Depth ${depth}: ${url}`);
+    this.emitLog("queue", `Depth ${depth}: ${this.redact(url)}`);
   }
 
   externalSkipped(url, sourcePage) {
-    this.emitLog("skip", `External link skipped: ${url}`, sourcePage);
+    this.emitLog("skip", `External link skipped: ${this.redact(url)}`, this.redact(sourcePage));
   }
 
   requestQueued(url, method) {
-    this.currentUrl = url;
-    this.emitLog("request", `${method} ${url}`);
+    this.currentUrl = this.redact(url);
+    this.emitLog("request", `${method} ${this.redact(url)}`);
   }
 
   requestFinished(result) {
-    this.currentUrl = result.url;
+    this.currentUrl = this.redact(result.url);
     const reason = formatIssueReason(result);
-    this.emitLog(result.ok ? "ok" : "broken", `${reason}: ${result.url}`);
+    this.emitLog(result.ok ? "ok" : "broken", `${reason}: ${this.redact(result.url)}`);
     this.emit("status", this.snapshot());
+  }
+
+  redact(value) {
+    return redactSensitiveQueryValue(value, this.job.options);
   }
 
   snapshot() {
@@ -126,8 +131,8 @@ class GuiReporter {
   emitLog(type, message, detail = null) {
     const item = {
       type,
-      message,
-      detail,
+      message: this.redact(message),
+      detail: detail === null ? null : this.redact(detail),
       at: new Date().toISOString(),
     };
     this.job.events.push(item);
@@ -450,10 +455,10 @@ async function saveJobArtifacts(job) {
     await Promise.all([
       writeJsonFile(join(logDir, "summary.json"), summary),
       writeJsonFile(join(logDir, "report.json"), job.report || summary),
-      writeFile(join(logDir, "broken.csv"), makeBrokenCsv(job.report?.broken || []), "utf8"),
-      writeFile(join(logDir, "external-links.csv"), makeExternalLinksCsv(job.report?.externalLinks || []), "utf8"),
+      writeFile(join(logDir, "broken.csv"), makeBrokenCsv(job.report?.broken || [], job.options), "utf8"),
+      writeFile(join(logDir, "external-links.csv"), makeExternalLinksCsv(job.report?.externalLinks || [], job.options), "utf8"),
       writeJsonFile(join(logDir, "external-summary.json"), externalSummary),
-      writeFile(join(logDir, "events.log"), makeEventsLog(job.events), "utf8"),
+      writeFile(join(logDir, "events.log"), makeEventsLog(job.events, job.options), "utf8"),
       writeFile(join(logDir, "README.txt"), makeLogReadme(job, summary), "utf8"),
       writeJsonFile(join(logDir, "manifest.json"), manifest),
     ]);
@@ -488,7 +493,7 @@ function buildLogSummary(job) {
     generator: job.report?.generator || null,
     jobId: job.id,
     state: job.state,
-    startUrl: job.startUrl,
+    startUrl: redactSensitiveQueryValue(job.startUrl, job.options),
     createdAt: job.createdAt,
     finishedAt: new Date().toISOString(),
     options: job.options,
@@ -510,7 +515,7 @@ async function writeJsonFile(path, data) {
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
-function makeBrokenCsv(items) {
+function makeBrokenCsv(items, options = DEFAULTS) {
   const rows = [[
     "url",
     "status",
@@ -547,14 +552,14 @@ function makeBrokenCsv(items) {
     const sources = item.sources?.length ? item.sources : [{}];
     for (const source of sources) {
       rows.push([
-        item.url,
+        redactSensitiveQueryValue(item.url, options),
         item.status ?? "",
         item.issueType || "",
         item.classification || "",
         item.checkedAt || "",
-        item.canonicalUrl || "",
+        redactSensitiveQueryValue(item.canonicalUrl || "", options),
         item.method || "",
-        item.finalUrl || "",
+        redactSensitiveQueryValue(item.finalUrl || "", options),
         item.contentLength ?? "",
         item.cacheHeaders?.cacheControl || "",
         item.suspectedWaf ? "yes" : "no",
@@ -565,17 +570,17 @@ function makeBrokenCsv(items) {
         item.confirmation?.checked ? "yes" : "no",
         item.confirmation?.outcome || "",
         item.confirmation?.status ?? "",
-        item.confirmation?.finalUrl || "",
+        redactSensitiveQueryValue(item.confirmation?.finalUrl || "", options),
         item.confirmation?.checkedAt || "",
-        item.confirmation?.referer || "",
+        redactSensitiveQueryValue(item.confirmation?.referer || "", options),
         item.confirmation?.reason || "",
         item.needsReview ? "yes" : "no",
         item.transientFailure ? "yes" : "no",
-        source.page || "",
+        redactSensitiveQueryValue(source.page || "", options),
         source.tag || "",
         source.attribute || "",
-        source.text || "",
-        item.diagnosis || item.error || "",
+        redactSensitiveQueryValue(source.text || "", options),
+        redactSensitiveQueryValue(item.diagnosis || item.error || "", options),
       ]);
     }
   }
@@ -583,7 +588,7 @@ function makeBrokenCsv(items) {
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }
 
-function makeExternalLinksCsv(items) {
+function makeExternalLinksCsv(items, options = DEFAULTS) {
   const rows = [[
     "url",
     "hostname",
@@ -618,7 +623,7 @@ function makeExternalLinksCsv(items) {
     const sources = item.sources?.length ? item.sources : [{}];
     for (const source of sources) {
       rows.push([
-        item.url,
+        redactSensitiveQueryValue(item.url, options),
         item.hostname || "",
         item.registrableDomain || "",
         item.type || "",
@@ -633,18 +638,18 @@ function makeExternalLinksCsv(items) {
         item.ok === null || item.ok === undefined ? "" : item.ok ? "yes" : "no",
         item.status ?? "",
         item.method || "",
-        item.finalUrl || "",
+        redactSensitiveQueryValue(item.finalUrl || "", options),
         item.checkedAt || "",
-        item.canonicalUrl || "",
+        redactSensitiveQueryValue(item.canonicalUrl || "", options),
         item.contentLength ?? "",
         item.cacheHeaders?.cacheControl || "",
         item.issueType || "",
         item.classification || "",
         item.blockedReason || "",
-        source.page || "",
+        redactSensitiveQueryValue(source.page || "", options),
         source.tag || "",
         source.attribute || "",
-        source.text || "",
+        redactSensitiveQueryValue(source.text || "", options),
       ]);
     }
   }
@@ -800,11 +805,12 @@ function formatMatchedRules(rules) {
     .join(";");
 }
 
-function makeEventsLog(events) {
+function makeEventsLog(events, options = DEFAULTS) {
   return events
     .map((event) => {
-      const detail = event.detail ? ` | ${event.detail}` : "";
-      return `[${event.at}] ${event.type}: ${event.message}${detail}`;
+      const message = redactSensitiveQueryValue(event.message, options);
+      const detail = event.detail ? ` | ${redactSensitiveQueryValue(event.detail, options)}` : "";
+      return `[${event.at}] ${event.type}: ${message}${detail}`;
     })
     .join("\r\n")
     + (events.length ? "\r\n" : "");
@@ -815,7 +821,7 @@ function makeLogReadme(job, summary) {
     "Link Checker log files",
     "",
     `Job ID: ${job.id}`,
-    `Start URL: ${job.startUrl}`,
+    `Start URL: ${redactSensitiveQueryValue(job.startUrl, job.options)}`,
     `State: ${job.state}`,
     `Created at: ${job.createdAt}`,
     `Finished at: ${summary.finishedAt}`,
@@ -896,6 +902,8 @@ function parseJobOptions(input) {
     externalReferer: Boolean(input.externalReferer ?? baseOptions.externalReferer),
     legacyTls: Boolean(input.legacyTls ?? baseOptions.legacyTls),
     systemCa: Boolean(input.systemCa ?? baseOptions.systemCa),
+    redactSensitiveQuery: input.redactSensitiveQuery !== false,
+    redactQueryKeys: Array.isArray(input.redactQueryKeys) ? input.redactQueryKeys : baseOptions.redactQueryKeys,
     confirm404: Boolean(input.confirm404 ?? baseOptions.confirm404),
     confirmationMaxUrls: baseOptions.confirmationMaxUrls,
     confirmationMaxPerHost: baseOptions.confirmationMaxPerHost,
@@ -1509,4 +1517,12 @@ async function main() {
   }
 }
 
-await main();
+export {
+  makeBrokenCsv,
+  makeEventsLog,
+  makeExternalLinksCsv,
+};
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}
