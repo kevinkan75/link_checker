@@ -166,6 +166,9 @@
         },
         "authorizationNote": {
           "type": ["string", "null"]
+        },
+        "protectionBodyHash": {
+          "type": "boolean"
         }
       }
     },
@@ -377,6 +380,12 @@
         "checkedAt": { "type": ["string", "null"] },
         "bodyBytesRead": { "$ref": "#/$defs/nonNegativeInteger" },
         "bodyTruncated": { "type": "boolean" },
+        "bodySignature": {
+          "$ref": "#/$defs/bodySignature"
+        },
+        "protection": {
+          "$ref": "#/$defs/protection"
+        },
         "securityPolicy": {
           "type": "object",
           "additionalProperties": true
@@ -398,6 +407,65 @@
             "type": "object",
             "additionalProperties": true
           }
+        },
+        "bodySignature": {
+          "$ref": "#/$defs/bodySignature"
+        },
+        "protection": {
+          "$ref": "#/$defs/protection"
+        }
+      }
+    },
+    "bodySignature": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "required": ["signatureType", "matchedPatterns"],
+      "properties": {
+        "signatureType": { "type": "string" },
+        "matchedPatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "bodyHash": { "type": "string" },
+        "title": { "type": ["string", "null"] },
+        "snippet": { "type": "string" }
+      }
+    },
+    "protection": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "required": ["provider", "headerEvidence", "bodySignatureRuleIds"],
+      "properties": {
+        "provider": { "type": ["string", "null"] },
+        "status": { "type": ["integer", "null"] },
+        "title": { "type": ["string", "null"] },
+        "blockedReason": { "type": ["string", "null"] },
+        "blockedRuleId": { "type": ["string", "null"] },
+        "suspectedWaf": { "type": "boolean" },
+        "suspectedBot": { "type": "boolean" },
+        "headerEvidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["header", "value"],
+            "properties": {
+              "header": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        },
+        "bodySignatureRuleIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "matchedPatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     },

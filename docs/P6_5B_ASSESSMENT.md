@@ -24,6 +24,7 @@
 - P6.5b-2 已完成 `runStatus` / partial report，scan report 會正式產生 `runStatus`，diff 與 Report Analyzer 會提示 partial / failed report。
 - P6.5b-3 已完成 robots / compliance 記錄，scan report 會正式產生 `summary.robotsTxt`、`scanPolicy` 與 `compliance`。
 - P6.5b-4 已完成 Retry-After / host diagnostics，scan report 會正式產生 `summary.hostDiagnostics`。
+- P6.5b-5 已完成 WAF signature schema 收斂，scan report 會正式產生穩定的 `protection` evidence，且 bodyHash 預設關閉。
 
 ## 建議切分
 
@@ -99,21 +100,21 @@
 - 一個 host cooldown 時，其他 host 仍可繼續檢查。
 - block-rate diagnostics 不得自動觸發 aggressive retry。
 
-### P6.5b-5：WAF signature schema 收斂
+### P6.5b-5：WAF signature schema 收斂（已完成）
 
 優先級：中。
 
 交付：
 
-- 將現有 `protection` / body signature / WAF header evidence 收斂成穩定 report schema。
-- 保存 provider、header evidence、body signature rule id，不保存完整 body。
-- bodyHash 預設關閉，僅 diagnostics opt-in 可啟用。
-- WAF body signature 命中時，不應被歸入一般 404。
+- 已將現有 `protection` / body signature / WAF header evidence 收斂成穩定 report schema。
+- 已保存 provider、header evidence、body signature rule id，不保存完整 body。
+- bodyHash 預設關閉，僅 `--protection-body-hash` / options opt-in 可啟用。
+- WAF body signature 命中時，不會被歸入一般 404。
 
 驗收：
 
-- WAF / Bot body signature 命中時 classification 不落入一般 `not_found`。
-- `bodyHashEnabled=false` 是預設。
+- WAF / Bot body signature 命中時 classification 不落入一般 `not_found`。（P6.5b-5 已完成）
+- `bodyHashEnabled=false` 是預設。（P6.5b-5 已完成）
 - report 不保存完整 challenge body。
 
 ## 風險評估
@@ -148,4 +149,4 @@
 - `--authorized-scan` 宣告欄位測試。（P6.5b-3 已完成）
 - `Retry-After` capped wait 測試。（P6.5b-4 已完成）
 - host cooldown 不阻塞其他 host 測試。（P6.5b-4 已完成）
-- WAF signature classification 測試。
+- WAF signature classification 測試。（P6.5b-5 已完成）

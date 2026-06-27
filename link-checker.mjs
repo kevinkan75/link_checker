@@ -122,6 +122,7 @@ const DEFAULTS = {
   robotsTxt: true,
   authorizedScan: false,
   authorizationNote: null,
+  protectionBodyHash: false,
   redactSensitiveQuery: true,
   redactQueryKeys: DEFAULT_REDACT_QUERY_KEYS,
   maxHtmlBytes: DEFAULT_MAX_HTML_BYTES,
@@ -527,6 +528,7 @@ class LinkChecker {
     this.options.maxDownloadProbeBytes = normalizeByteLimit(this.options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
     this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
     this.options.retryAfterMaxMs = normalizeRetryAfterMaxMs(this.options.retryAfterMaxMs);
+    this.options.protectionBodyHash = this.options.protectionBodyHash === true;
     this.securityPolicy = normalizeSecurityPolicy(this.options);
     Object.assign(this.options, this.securityPolicy);
     this.complianceOptions = normalizeComplianceOptions(this.options);
@@ -680,6 +682,7 @@ class LinkChecker {
         agents: this.agents,
         securityPolicy: this.securityPolicy,
         retryAfterMaxMs: this.options.retryAfterMaxMs,
+        protectionBodyHash: this.options.protectionBodyHash,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
       });
@@ -1098,6 +1101,7 @@ class LinkChecker {
       agents: this.agents,
       securityPolicy: this.securityPolicy,
       retryAfterMaxMs: this.options.retryAfterMaxMs,
+      protectionBodyHash: this.options.protectionBodyHash,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
       onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
     });
@@ -1163,6 +1167,7 @@ class LinkChecker {
         agents: this.agents,
         securityPolicy: this.securityPolicy,
         retryAfterMaxMs: this.options.retryAfterMaxMs,
+        protectionBodyHash: this.options.protectionBodyHash,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
       });
@@ -1216,6 +1221,7 @@ class LinkChecker {
         agents: this.agents,
         securityPolicy: this.securityPolicy,
         retryAfterMaxMs: this.options.retryAfterMaxMs,
+        protectionBodyHash: this.options.protectionBodyHash,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
         onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
       });
@@ -1261,6 +1267,7 @@ class LinkChecker {
           agents: this.agents,
           securityPolicy: this.securityPolicy,
           retryAfterMaxMs: this.options.retryAfterMaxMs,
+          protectionBodyHash: this.options.protectionBodyHash,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
           onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
         });
@@ -1408,6 +1415,7 @@ class LinkChecker {
       agents: this.agents,
       securityPolicy: this.securityPolicy,
       retryAfterMaxMs: this.options.retryAfterMaxMs,
+      protectionBodyHash: this.options.protectionBodyHash,
       scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
       onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result, this.confirmationScheduler),
     });
@@ -1506,6 +1514,7 @@ class LinkChecker {
         robotsTxt: this.options.robotsTxt,
         authorizedScan: this.options.authorizedScan,
         authorizationNote: this.options.authorizationNote,
+        protectionBodyHash: this.options.protectionBodyHash,
         keepAlive: this.options.keepAlive,
         maxSockets: this.options.maxSockets,
         maxFreeSockets: this.options.maxFreeSockets,
@@ -2155,7 +2164,7 @@ function buildComplianceRecord(scanPolicy, options = DEFAULTS) {
     robotsTxtPolicy: scanPolicy?.robotsTxt?.status || "robots_fetch_error",
     robotsTxtEnforced: false,
     responseBodyStored: false,
-    bodyHashEnabled: false,
+    bodyHashEnabled: options.protectionBodyHash === true,
     disclaimer: "This record stores user declarations and tool behavior only; it does not verify scan authorization.",
   };
 }
@@ -2304,6 +2313,7 @@ async function fetchUrl(url, {
   agents = createConnectionAgents(connectionOptions),
   securityPolicy = normalizeSecurityPolicy(DEFAULTS),
   retryAfterMaxMs = DEFAULTS.retryAfterMaxMs,
+  protectionBodyHash = DEFAULTS.protectionBodyHash,
   scheduleRequest,
   onRetryAfter,
 }) {
@@ -2329,6 +2339,7 @@ async function fetchUrl(url, {
       connectionOptions,
       agents,
       securityPolicy,
+      protectionBodyHash,
       scheduleRequest,
       started,
     });
@@ -2369,6 +2380,7 @@ async function fetchUrlOnce(url, {
   connectionOptions,
   agents,
   securityPolicy,
+  protectionBodyHash,
   scheduleRequest,
   started,
 }) {
@@ -2389,6 +2401,7 @@ async function fetchUrlOnce(url, {
         connectionOptions,
         agents,
         securityPolicy,
+        protectionBodyHash,
         readBody: true,
         scheduleRequest,
         started,
@@ -2411,6 +2424,7 @@ async function fetchUrlOnce(url, {
         connectionOptions,
         agents,
         securityPolicy,
+        protectionBodyHash,
         readBody: false,
         scheduleRequest,
         started,
@@ -2432,6 +2446,7 @@ async function fetchUrlOnce(url, {
       connectionOptions,
       agents,
       securityPolicy,
+      protectionBodyHash,
       readBody: false,
       scheduleRequest,
       started,
@@ -2455,6 +2470,7 @@ async function fetchUrlOnce(url, {
       connectionOptions,
       agents,
       securityPolicy,
+      protectionBodyHash,
       readBody: false,
       scheduleRequest,
       started,
@@ -2848,6 +2864,7 @@ async function request(url, method, {
   connectionOptions,
   agents,
   securityPolicy,
+  protectionBodyHash,
   readBody,
   scheduleRequest,
   started,
@@ -2899,6 +2916,7 @@ async function request(url, method, {
           maxHtmlBytes,
           maxBodyPreviewBytes,
           maxDownloadProbeBytes,
+          protectionBodyHash,
           redirectChain,
           maxRedirects,
           longRedirectThreshold,
@@ -2989,6 +3007,7 @@ async function request(url, method, {
       maxHtmlBytes,
       maxBodyPreviewBytes,
       maxDownloadProbeBytes,
+      protectionBodyHash,
       redirectChain,
       maxRedirects,
       longRedirectThreshold,
@@ -3206,6 +3225,7 @@ async function buildResponseResult(response, {
   maxHtmlBytes,
   maxBodyPreviewBytes,
   maxDownloadProbeBytes,
+  protectionBodyHash = DEFAULTS.protectionBodyHash,
   redirectChain,
   maxRedirects,
   longRedirectThreshold,
@@ -3255,7 +3275,9 @@ async function buildResponseResult(response, {
     result.bodyTruncated = release.truncated;
   }
 
-  const signature = buildBodySignature(result.body || result.diagnosticBody || "");
+  const signature = buildBodySignature(result.body || result.diagnosticBody || "", {
+    includeBodyHash: protectionBodyHash,
+  });
   if (signature && (!result.ok || signature.matchedPatterns.length > 0)) {
     result.bodySignature = signature;
   }
@@ -3383,6 +3405,20 @@ function extractWafHeaders(headers) {
   return result;
 }
 
+function extractWafHeaderEvidence(headers) {
+  const evidence = [];
+  for (const name of WAF_HEADER_NAMES) {
+    const value = headers.get(name);
+    if (value) {
+      if (name === "server" && !/(cloudflare|akamai|sucuri|incapsula|imperva)/i.test(value)) {
+        continue;
+      }
+      evidence.push({ header: name, value });
+    }
+  }
+  return evidence;
+}
+
 function extractBlockedRuleId(headers) {
   for (const name of BLOCK_RULE_HEADER_NAMES) {
     const value = headers.get(name);
@@ -3402,7 +3438,7 @@ function toCamelCase(headerName) {
   return headerName.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
 }
 
-function buildBodySignature(body) {
+function buildBodySignature(body, { includeBodyHash = false } = {}) {
   if (!body) {
     return null;
   }
@@ -3414,13 +3450,18 @@ function buildBodySignature(body) {
     .filter((pattern) => lower.includes(pattern.text))
     .map((pattern) => pattern.id);
 
-  return {
+  const signature = {
     signatureType: "html_text",
     matchedPatterns,
-    bodyHash: createHash("sha256").update(text).digest("hex"),
     title: extractTitle(text) || null,
     snippet: sanitizeSnippet(normalized),
   };
+
+  if (includeBodyHash) {
+    signature.bodyHash = createHash("sha256").update(text).digest("hex");
+  }
+
+  return signature;
 }
 
 function sanitizeSnippet(value) {
@@ -3737,6 +3778,7 @@ function applyRedirectIssueClassification(result) {
 function applyResponseClassification(result, headers) {
   if (result.ok) {
     applyBodySignatureDiagnostics(result);
+    result.protection = buildProtectionMetadata(result, headers);
     result.classification = "ok";
     result.issueType = "ok";
     result.diagnosis = result.blockedReason
@@ -3754,6 +3796,7 @@ function applyResponseClassification(result, headers) {
     result.blockedRuleId = result.blockedRuleId || protection.blockedRuleId || null;
     result.suspectedWaf = protection.suspectedWaf;
     result.suspectedBot = protection.suspectedBot;
+    result.protection = buildProtectionMetadata(result, headers, protection);
     result.diagnosis = `Blocked by protection layer${protection.provider ? ` (${protection.provider})` : ""}.`;
     return;
   }
@@ -3783,6 +3826,80 @@ function applyBodySignatureDiagnostics(result) {
     result.suspectedWaf = result.suspectedWaf || pattern.suspectedWaf;
     result.suspectedBot = result.suspectedBot || pattern.suspectedBot;
   }
+}
+
+function buildProtectionMetadata(result, headers, detection = null) {
+  const bodySignatureRuleIds = [...new Set([
+    ...(detection?.matchedPatterns || []),
+    ...(result.bodySignature?.matchedPatterns || []),
+  ])].sort();
+  const headerEvidence = extractWafHeaderEvidence(headers);
+  const matchedPatternDetails = bodySignatureRuleIds
+    .map((id) => PROTECTION_BODY_PATTERNS.find((item) => item.id === id))
+    .filter(Boolean);
+  const provider = detection?.provider
+    || matchedPatternDetails.find((item) => item.provider)?.provider
+    || inferProtectionProviderFromHeaders(headerEvidence);
+  const blockedReason = detection?.blockedReason
+    || result.blockedReason
+    || matchedPatternDetails.find((item) => item.reason)?.reason
+    || null;
+  const suspectedWaf = Boolean(
+    detection?.suspectedWaf
+    || result.suspectedWaf
+    || matchedPatternDetails.some((item) => item.suspectedWaf)
+    || provider,
+  );
+  const suspectedBot = Boolean(
+    detection?.suspectedBot
+    || result.suspectedBot
+    || matchedPatternDetails.some((item) => item.suspectedBot),
+  );
+  const evidence = new Set(detection?.evidence || []);
+  for (const item of headerEvidence) {
+    evidence.add(`${item.header} response header`);
+  }
+  for (const item of matchedPatternDetails) {
+    evidence.add(item.evidence);
+  }
+
+  if (!provider && !blockedReason && !suspectedWaf && !suspectedBot && headerEvidence.length === 0 && bodySignatureRuleIds.length === 0) {
+    return null;
+  }
+
+  return {
+    provider: provider || null,
+    status: result.status ?? null,
+    title: detection?.title || result.bodySignature?.title || null,
+    blockedReason,
+    blockedRuleId: result.blockedRuleId || detection?.blockedRuleId || null,
+    suspectedWaf,
+    suspectedBot,
+    headerEvidence,
+    bodySignatureRuleIds,
+    matchedPatterns: bodySignatureRuleIds,
+    evidence: [...evidence].sort(),
+  };
+}
+
+function inferProtectionProviderFromHeaders(headerEvidence) {
+  for (const item of headerEvidence) {
+    const header = item.header.toLowerCase();
+    const value = String(item.value || "").toLowerCase();
+    if (header.startsWith("cf-") || value.includes("cloudflare")) {
+      return "Cloudflare";
+    }
+    if (header.includes("akamai") || value.includes("akamai")) {
+      return "Akamai";
+    }
+    if (header.includes("sucuri") || value.includes("sucuri")) {
+      return "Sucuri";
+    }
+    if (header === "x-iinfo" || value.includes("incapsula") || value.includes("imperva")) {
+      return "Imperva";
+    }
+  }
+  return null;
 }
 
 function detectProtectionLayer(result, headers) {
@@ -3835,7 +3952,11 @@ function detectProtectionLayer(result, headers) {
     }
   }
 
-  if (!statusLooksBlocked || evidence.length === 0) {
+  const bodyProtectionLooksBlocked = matchedPatterns.some((id) => {
+    const pattern = PROTECTION_BODY_PATTERNS.find((item) => item.id === id);
+    return pattern?.suspectedWaf || pattern?.suspectedBot;
+  });
+  if ((!statusLooksBlocked && !bodyProtectionLooksBlocked) || evidence.length === 0) {
     return null;
   }
 
@@ -5782,6 +5903,11 @@ function parseArgs(argv) {
       explicitOptions.add("authorizedScan");
       continue;
     }
+    if (arg === "--protection-body-hash") {
+      options.protectionBodyHash = true;
+      explicitOptions.add("protectionBodyHash");
+      continue;
+    }
     if (arg === "--authorization-note") {
       options.authorizationNote = args.shift();
       if (!options.authorizationNote || options.authorizationNote.startsWith("-")) {
@@ -6032,6 +6158,7 @@ function parseArgs(argv) {
   options.requestDelayMinMs = normalizeOptionalDelay(options.requestDelayMinMs);
   options.requestDelayMaxMs = normalizeOptionalDelay(options.requestDelayMaxMs);
   options.retryAfterMaxMs = normalizeRetryAfterMaxMs(options.retryAfterMaxMs);
+  options.protectionBodyHash = options.protectionBodyHash === true;
   if (Number.isFinite(options.requestDelayMinMs) !== Number.isFinite(options.requestDelayMaxMs)) {
     throw new Error("Random request delay requires both --request-delay-min-ms and --request-delay-max-ms");
   }
@@ -6235,6 +6362,8 @@ Options:
   --authorized-scan   Record that the user declares they are authorized to scan this site.
   --authorization-note <text>
                       Optional authorization context saved in report compliance metadata.
+  --protection-body-hash
+                      Include SHA-256 bodyHash in protection body signatures. Default: off.
   --no-robots         Do not fetch robots.txt audit metadata.
   --confirm-404       Re-check same-site 404/410 results after the main scan. Default: on.
   --no-confirm-404    Disable the post-scan 404/410 confirmation stage.

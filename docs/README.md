@@ -22,5 +22,5 @@
 
 - P0-P5.5 完成紀錄集中在 `ROADMAP_HISTORY.md`。
 - P6 report-to-report diff 第一版已完成，實作入口是根目錄的 `report-diff.mjs`，測試入口是 `test-report-diff.mjs`。
-- P6.5a-1 輸出契約基線、P6.5a-2 redaction、P6.5a-3 sources/body limit 與 P6.5a-4 Header/Keep-Alive 已完成；後續主線為 P6.5b。
-- P6.5b-1 SSRF / URL security policy 已完成；後續建議依序做 partial report、robots / compliance、Retry-After / host diagnostics 與 WAF schema 收斂。
+- P6.5a-1 輸出契約基線、P6.5a-2 redaction、P6.5a-3 sources/body limit 與 P6.5a-4 Header/Keep-Alive 已完成。
+- P6.5b-1 到 P6.5b-5 已完成，包含 SSRF / URL security policy、partial report、robots / compliance、Retry-After / host diagnostics 與 WAF schema 收斂；後續主線為 P7 TTL URL result cache。

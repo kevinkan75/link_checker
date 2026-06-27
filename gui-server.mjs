@@ -925,6 +925,7 @@ function parseJobOptions(input) {
     authorizationNote: typeof input.authorizationNote === "string" && input.authorizationNote.trim()
       ? input.authorizationNote.trim().slice(0, 500)
       : baseOptions.authorizationNote,
+    protectionBodyHash: Boolean(input.protectionBodyHash ?? baseOptions.protectionBodyHash),
     keepAlive: input.keepAlive !== false,
     redactSensitiveQuery: input.redactSensitiveQuery !== false,
     redactQueryKeys: Array.isArray(input.redactQueryKeys) ? input.redactQueryKeys : baseOptions.redactQueryKeys,
