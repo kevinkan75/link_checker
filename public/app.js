@@ -44,6 +44,7 @@ const elapsed = document.querySelector("#elapsed");
 const progressTrack = document.querySelector(".progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const progressPercent = document.querySelector("#progress-percent");
+const pendingUrlNote = document.querySelector("#pending-url-note");
 const pages = document.querySelector("#pages");
 const checked = document.querySelector("#checked");
 const pendingUrls = document.querySelector("#pending-urls");
@@ -459,6 +460,7 @@ async function startCheck() {
   updateFilterCounts(emptyBreakdown(), 0);
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
   pendingUrls.textContent = "0";
+  updatePendingUrlDisplay(0);
   updateActiveFilter();
   setProgressValue(0);
   showLogLocation(null);
@@ -844,7 +846,7 @@ function updateStatus(status) {
   elapsed.textContent = `${status.elapsedSeconds || 0}s`;
   pages.textContent = `${status.pagesCrawled || 0} / ${status.maxPages || maxPagesInput.value}`;
   checked.textContent = status.urlsChecked || 0;
-  pendingUrls.textContent = getPendingUrlCount(status);
+  updatePendingUrlDisplay(getPendingUrlCount(status));
   active.textContent = status.activeRequests || 0;
   queue.textContent = status.queuedPages || 0;
   brokenCount.textContent = status.brokenLinks || 0;
@@ -888,6 +890,12 @@ function getPendingUrlCount(status) {
     return pending;
   }
   return Number(status?.pendingValidations || 0) + Number(status?.activeValidationTasks || 0);
+}
+
+function updatePendingUrlDisplay(count) {
+  const normalized = Math.max(0, Number(count) || 0);
+  pendingUrls.textContent = normalized;
+  pendingUrlNote.textContent = `尚有 ${normalized} 個待檢測 URL`;
 }
 
 function setState(state) {
@@ -951,7 +959,7 @@ function renderReport(report) {
   brokenCount.textContent = broken.length;
   pages.textContent = `${report.summary.pagesCrawled} / ${report.options.maxPages}`;
   checked.textContent = report.summary.urlsChecked;
-  pendingUrls.textContent = getReportPendingUrlCount(report);
+  updatePendingUrlDisplay(getReportPendingUrlCount(report));
   skipped.textContent = report.summary.skippedExternal;
   const maxPages = Number(report.options.maxPages || 1);
   const crawled = Number(report.summary.pagesCrawled || 0);
