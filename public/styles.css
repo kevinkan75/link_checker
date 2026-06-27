@@ -66,6 +66,48 @@ button:disabled {
   color: var(--danger);
 }
 
+button.is-running {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+button.is-running:disabled {
+  cursor: progress;
+  opacity: 1;
+}
+
+button.is-running::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 999px;
+  animation: spin 800ms linear infinite;
+}
+
+button.is-stop-ready:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #ffffff;
+}
+
+button.is-stop-ready:hover:not(:disabled) {
+  border-color: #7f1d1d;
+  background: #7f1d1d;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .app-shell {
   width: min(1220px, calc(100% - 32px));
   margin: 0 auto;
@@ -557,7 +599,7 @@ input:focus {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
   gap: 10px;
 }
 

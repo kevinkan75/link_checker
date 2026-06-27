@@ -46,6 +46,7 @@ const progressBar = document.querySelector("#progress-bar");
 const progressPercent = document.querySelector("#progress-percent");
 const pages = document.querySelector("#pages");
 const checked = document.querySelector("#checked");
+const pendingUrls = document.querySelector("#pending-urls");
 const active = document.querySelector("#active");
 const queue = document.querySelector("#queue");
 const brokenCount = document.querySelector("#broken-count");
@@ -121,6 +122,15 @@ const presets = {
   },
   defaults: { ...defaultSettings },
 };
+const buttonLabels = {
+  start: "開始檢查",
+  checking: "檢查中...",
+  stop: "停止",
+  startQueue: "開始佇列",
+  queueRunning: "佇列執行中...",
+  stopQueue: "停止佇列",
+};
+const unfinishedScanWarning = "檢測尚未完成。切換功能頁面會中斷目前頁面的即時進度顯示，確定要離開嗎？";
 
 let currentJobId = null;
 let eventSource = null;
@@ -131,8 +141,12 @@ let watchedQueueItemId = null;
 let watchedQueueUrl = null;
 let manualWatchSelected = false;
 let activePreset = null;
+let scanInProgress = false;
+let queueInProgress = false;
+let suppressNextUnloadWarning = false;
 
 startSessionHeartbeat();
+installUnfinishedScanGuard();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -301,6 +315,50 @@ function startSessionHeartbeat() {
   window.addEventListener("pagehide", send);
 }
 
+function installUnfinishedScanGuard() {
+  document.querySelectorAll(".header-nav a[href]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = new URL(link.href, window.location.href);
+      if (
+        target.pathname === window.location.pathname
+        && target.search === window.location.search
+        && target.hash === window.location.hash
+      ) {
+        return;
+      }
+
+      if (!hasUnfinishedWork()) {
+        return;
+      }
+
+      if (!window.confirm(unfinishedScanWarning)) {
+        event.preventDefault();
+        return;
+      }
+
+      suppressNextUnloadWarning = true;
+    });
+  });
+
+  window.addEventListener("beforeunload", (event) => {
+    if (suppressNextUnloadWarning || !hasUnfinishedWork()) {
+      suppressNextUnloadWarning = false;
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = "";
+  });
+}
+
+function hasUnfinishedWork() {
+  return scanInProgress || queueInProgress;
+}
+
 function applyPreset(name) {
   const preset = presets[name] || defaultSettings;
   applySettings(preset);
@@ -400,11 +458,13 @@ async function startCheck() {
   updateIssueBreakdown(emptyBreakdown(), 0);
   updateFilterCounts(emptyBreakdown(), 0);
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
+  pendingUrls.textContent = "0";
   updateActiveFilter();
   setProgressValue(0);
   showLogLocation(null);
   updateWatchingSite();
   eventLog.replaceChildren();
+  scanInProgress = true;
   setState("running");
   setBusy(true);
 
@@ -427,6 +487,7 @@ async function startCheck() {
     currentJobId = data.id;
     connectEvents(data.eventsUrl);
   } catch (error) {
+    scanInProgress = false;
     setState("failed");
     statusTitle.textContent = error.message;
     setBusy(false);
@@ -522,12 +583,15 @@ function renderQueue(queueState) {
   const total = totals.total || 0;
   const activeSites = queueState?.activeSites || totals.running || 0;
   const maxConcurrentSites = queueState?.maxConcurrentSites || maxConcurrentSitesInput.value || 1;
+  const isRunning = Boolean(queueState?.running);
+  queueInProgress = isRunning;
   queueSummary.textContent = total
     ? `共 ${total} 個，執行中 ${activeSites} / ${maxConcurrentSites}，等待 ${totals.queued || 0}，完成 ${totals.finished || 0}，失敗 ${totals.failed || 0}，停止 ${totals.stopped || 0}`
     : "尚未加入網站";
-  startQueueButton.disabled = Boolean(queueState?.running) || !(totals.queued > 0);
-  stopQueueButton.disabled = !queueState?.running;
-  maxConcurrentSitesInput.disabled = Boolean(queueState?.running);
+  startQueueButton.disabled = isRunning || !(totals.queued > 0);
+  stopQueueButton.disabled = !isRunning;
+  maxConcurrentSitesInput.disabled = isRunning;
+  updateQueueButtonState(isRunning);
 
   const items = queueState?.items || [];
   if (items.length === 0) {
@@ -648,6 +712,7 @@ function watchQueueItemObject(item, { manual }) {
   manualWatchSelected = manual || manualWatchSelected;
   currentReport = null;
   currentFilter = "all";
+  scanInProgress = true;
   downloadButton.disabled = true;
   eventLog.replaceChildren();
   renderBrokenTable([]);
@@ -682,6 +747,7 @@ async function viewQueueReport(id) {
 
   closeEvents();
   currentJobId = null;
+  scanInProgress = false;
   watchedQueueItemId = id;
   watchedQueueUrl = null;
   manualWatchSelected = true;
@@ -721,6 +787,7 @@ function connectEvents(url) {
     currentReport = data.report;
     renderReport(currentReport);
     showLogLocation(data);
+    scanInProgress = false;
     setState(data.state);
     setBusy(false);
     downloadButton.disabled = false;
@@ -734,6 +801,7 @@ function connectEvents(url) {
     } catch {
       statusTitle.textContent = "連線中斷";
     }
+    scanInProgress = false;
     setState("failed");
     setBusy(false);
     closeEvents();
@@ -771,10 +839,12 @@ function showLogLocation(data) {
 }
 
 function updateStatus(status) {
+  scanInProgress = ["running", "stopping"].includes(status.state || "running");
   setState(status.state || "running");
   elapsed.textContent = `${status.elapsedSeconds || 0}s`;
   pages.textContent = `${status.pagesCrawled || 0} / ${status.maxPages || maxPagesInput.value}`;
   checked.textContent = status.urlsChecked || 0;
+  pendingUrls.textContent = getPendingUrlCount(status);
   active.textContent = status.activeRequests || 0;
   queue.textContent = status.queuedPages || 0;
   brokenCount.textContent = status.brokenLinks || 0;
@@ -788,7 +858,7 @@ function updateStatus(status) {
   const maxPages = Number(status.maxPages || maxPagesInput.value || 1);
   const crawled = Number(status.pagesCrawled || 0);
   const width = Math.max(0, Math.min(100, (crawled / maxPages) * 100));
-  setProgressValue(width);
+  setProgressValue(isStatusComplete(status) ? 100 : capIncompleteProgress(width));
 }
 
 function setProgressValue(value) {
@@ -796,6 +866,28 @@ function setProgressValue(value) {
   progressBar.style.width = `${normalized}%`;
   progressPercent.textContent = `${normalized}%`;
   progressTrack.setAttribute("aria-valuenow", String(normalized));
+}
+
+function capIncompleteProgress(value) {
+  const normalized = Math.max(0, Math.min(100, Number(value) || 0));
+  return Math.min(99, normalized);
+}
+
+function isStatusComplete(status) {
+  if (status?.state !== "finished") {
+    return false;
+  }
+  return getPendingUrlCount(status) === 0
+    && Number(status?.queuedPages || 0) === 0
+    && Number(status?.activeRequests || 0) === 0;
+}
+
+function getPendingUrlCount(status) {
+  const pending = Number(status?.pendingUrls);
+  if (Number.isFinite(pending)) {
+    return pending;
+  }
+  return Number(status?.pendingValidations || 0) + Number(status?.activeValidationTasks || 0);
 }
 
 function setState(state) {
@@ -824,6 +916,19 @@ function setState(state) {
 function setBusy(isBusy) {
   startButton.disabled = isBusy;
   stopButton.disabled = !isBusy;
+  startButton.textContent = isBusy ? buttonLabels.checking : buttonLabels.start;
+  stopButton.textContent = buttonLabels.stop;
+  startButton.classList.toggle("is-running", isBusy);
+  stopButton.classList.toggle("is-stop-ready", isBusy);
+  startButton.setAttribute("aria-busy", String(isBusy));
+}
+
+function updateQueueButtonState(isRunning) {
+  startQueueButton.textContent = isRunning ? buttonLabels.queueRunning : buttonLabels.startQueue;
+  stopQueueButton.textContent = buttonLabels.stopQueue;
+  startQueueButton.classList.toggle("is-running", isRunning);
+  stopQueueButton.classList.toggle("is-stop-ready", isRunning);
+  startQueueButton.setAttribute("aria-busy", String(isRunning));
 }
 
 function appendLog(item) {
@@ -846,8 +951,12 @@ function renderReport(report) {
   brokenCount.textContent = broken.length;
   pages.textContent = `${report.summary.pagesCrawled} / ${report.options.maxPages}`;
   checked.textContent = report.summary.urlsChecked;
+  pendingUrls.textContent = getReportPendingUrlCount(report);
   skipped.textContent = report.summary.skippedExternal;
-  setProgressValue(100);
+  const maxPages = Number(report.options.maxPages || 1);
+  const crawled = Number(report.summary.pagesCrawled || 0);
+  const width = Math.max(0, Math.min(100, (crawled / maxPages) * 100));
+  setProgressValue(report.runStatus?.status === "complete" ? 100 : capIncompleteProgress(width));
   updateIssueBreakdown(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateFilterCounts(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateRedirectBreakdown(report.summary.redirectByType || emptyRedirectBreakdown(), report.summary.redirects || 0);
@@ -855,6 +964,11 @@ function renderReport(report) {
   updateActiveFilter();
 
   renderBrokenTable(broken);
+}
+
+function getReportPendingUrlCount(report) {
+  const runStatus = report?.runStatus || {};
+  return Number(runStatus.pendingValidations || 0) + Number(runStatus.activeValidationTasks || 0);
 }
 
 function renderBrokenTable(broken) {

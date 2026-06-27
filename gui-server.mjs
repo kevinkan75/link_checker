@@ -118,6 +118,11 @@ class GuiReporter {
       pagesCrawled: checker?.crawledPages.size || 0,
       queuedPages: checker?.pageQueue.length || 0,
       urlsChecked: results.length,
+      pendingValidations: checker?.validationQueue.length || 0,
+      activeValidationTasks: checker?.activeValidationTasks || 0,
+      pendingUrls: checker
+        ? checker.validationQueue.length + checker.activeValidationTasks
+        : 0,
       activeRequests: checker?.fetchLimiter.active || 0,
       brokenLinks: brokenItems.length,
       brokenByType: countBrokenByType(brokenItems),
