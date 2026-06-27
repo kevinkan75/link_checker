@@ -343,7 +343,8 @@ P5.5 diagnostics：
 - response：`ok`、`status`、`contentType`、`contentLength`、`bodyBytesRead`、`bodyTruncated`
 - cache：`cacheHeaders`
 - redirect：`redirected`、`redirectCount`、`redirectChain`、`redirectType`、`redirectIssues`、`redirectLabels`
-- protection：`wafHeaders`、`blockedReason`、`blockedRuleId`、`suspectedWaf`、`suspectedBot`
+- protection：`protection.provider`、`protection.headerEvidence`、`protection.bodySignatureRuleIds`、`wafHeaders`、`blockedReason`、`blockedRuleId`、`suspectedWaf`、`suspectedBot`
+- body signature：`bodySignature.signatureType`、`bodySignature.matchedPatterns`、`bodySignature.title`、`bodySignature.snippet`，`bodySignature.bodyHash` 僅在 `--protection-body-hash` opt-in 時輸出
 - diagnosis：`classification`、`issueType`、`diagnosis`
 - retry：`attempts`
 - confirmation：`confirmation`、`transientFailure`、`needsReview`
@@ -424,7 +425,7 @@ CLI 使用 `--output <file>` 時會寫出指定 report，並在同目錄建立 `
 - GUI 尚未提供 `--external-risk-rules` 輸入欄位。
 - 外連治理規則尚未支援 URL pattern、path、tag/source 條件。
 - 外連 `410` 是否納入二次確認需等 TTL cache 穩定後評估。
-- CDN/WAF body hash 診斷可後續補強。
+- CDN/WAF provider 與 body signature 規則庫可後續補強；`bodyHash` 已支援 `--protection-body-hash` opt-in，預設不輸出。
 - Asset skip / asset defer 應建立在 P7/P8 cache 與 incremental scan 之後。
 - 可增加更多 framework payload 支援，例如 Next.js `__NEXT_DATA__`。
 - `--render` headless fallback 應保持 opt-in。

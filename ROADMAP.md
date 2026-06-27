@@ -455,7 +455,7 @@ CLI 可新增：
 
 | 類別 | 細項 | 落點 |
 | --- | --- | --- |
-| schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / redaction / body limit / `sourcesTruncated`、`1.2.0` 新增 `securityPolicy`、`runStatus`、robots / compliance 記錄，後續擴充 protection 結構 | P6.5a / P6.5b |
+| schema version | `1.0.0` 舊 report、`1.1.0` 新增 `schemaVersion` / `generator` / redaction / body limit / `sourcesTruncated`、`1.2.0` 新增 `securityPolicy`、`runStatus`、robots / compliance、`hostDiagnostics`、`protection` 與 `bodySignature` 契約 | P6.5a / P6.5b |
 | output versioning | 日常輸出檔名穩定；`report.json`、`summary.json`、`external-summary.json`、`diff.json` 使用內容版本欄位；CSV 不新增版本欄位 | P6.5a |
 | output manifest | 每次輸出建立 `manifest.json`，記錄 `toolVersion`、`schemaVersions`、`generatedAt`、`startUrl`、`optionsProfile`、`runtimeVersion`、generated files | P6.5a |
 | normalization | `load report -> detect schemaVersion -> normalize to internal ReportModel`，避免 GUI / Analyzer 散落 fallback 邏輯 | P6 / P9 |
@@ -466,7 +466,7 @@ CLI 可新增：
 | redaction CLI | `--redact-sensitive-query` 預設開啟、`--no-redact-sensitive-query`、`--redact-query-keys <list>` | P6.5a |
 | body / source limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes`、`--max-sources-per-url` | P6.5a |
 | keep-alive CLI | `--no-keep-alive`，並記錄 `keepAlive`、`maxSockets`、`maxFreeSockets`、`keepAliveMsecs` | P6.5a |
-| report fields | `securityPolicy`、`redaction`、`bodyLimits`、`runStatus`、`scanPolicy`、`compliance`、`hostDiagnostics`、`rulesVersion`、`profileExpandedOptions` | P6.5 / P9 |
+| report fields | `securityPolicy`、`redaction`、`bodyLimits`、`runStatus`、`scanPolicy`、`compliance`、`hostDiagnostics`、`protection`、`bodySignature`、`rulesVersion`、`profileExpandedOptions` | P6.5 / P9 |
 | redirect security labels | `scheme_downgrade_redirect`、`redirect_to_private_ip`、`redirect_to_blocked_scheme`、`redirect_to_metadata_ip` | P6.5b |
 | DNS / TLS issue types | `dns_not_found`、`connection_refused`、`timeout`、`tls_error`、`tls_cert_expired` | P6.5b |
 | IDN / IPv6 | canonical 比對使用 normalized hostname；security policy 需支援 punycode、`[::1]`、IPv6 unique local / link-local 判斷 | P6.5b |

@@ -68,7 +68,7 @@ node .\report-diff.mjs old-report.json new-report.json --output diff.json
 
 - URL 狀態變化：新增、移除、變更、新發生問題、已修復、持續存在、信心升降。
 - 外連治理風險變化：風險升高、風險降低。
-- Summary diagnostics 變化：`summary.scanQuality`、`summary.spaDetection`、`summary.checkedByKind`。
+- Summary diagnostics 變化：`summary.scanQuality`、`summary.spaDetection`、`summary.checkedByKind`、`summary.hostDiagnostics`。
 - Normalization warnings：legacy report、`broken[]` fallback、duplicate key 等。
 
 ## 快速選擇

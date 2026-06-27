@@ -1,5 +1,7 @@
 # P6.5a Assessment
 
+本文件原為 P6.5a 實作前評估，現已回填完成狀態；最新主線請以 [../ROADMAP.md](../ROADMAP.md) 為準。
+
 本文件記錄 P6.5a 實作前評估。P6.5a 名義上是低風險穩定性修補，範圍不引入 robots / compliance 語意，也不改掃描結果來源；但實作會觸及 report 契約、輸出脫敏、response body 讀取與 connection pool，因此整體風險應視為中等，需拆小批次落地。
 
 ## 結論
