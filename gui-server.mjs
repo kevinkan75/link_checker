@@ -902,6 +902,7 @@ function parseJobOptions(input) {
     requestDelayMs: clampInteger(input.requestDelayMs, baseOptions.requestDelayMs, 0, 60000),
     requestDelayMinMs: randomDelay.min,
     requestDelayMaxMs: randomDelay.max,
+    retryAfterMaxMs: clampInteger(input.retryAfterMaxMs, baseOptions.retryAfterMaxMs, 0, 300000),
     timeoutMs: clampInteger(input.timeoutMs, baseOptions.timeoutMs, 1000, 120000),
     retryCount: clampInteger(input.retryCount, baseOptions.retryCount, 0, 5),
     maxRedirects: clampInteger(input.maxRedirects, baseOptions.maxRedirects, 0, 20),

@@ -20,6 +20,7 @@ const DEFAULT_MAX_BODY_PREVIEW_BYTES = 4096;
 const DEFAULT_MAX_DOWNLOAD_PROBE_BYTES = 64 * 1024;
 const DEFAULT_MAX_SOURCES_PER_URL = 50;
 const DEFAULT_KEEP_ALIVE_MSECS = 1000;
+const DEFAULT_RETRY_AFTER_MAX_MS = 30000;
 const REDACTED_QUERY_VALUE = "REDACTED";
 const DEFAULT_REDACT_QUERY_KEYS = [
   "access_token",
@@ -102,6 +103,7 @@ const DEFAULTS = {
   requestDelayMs: 500,
   requestDelayMinMs: null,
   requestDelayMaxMs: null,
+  retryAfterMaxMs: DEFAULT_RETRY_AFTER_MAX_MS,
   timeoutMs: 15000,
   retryCount: 2,
   maxRedirects: 10,
@@ -318,6 +320,19 @@ class HostScheduler {
     return count;
   }
 
+  applyCooldown(url, cooldownMs) {
+    const delay = Math.max(0, Number.isFinite(cooldownMs) ? Math.floor(cooldownMs) : 0);
+    if (delay <= 0) {
+      return false;
+    }
+
+    const host = new URL(url).host;
+    const state = this.getState(host);
+    state.nextAllowedAt = Math.max(state.nextAllowedAt, Date.now() + delay);
+    this.pump(host);
+    return true;
+  }
+
   getState(host) {
     if (!this.hosts.has(host)) {
       this.hosts.set(host, {
@@ -336,15 +351,13 @@ class HostScheduler {
       return;
     }
 
-    if (!this.hasRandomDelay()) {
-      const delay = Math.max(0, state.nextAllowedAt - Date.now());
-      if (delay > 0) {
-        state.timer = setTimeout(() => {
-          state.timer = null;
-          this.pump(host);
-        }, delay);
-        return;
-      }
+    const delay = Math.max(0, state.nextAllowedAt - Date.now());
+    if (delay > 0) {
+      state.timer = setTimeout(() => {
+        state.timer = null;
+        this.pump(host);
+      }, delay);
+      return;
     }
 
     const item = state.queue.shift();
@@ -513,6 +526,7 @@ class LinkChecker {
     this.options.maxBodyPreviewBytes = normalizeByteLimit(this.options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
     this.options.maxDownloadProbeBytes = normalizeByteLimit(this.options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
     this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+    this.options.retryAfterMaxMs = normalizeRetryAfterMaxMs(this.options.retryAfterMaxMs);
     this.securityPolicy = normalizeSecurityPolicy(this.options);
     Object.assign(this.options, this.securityPolicy);
     this.complianceOptions = normalizeComplianceOptions(this.options);
@@ -559,6 +573,7 @@ class LinkChecker {
       bodyCacheHits: 0,
     };
     this.spaDetections = [];
+    this.retryAfterEvents = [];
     this.domainCategoryRules = [
       ...EXTERNAL_CATEGORY_RULES,
       ...normalizeDomainCategoryRules(options.domainCategoryRules || []),
@@ -664,7 +679,9 @@ class LinkChecker {
         connectionOptions: this.connectionOptions,
         agents: this.agents,
         securityPolicy: this.securityPolicy,
+        retryAfterMaxMs: this.options.retryAfterMaxMs,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
+        onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
       });
       this.robotsTxt = buildRobotsTxtSummary(robotsUrl, result, this.options);
     } catch (error) {
@@ -676,6 +693,23 @@ class LinkChecker {
   updatePolicyRecords() {
     this.scanPolicy = buildScanPolicy(this.robotsTxt, this.options);
     this.compliance = buildComplianceRecord(this.scanPolicy, this.options);
+  }
+
+  applyRetryAfterCooldown(requestUrl, cooldownMs, result, scheduler = this.hostScheduler) {
+    const applied = scheduler.applyCooldown(requestUrl, cooldownMs);
+    this.retryAfterEvents.push({
+      host: new URL(requestUrl).host,
+      url: requestUrl,
+      status: result.status ?? null,
+      header: result.retryAfter?.header || null,
+      waitMs: result.retryAfter?.waitMs ?? null,
+      cappedWaitMs: result.retryAfter?.cappedWaitMs ?? null,
+      cooldownMs,
+      capped: result.retryAfter?.capped === true,
+      applied,
+      recordedAt: new Date().toISOString(),
+    });
+    return applied;
   }
 
   async processPage({ url, depth }) {
@@ -1063,7 +1097,9 @@ class LinkChecker {
       connectionOptions: this.connectionOptions,
       agents: this.agents,
       securityPolicy: this.securityPolicy,
+      retryAfterMaxMs: this.options.retryAfterMaxMs,
       scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
+      onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
     });
 
     if (this.shouldConfirmWithHomepageFallback(url, result, requireBody)) {
@@ -1126,7 +1162,9 @@ class LinkChecker {
         connectionOptions: this.connectionOptions,
         agents: this.agents,
         securityPolicy: this.securityPolicy,
+        retryAfterMaxMs: this.options.retryAfterMaxMs,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
+        onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
       });
 
       if (fallbackResult.ok) {
@@ -1177,7 +1215,9 @@ class LinkChecker {
         connectionOptions: this.connectionOptions,
         agents: this.agents,
         securityPolicy: this.securityPolicy,
+        retryAfterMaxMs: this.options.retryAfterMaxMs,
         scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
+        onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
       });
       result.confirmedWithReferer = source.page;
       if (result.ok) {
@@ -1220,7 +1260,9 @@ class LinkChecker {
           connectionOptions: this.connectionOptions,
           agents: this.agents,
           securityPolicy: this.securityPolicy,
+          retryAfterMaxMs: this.options.retryAfterMaxMs,
           scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
+          onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
         });
         fallbackResult.normalizedFrom = url;
         fallbackResult.normalizationFallback = true;
@@ -1365,7 +1407,9 @@ class LinkChecker {
       connectionOptions: this.connectionOptions,
       agents: this.agents,
       securityPolicy: this.securityPolicy,
+      retryAfterMaxMs: this.options.retryAfterMaxMs,
       scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
+      onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result, this.confirmationScheduler),
     });
 
     const outcome = getConfirmationOutcome(confirmed);
@@ -1428,6 +1472,7 @@ class LinkChecker {
         requestDelayMs: this.options.requestDelayMs,
         requestDelayMinMs: this.options.requestDelayMinMs,
         requestDelayMaxMs: this.options.requestDelayMaxMs,
+        retryAfterMaxMs: this.options.retryAfterMaxMs,
         timeoutMs: this.options.timeoutMs,
         retryCount: this.options.retryCount,
         maxRedirects: this.options.maxRedirects,
@@ -1500,6 +1545,7 @@ class LinkChecker {
         spaDetection,
         scanQuality,
         robotsTxt: this.robotsTxt,
+        hostDiagnostics: this.buildHostDiagnostics(checked),
       },
       broken,
       checked,
@@ -1608,6 +1654,115 @@ class LinkChecker {
       assetRatio: Number(assetRatio.toFixed(4)),
       nuxtAssetUrls,
       nuxtAssetRatio: Number(nuxtAssetRatio.toFixed(4)),
+    };
+  }
+
+  buildHostDiagnostics(checked) {
+    const hosts = new Map();
+    const ensureHost = (host) => {
+      const key = host || "unknown";
+      if (!hosts.has(key)) {
+        hosts.set(key, {
+          host: key,
+          urlsChecked: 0,
+          ok: 0,
+          httpErrors: 0,
+          accessDenied: 0,
+          rateLimited: 0,
+          protected: 0,
+          suspectedWaf: 0,
+          suspectedBot: 0,
+          retryAfterResponses: 0,
+          retryAfterCooldowns: 0,
+          retryAfterCooldownMs: 0,
+          maxRetryAfterWaitMs: 0,
+          warningCodes: new Set(),
+        });
+      }
+      return hosts.get(key);
+    };
+
+    for (const result of checked) {
+      const host = getResultHost(result);
+      const item = ensureHost(host);
+      item.urlsChecked += 1;
+      if (result.ok) {
+        item.ok += 1;
+      }
+      if (!result.ok && result.status >= 400) {
+        item.httpErrors += 1;
+      }
+      if (result.status === 403 || result.classification === "access_denied" || result.issueType === "access_denied") {
+        item.accessDenied += 1;
+      }
+      if (result.status === 429) {
+        item.rateLimited += 1;
+      }
+      if (result.classification === "protected") {
+        item.protected += 1;
+      }
+      if (result.suspectedWaf) {
+        item.suspectedWaf += 1;
+      }
+      if (result.suspectedBot) {
+        item.suspectedBot += 1;
+      }
+      if (result.retryAfter) {
+        item.retryAfterResponses += 1;
+        item.maxRetryAfterWaitMs = Math.max(item.maxRetryAfterWaitMs, result.retryAfter.waitMs || 0);
+      }
+    }
+
+    for (const event of this.retryAfterEvents) {
+      const item = ensureHost(event.host);
+      item.retryAfterCooldowns += 1;
+      item.retryAfterCooldownMs += event.cooldownMs || 0;
+      item.maxRetryAfterWaitMs = Math.max(item.maxRetryAfterWaitMs, event.waitMs || 0);
+    }
+
+    const hostItems = [...hosts.values()].map((item) => {
+      const blockCount = item.accessDenied + item.rateLimited + item.protected + item.suspectedWaf + item.suspectedBot;
+      const blockRate = item.urlsChecked > 0 ? blockCount / item.urlsChecked : 0;
+      if (item.rateLimited > 0 || item.retryAfterCooldowns > 0) {
+        item.warningCodes.add("rate_limited_host");
+      }
+      if (item.urlsChecked >= 3 && blockRate >= 0.5) {
+        item.warningCodes.add("high_block_rate");
+      }
+      if (item.suspectedWaf > 0 || item.protected > 0) {
+        item.warningCodes.add("suspected_waf_or_bot");
+      }
+
+      return {
+        host: item.host,
+        urlsChecked: item.urlsChecked,
+        ok: item.ok,
+        httpErrors: item.httpErrors,
+        accessDenied: item.accessDenied,
+        rateLimited: item.rateLimited,
+        protected: item.protected,
+        suspectedWaf: item.suspectedWaf,
+        suspectedBot: item.suspectedBot,
+        blockRate: Number(blockRate.toFixed(4)),
+        retryAfterResponses: item.retryAfterResponses,
+        retryAfterCooldowns: item.retryAfterCooldowns,
+        retryAfterCooldownMs: item.retryAfterCooldownMs,
+        maxRetryAfterWaitMs: item.maxRetryAfterWaitMs,
+        warnings: [...item.warningCodes].sort(),
+      };
+    }).sort((a, b) => (
+      b.warnings.length - a.warnings.length
+      || b.blockRate - a.blockRate
+      || b.urlsChecked - a.urlsChecked
+      || a.host.localeCompare(b.host)
+    ));
+
+    const warnings = [...new Set(hostItems.flatMap((item) => item.warnings))].sort();
+    return {
+      status: warnings.length > 0 ? "warning" : "ok",
+      warnings,
+      retryAfterMaxMs: this.options.retryAfterMaxMs,
+      hosts: hostItems,
     };
   }
 
@@ -1744,6 +1899,14 @@ function normalizeIntegerLimit(value, fallback) {
     return fallback;
   }
   return Math.min(number, 100000);
+}
+
+function normalizeRetryAfterMaxMs(value) {
+  const number = Number.parseInt(value ?? DEFAULTS.retryAfterMaxMs, 10);
+  if (!Number.isFinite(number) || number < 0) {
+    return DEFAULTS.retryAfterMaxMs;
+  }
+  return Math.min(number, 300000);
 }
 
 function normalizeConnectionOptions(options = {}) {
@@ -1954,6 +2117,7 @@ function buildScanPolicy(robotsTxt, options = DEFAULTS) {
       requestDelayMs: options.requestDelayMs,
       requestDelayMinMs: options.requestDelayMinMs,
       requestDelayMaxMs: options.requestDelayMaxMs,
+      retryAfterMaxMs: options.retryAfterMaxMs,
       crawlDelayApplied: false,
     },
     notes: [
@@ -2139,7 +2303,9 @@ async function fetchUrl(url, {
   connectionOptions = normalizeConnectionOptions(DEFAULTS),
   agents = createConnectionAgents(connectionOptions),
   securityPolicy = normalizeSecurityPolicy(DEFAULTS),
+  retryAfterMaxMs = DEFAULTS.retryAfterMaxMs,
   scheduleRequest,
+  onRetryAfter,
 }) {
   const started = performance.now();
   let result = null;
@@ -2167,12 +2333,19 @@ async function fetchUrl(url, {
       started,
     });
     result.attempts = attempt + 1;
+    const canRetry = attempt < retryCount && shouldRetryResult(result);
+    const retryAfterCooldownMs = applyRetryAfterCooldown(result, {
+      retryAfterMaxMs,
+      onRetryAfter,
+    });
 
-    if (attempt >= retryCount || !shouldRetryResult(result)) {
+    if (!canRetry) {
       return result;
     }
 
-    await sleep(getRetryDelayMs(attempt));
+    if (retryAfterCooldownMs === null) {
+      await sleep(getRetryDelayMs(attempt));
+    }
   }
 
   return result;
@@ -3038,6 +3211,7 @@ async function buildResponseResult(response, {
   longRedirectThreshold,
 }) {
   const contentType = response.headers.get("content-type");
+  const retryAfter = parseRetryAfterHeader(response.headers.get("retry-after"));
   const result = {
     url,
     canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
@@ -3050,6 +3224,7 @@ async function buildResponseResult(response, {
     contentType,
     contentLength: parseContentLength(response.headers),
     cacheHeaders: extractCacheHeaders(response.headers),
+    retryAfter,
     server: response.headers.get("server"),
     wafHeaders: extractWafHeaders(response.headers),
     blockedReason: null,
@@ -3415,6 +3590,60 @@ function shouldRetryResult(result) {
   return false;
 }
 
+function parseRetryAfterHeader(value, nowMs = Date.now()) {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+
+  const header = value.trim();
+  const seconds = Number.parseFloat(header);
+  let waitMs = null;
+  let type = "invalid";
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    waitMs = Math.round(seconds * 1000);
+    type = "seconds";
+  } else {
+    const dateMs = Date.parse(header);
+    if (Number.isFinite(dateMs)) {
+      waitMs = Math.max(0, dateMs - nowMs);
+      type = "http_date";
+    }
+  }
+
+  return {
+    header,
+    type,
+    waitMs,
+    cappedWaitMs: null,
+    cooldownMs: null,
+    capped: false,
+    cooldownApplied: false,
+  };
+}
+
+function applyRetryAfterCooldown(result, { retryAfterMaxMs, onRetryAfter } = {}) {
+  if (!result.retryAfter || !Number.isFinite(result.retryAfter.waitMs)) {
+    return null;
+  }
+  if (result.status !== 429 && result.status !== 503) {
+    return null;
+  }
+
+  const maxWaitMs = Math.max(0, Number.isFinite(retryAfterMaxMs) ? Math.floor(retryAfterMaxMs) : DEFAULT_RETRY_AFTER_MAX_MS);
+  const cappedWaitMs = Math.min(result.retryAfter.waitMs, maxWaitMs);
+  const cooldownMs = cappedWaitMs;
+  result.retryAfter.cappedWaitMs = cappedWaitMs;
+  result.retryAfter.cooldownMs = cooldownMs;
+  result.retryAfter.capped = result.retryAfter.waitMs > cappedWaitMs;
+  result.retryAfter.maxWaitMs = maxWaitMs;
+
+  if (typeof onRetryAfter === "function" && cooldownMs > 0) {
+    result.retryAfter.cooldownApplied = onRetryAfter(result.finalUrl || result.url, cooldownMs, result) === true;
+  }
+
+  return cooldownMs;
+}
+
 function getRetryDelayMs(attempt) {
   return Math.min(4000, 500 * 2 ** attempt);
 }
@@ -3634,6 +3863,9 @@ function shouldRetryWithGet(status) {
 }
 
 function shouldFallbackFromHeadToGet(result) {
+  if (result.retryAfter && (result.status === 429 || result.status === 503)) {
+    return false;
+  }
   return shouldRetryWithGet(result.status)
     || result.classification === "redirect_error"
     || result.issueType === "redirect_to_error"
@@ -5066,6 +5298,20 @@ function isHtml(contentType) {
   return Boolean(contentType && /(^|;|\s)(text\/html|application\/xhtml\+xml)\b/i.test(contentType));
 }
 
+function getResultHost(result) {
+  for (const value of [result?.finalUrl, result?.url]) {
+    if (typeof value !== "string" || !value) {
+      continue;
+    }
+    try {
+      return new URL(value).host;
+    } catch {
+      // Ignore malformed diagnostic values.
+    }
+  }
+  return "unknown";
+}
+
 function stripBody(result) {
   const { body, diagnosticBody, ...withoutBody } = result;
   return withoutBody;
@@ -5648,6 +5894,11 @@ function parseArgs(argv) {
       explicitOptions.add("requestDelayMaxMs");
       continue;
     }
+    if (arg === "--retry-after-max-ms") {
+      options.retryAfterMaxMs = readNonNegativeInteger(args.shift(), "--retry-after-max-ms");
+      explicitOptions.add("retryAfterMaxMs");
+      continue;
+    }
     if (arg === "--timeout") {
       options.timeoutMs = readPositiveInteger(args.shift(), "--timeout");
       continue;
@@ -5780,6 +6031,7 @@ function parseArgs(argv) {
   options.requestDelayMs = Math.max(0, Math.min(options.requestDelayMs, 60000));
   options.requestDelayMinMs = normalizeOptionalDelay(options.requestDelayMinMs);
   options.requestDelayMaxMs = normalizeOptionalDelay(options.requestDelayMaxMs);
+  options.retryAfterMaxMs = normalizeRetryAfterMaxMs(options.retryAfterMaxMs);
   if (Number.isFinite(options.requestDelayMinMs) !== Number.isFinite(options.requestDelayMaxMs)) {
     throw new Error("Random request delay requires both --request-delay-min-ms and --request-delay-max-ms");
   }
@@ -5947,6 +6199,8 @@ Options:
                        Random pre-request delay minimum in seconds, for example 0.3.
   --request-delay-max <s>
                        Random pre-request delay maximum in seconds, for example 1.
+  --retry-after-max-ms <n>
+                       Maximum per-host Retry-After cooldown in milliseconds. Default: ${DEFAULTS.retryAfterMaxMs}
   --timeout <ms>      Request timeout in milliseconds. Default: ${DEFAULTS.timeoutMs}
   --timeout-seconds <n>
                        Request timeout in seconds.
@@ -6036,6 +6290,9 @@ function printSummary(report) {
   }
   if (summary.scanQuality?.warnings?.length > 0) {
     console.log(`Scan quality warnings: ${summary.scanQuality.warnings.join(", ")}`);
+  }
+  if (summary.hostDiagnostics?.warnings?.length > 0) {
+    console.log(`Host diagnostics warnings: ${summary.hostDiagnostics.warnings.join(", ")}`);
   }
   if (summary.brokenLinks > 0) {
     for (const [issueType, count] of Object.entries(summary.brokenByType || {})) {

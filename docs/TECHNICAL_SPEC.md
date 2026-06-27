@@ -244,11 +244,13 @@ Report root：
 }
 ```
 
-P6.5b-1 起，scan report 使用 `schemaVersion: "1.2.0"`，`generator.name` 為 `link-checker.mjs`。`1.1.0` 代表 P6.5a 輸出契約、redaction 與 body/source limit 基線；`1.2.0` 起加入 URL security policy、P6.5b-2 `runStatus` 與 P6.5b-3 robots / compliance 記錄。最低契約草案位於 `schemas/report.schema.json`。
+P6.5b-1 起，scan report 使用 `schemaVersion: "1.2.0"`，`generator.name` 為 `link-checker.mjs`。`1.1.0` 代表 P6.5a 輸出契約、redaction 與 body/source limit 基線；`1.2.0` 起加入 URL security policy、P6.5b-2 `runStatus`、P6.5b-3 robots / compliance 記錄與 P6.5b-4 host diagnostics。最低契約草案位於 `schemas/report.schema.json`。
 
 P6.5b-2 起，report root 會輸出 `completedAt` 與 `runStatus`。`runStatus.status` 只允許 `complete`、`partial`、`failed`：正常結束為 `complete`，GUI stop / queue stop 為 `partial` 並標記 `stoppedByUser` 與 `stopReason`，runtime / validation error 為 `failed` 並記錄 `failureReason`。Analyzer 與 `report-diff.mjs` 讀到 `partial` 或 `failed` 時必須顯示 warning；舊 report 沒有 `runStatus` 時視為 legacy complete。
 
 P6.5b-3 起，scan report 會輸出 `summary.robotsTxt`、root `scanPolicy` 與 root `compliance`。工具會在掃描前讀取 start origin 的 `/robots.txt` 並記錄狀態、HTTP status、Crawl-delay、Allow / Disallow rule count、Sitemap 與全站 Disallow；`--no-robots` 會停用這個讀取。`scanPolicy.robotsTxt.mode` 目前為 `record_only` 或 `disabled`，`pathEnforcement=false`，因此不會依 Disallow 跳過 URL。`--authorized-scan` 與 `--authorization-note` 只記錄使用者宣告，`compliance.disclaimer` 明確表示工具不驗證授權。
+
+P6.5b-4 起，429 / 503 response 若帶 `Retry-After`，工具會解析秒數或 HTTP-date，並依 `retryAfterMaxMs` 設定 per-host cooldown；預設上限為 `30000` ms。cooldown 只套用到同一 host，不阻塞其他 host。`summary.hostDiagnostics` 會彙整各 host 的 403、429、protected、suspected WAF/Bot、Retry-After cooldown 與 block-rate warning，`report-diff.mjs` 也會比較 `summary.hostDiagnostics`。
 
 ### 7.1 options
 

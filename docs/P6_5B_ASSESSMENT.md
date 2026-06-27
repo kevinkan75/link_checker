@@ -23,6 +23,7 @@
 - README 已明確說明目前只記錄 robots / compliance，不執行 robots.txt path enforcement，也不驗證使用者授權。
 - P6.5b-2 已完成 `runStatus` / partial report，scan report 會正式產生 `runStatus`，diff 與 Report Analyzer 會提示 partial / failed report。
 - P6.5b-3 已完成 robots / compliance 記錄，scan report 會正式產生 `summary.robotsTxt`、`scanPolicy` 與 `compliance`。
+- P6.5b-4 已完成 Retry-After / host diagnostics，scan report 會正式產生 `summary.hostDiagnostics`。
 
 ## 建議切分
 
@@ -81,16 +82,16 @@
 - external host 不套用同站授權 override 語意。
 - 全站 Disallow 且無 Crawl-delay 時，最低降頻為 `effectiveDelayMs >= 2000`、`effectivePerHostConcurrency <= 1`。
 
-### P6.5b-4：Retry-After / host diagnostics
+### P6.5b-4：Retry-After / host diagnostics（已完成）
 
 優先級：中高。
 
 交付：
 
-- 429 / 503 時解析 `Retry-After`。
-- 設定 host cooldown 上限，避免掃描長時間卡住。
+- 429 / 503 時已解析 `Retry-After` 秒數與 HTTP-date。
+- 已設定 `retryAfterMaxMs` host cooldown 上限，避免掃描長時間卡住。
 - cooldown 只影響該 host，不阻塞其他 host。
-- report summary 增加 host block-rate diagnostics，例如高 403 / 429 / suspected WAF 比例提示。
+- report summary 已增加 `hostDiagnostics`，包含高 403 / 429 / suspected WAF/Bot 比例提示與 Retry-After cooldown 記錄。
 
 驗收：
 
@@ -145,6 +146,6 @@
 - diff / Analyzer partial report warning 測試。（P6.5b-2 已完成）
 - robots missing / fetch error / full disallow 測試。（P6.5b-3 已完成核心覆蓋）
 - `--authorized-scan` 宣告欄位測試。（P6.5b-3 已完成）
-- `Retry-After` capped wait 測試。
-- host cooldown 不阻塞其他 host 測試。
+- `Retry-After` capped wait 測試。（P6.5b-4 已完成）
+- host cooldown 不阻塞其他 host 測試。（P6.5b-4 已完成）
 - WAF signature classification 測試。

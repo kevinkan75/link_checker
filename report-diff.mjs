@@ -46,7 +46,8 @@ const GOVERNANCE_ORDER = new Map([
 const DIAGNOSTICS_PATHS = [
   "summary.scanQuality",
   "summary.spaDetection",
-  "summary.checkedByKind"
+  "summary.checkedByKind",
+  "summary.hostDiagnostics"
 ];
 
 function printHelp() {
@@ -346,7 +347,8 @@ function normalizeReport(report, reportPath, reportLabel) {
     diagnostics: {
       "summary.scanQuality": report?.summary?.scanQuality ?? null,
       "summary.spaDetection": report?.summary?.spaDetection ?? null,
-      "summary.checkedByKind": report?.summary?.checkedByKind ?? null
+      "summary.checkedByKind": report?.summary?.checkedByKind ?? null,
+      "summary.hostDiagnostics": report?.summary?.hostDiagnostics ?? null
     },
     warnings
   };

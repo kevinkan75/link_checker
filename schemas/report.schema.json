@@ -155,6 +155,9 @@
         "allowPrivateIp": {
           "type": "boolean"
         },
+        "retryAfterMaxMs": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
         "robotsTxt": {
           "type": "boolean"
         },
@@ -297,6 +300,47 @@
         "externalDomains": { "$ref": "#/$defs/nonNegativeInteger" },
         "robotsTxt": {
           "$ref": "#/$defs/robotsTxtSummary"
+        },
+        "hostDiagnostics": {
+          "$ref": "#/$defs/hostDiagnostics"
+        }
+      }
+    },
+    "hostDiagnostics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "warnings", "hosts"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "warning"]
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "retryAfterMaxMs": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["host", "urlsChecked", "blockRate", "warnings"],
+            "properties": {
+              "host": { "type": "string" },
+              "urlsChecked": { "$ref": "#/$defs/nonNegativeInteger" },
+              "blockRate": { "type": "number" },
+              "warnings": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "retryAfterCooldowns": { "$ref": "#/$defs/nonNegativeInteger" },
+              "retryAfterCooldownMs": { "$ref": "#/$defs/nonNegativeInteger" },
+              "maxRetryAfterWaitMs": { "$ref": "#/$defs/nonNegativeInteger" }
+            }
+          }
         }
       }
     },

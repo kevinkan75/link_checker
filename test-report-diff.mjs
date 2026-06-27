@@ -161,7 +161,10 @@ function assertChangeItems(diff, schema) {
   for (const [index, change] of diff.diagnosticsChanges.entries()) {
     const label = `diagnosticsChanges[${index}]`;
     assertNoExtraProperties(change, new Set(["path", "changeTypes", "fieldChanges"]), label);
-    assert(["summary.scanQuality", "summary.spaDetection", "summary.checkedByKind"].includes(change.path), `${label}.path is invalid.`);
+    assert(
+      ["summary.scanQuality", "summary.spaDetection", "summary.checkedByKind", "summary.hostDiagnostics"].includes(change.path),
+      `${label}.path is invalid.`,
+    );
     assertChangeTypes(change.changeTypes, schema, label);
     assertFieldChanges(change.fieldChanges, label);
   }

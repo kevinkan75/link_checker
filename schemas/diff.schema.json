@@ -253,7 +253,8 @@
           "enum": [
             "summary.scanQuality",
             "summary.spaDetection",
-            "summary.checkedByKind"
+            "summary.checkedByKind",
+            "summary.hostDiagnostics"
           ]
         },
         "changeTypes": {
