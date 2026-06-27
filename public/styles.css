@@ -93,14 +93,16 @@ button.is-running::before {
   animation: spin 800ms linear infinite;
 }
 
-button.is-stop-ready:not(:disabled) {
+#stop-button.is-stop-ready:not(:disabled),
+#stop-queue-button.is-stop-ready:not(:disabled) {
   border-color: #7f1d1d;
   background: #8f1d18;
   color: #ffffff;
   font-weight: 800;
 }
 
-button.is-stop-ready:hover:not(:disabled) {
+#stop-button.is-stop-ready:hover:not(:disabled),
+#stop-queue-button.is-stop-ready:hover:not(:disabled) {
   border-color: #7f1d1d;
   background: #7f1d1d;
 }
