@@ -1,6 +1,6 @@
 # P6.5b Assessment
 
-本文件原為 P6.5b 實作前評估，現已回填完成狀態；最新主線請以 [../ROADMAP.md](../ROADMAP.md) 為準。
+本文件原為 P6.5b 實作前評估，現已回填完成狀態；最新主線請以 [../../ROADMAP.md](../../ROADMAP.md) 為準。
 
 本文件記錄 P6.5b 實作前評估。P6.5b 的主軸是稽查語意、掃描安全邊界與誤判降低，會新增 report 欄位與 CLI / GUI / Analyzer fallback 行為。相較 P6.5a，P6.5b 風險更高，必須拆批實作，避免同時改動 security policy、robots / compliance、partial report 與 host retry 行為。
 

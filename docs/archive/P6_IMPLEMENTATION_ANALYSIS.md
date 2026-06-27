@@ -23,7 +23,7 @@ node .\report-diff.mjs old-report.json new-report.json --output diff.json
 
 必要輸出：
 
-- `diff.json`，shape 依 [../schemas/diff.schema.json](../schemas/diff.schema.json)。
+- `diff.json`，shape 依 [../../schemas/diff.schema.json](../../schemas/diff.schema.json)。
 - 簡短 console summary，方便 CLI 使用者快速判讀。
 
 ## 前置狀態
@@ -33,7 +33,7 @@ P6 前置已足夠支援實作：
 - `fixtures/reports/`：已有 4 組 golden cases。
 - `schemas/diff.schema.json`：已有 diff schema 草案。
 - `docs/REPORT_NORMALIZATION.md`：已有 normalization 原則。
-- `docs/P6_PREFLIGHT_ASSESSMENT.md`：已記錄完成度與剩餘風險。
+- `docs/archive/P6_PREFLIGHT_ASSESSMENT.md`：已記錄完成度與剩餘風險。
 
 ## 建議實作切分
 
@@ -50,7 +50,7 @@ P6 前置已足夠支援實作：
 
 職責：
 
-- 依 [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md) 產生內部 normalized report。
+- 依 [../REPORT_NORMALIZATION.md](../REPORT_NORMALIZATION.md) 產生內部 normalized report。
 - URL 結果優先使用 `checked[]`。
 - 缺少 `checked[]` 時 fallback 到 `broken[]`。
 - `externalLinks[]` 獨立建立 `externalByKey`。

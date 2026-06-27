@@ -477,7 +477,9 @@ dist\LinkChecker-portable.zip
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
+- [docs/GUI_USABILITY_ASSESSMENT.md](docs/GUI_USABILITY_ASSESSMENT.md)：GUI 易用性第一優先評估與執行紀錄。
 - [docs/archive/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](docs/archive/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)：CEC / Nuxt 掃描問題分析與 P5.5 改善來源。
+- [docs/archive/P6_IMPLEMENTATION_ANALYSIS.md](docs/archive/P6_IMPLEMENTATION_ANALYSIS.md)：P6 report diff 實作分析歸檔。
 - [docs/archive/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](docs/archive/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)：SPA payload extraction 設計筆記。
 - [docs/rules/cec-site-link-rules.json](docs/rules/cec-site-link-rules.json)：CEC site link rules 範例。
 

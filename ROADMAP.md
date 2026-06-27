@@ -10,8 +10,8 @@ P6.5a 已完成輸出契約基線、redaction、sources 上限、response body l
 
 - `Local_Link_Checker_分析文件_v5.1.md`：作為架構決策與 Roadmap 邊界。
 - `Local_Link_Checker_分析文件_v5.2.md`：作為工程落地補充，補安全、測試、schema、response limit、partial report、profile 與規則治理。
-- [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)：作為 P6.5a 實作前切分、風險與驗收建議；P6.5a 雖不改掃描語意，但因涉及 report 契約、redaction、body limit 與 Keep-Alive，實作風險以中等看待。
-- [docs/P6_5B_ASSESSMENT.md](docs/P6_5B_ASSESSMENT.md)：作為 P6.5b 實作前切分、風險與驗收建議；優先順序以 SSRF / URL security policy 為第一批。
+- [docs/archive/P6_5A_ASSESSMENT.md](docs/archive/P6_5A_ASSESSMENT.md)：作為 P6.5a 實作前切分、風險與驗收建議；P6.5a 雖不改掃描語意，但因涉及 report 契約、redaction、body limit 與 Keep-Alive，實作風險以中等看待。
+- [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md)：作為 P6.5b 實作前切分、風險與驗收建議；優先順序以 SSRF / URL security policy 為第一批。
 
 ## 階段總覽
 
@@ -134,13 +134,13 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 2. 建立 `schemas/diff.schema.json` 草案，約束 P6 diff 輸出必要欄位。
 3. 建立 [docs/REPORT_NORMALIZATION.md](docs/REPORT_NORMALIZATION.md)：優先 `checked[]`，舊 report fallback `broken[]`，外連使用 `externalLinks[]`。
 
-結果：前置項目已支援並完成 P6 第一版；現行 regression runner 以 `fixtures/reports/index.json` 驗證 5 組 expected signals。原始進入 P6 評估保留於 [docs/P6_PREFLIGHT_ASSESSMENT.md](docs/P6_PREFLIGHT_ASSESSMENT.md)。
+結果：前置項目已支援並完成 P6 第一版；現行 regression runner 以 `fixtures/reports/index.json` 驗證 5 組 expected signals。原始進入 P6 評估保留於 [docs/archive/P6_PREFLIGHT_ASSESSMENT.md](docs/archive/P6_PREFLIGHT_ASSESSMENT.md)。
 
 ## P6：Report-to-Report Diff
 
 狀態：第一版已完成。
 
-實作分析已記錄於 [docs/P6_IMPLEMENTATION_ANALYSIS.md](docs/P6_IMPLEMENTATION_ANALYSIS.md)。
+實作分析已記錄於 [docs/archive/P6_IMPLEMENTATION_ANALYSIS.md](docs/archive/P6_IMPLEMENTATION_ANALYSIS.md)。
 
 交付項：
 
@@ -238,7 +238,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 狀態：已完成；P6.5a-1、P6.5a-2、P6.5a-3、P6.5a-4 均已完成。此階段改善輸出相容性與網路層穩定性，但不引入 robots / compliance 語意。
 
-實作前評估見 [docs/P6_5A_ASSESSMENT.md](docs/P6_5A_ASSESSMENT.md)。執行時需拆成契約/manifest、redaction/CSV、sources/body limit、Header/Keep-Alive 四批；不得一次混合所有交付項。
+實作前評估見 [docs/archive/P6_5A_ASSESSMENT.md](docs/archive/P6_5A_ASSESSMENT.md)。執行時需拆成契約/manifest、redaction/CSV、sources/body limit、Header/Keep-Alive 四批；不得一次混合所有交付項。
 
 已完成：
 
@@ -262,7 +262,7 @@ Stage 0 不得納入 `schemaVersion`、robots.txt、compliance、Keep-Alive、ca
 
 ## P6.5b：稽查語意與誤判降低
 
-狀態：已完成；P6.5b-1 到 P6.5b-5 均已完成。實作前評估見 [docs/P6_5B_ASSESSMENT.md](docs/P6_5B_ASSESSMENT.md)。此階段新增 report 語意、掃描安全邊界與合規紀錄，並同步更新 CLI、GUI 顯示與 Analyzer fallback。
+狀態：已完成；P6.5b-1 到 P6.5b-5 均已完成。實作前評估見 [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md)。此階段新增 report 語意、掃描安全邊界與合規紀錄，並同步更新 CLI、GUI 顯示與 Analyzer fallback。
 
 建議切分：
 

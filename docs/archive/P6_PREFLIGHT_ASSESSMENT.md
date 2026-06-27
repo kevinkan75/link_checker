@@ -40,7 +40,7 @@ P6 前置三項已完成，完成度約 85-90%，足以進入 P6 `report-diff.mj
 
 P6 可以開始實作，建議順序：
 
-1. 實作 report normalization function，依 [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md) 產生內部 `urlsByKey`、`externalByKey` 與 diagnostics。
+1. 實作 report normalization function，依 [../REPORT_NORMALIZATION.md](../REPORT_NORMALIZATION.md) 產生內部 `urlsByKey`、`externalByKey` 與 diagnostics。
 2. 用 `fixtures/reports/index.json` 驅動最小 regression test。
 3. 實作 diff summary 與 `urlChanges`。
 4. 補上 `externalChanges` 與 `diagnosticsChanges`。

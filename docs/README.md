@@ -6,16 +6,17 @@
 
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)：架構、掃描流程、資料模型、report schema、GUI API 與可重用設計點。
 - [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：P6 report-to-report diff 的 normalization 原則。
-- [P6_PREFLIGHT_ASSESSMENT.md](P6_PREFLIGHT_ASSESSMENT.md)：P6 實作前的前置完成度與測試補強評估。
-- [P6_IMPLEMENTATION_ANALYSIS.md](P6_IMPLEMENTATION_ANALYSIS.md)：P6 實作範圍、切分、驗收與風險分析。
-- [P6_5A_ASSESSMENT.md](P6_5A_ASSESSMENT.md)：P6.5a 實作前評估、切分、風險與驗收建議。
-- [P6_5B_ASSESSMENT.md](P6_5B_ASSESSMENT.md)：P6.5b 實作前評估、切分、風險與驗收建議。
+- [GUI_USABILITY_ASSESSMENT.md](GUI_USABILITY_ASSESSMENT.md)：GUI 易用性第一優先評估與執行紀錄。
 - [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)：已完成里程碑、驗收矩陣與設計理由。
 - [rules/cec-site-link-rules.json](rules/cec-site-link-rules.json)：CEC site link rules 範例。
 
 ## 歸檔文件
 
 - [archive/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](archive/CEC_SPA_SCAN_IMPROVEMENT_REPORT.md)：CEC / Nuxt 掃描問題分析；P5.5 已依此完成。
+- [archive/P6_PREFLIGHT_ASSESSMENT.md](archive/P6_PREFLIGHT_ASSESSMENT.md)：P6 實作前的前置完成度與測試補強評估；P6 已完成。
+- [archive/P6_IMPLEMENTATION_ANALYSIS.md](archive/P6_IMPLEMENTATION_ANALYSIS.md)：P6 實作範圍、切分、驗收與風險分析；P6 已完成。
+- [archive/P6_5A_ASSESSMENT.md](archive/P6_5A_ASSESSMENT.md)：P6.5a 實作前評估、切分、風險與驗收建議；P6.5a 已完成。
+- [archive/P6_5B_ASSESSMENT.md](archive/P6_5B_ASSESSMENT.md)：P6.5b 實作前評估、切分、風險與驗收建議；P6.5b 已完成。
 - [archive/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](archive/SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md)：SPA payload extraction 與 site link rules 的實作筆記；P5.5 已依此完成。
 
 ## 狀態
