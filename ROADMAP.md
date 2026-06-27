@@ -24,7 +24,7 @@ P6.5a 已完成輸出契約基線、redaction、sources 上限、response body l
 | 4 | P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | WAF/Bot 繞過 |
 | 5 | P7 | 待規劃 | TTL URL result cache | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 跳過 HTML inventory 發現的新 URL |
-| 7 | P9 | 待規劃 | Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 空 UI 或未落地的展示層 |
+| 7 | P9 | 待規劃 | GUI 易用性第一優先、Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 空 UI 或未落地的展示層 |
 | 8 | P10 | 待規劃 | 治理與分級排程、WAF 協調建議、`--respect-robots` | 常駐 scheduler 優先化 |
 | 9 | P11 | 待規劃 | 輔助格式、release / packaging governance | 早於核心契約與誤判降低 |
 
@@ -389,10 +389,11 @@ CLI 可新增：
 
 ## P9：Analyzer / GUI 大型報告
 
-狀態：P6/P7/P8 後實作。P9 強化呈現、profile 與規則治理，不先做空 UI。
+狀態：P6/P7/P8 後實作。P9 強化呈現、profile 與規則治理，不先做空 UI。第一優先先處理一般使用者視角的 GUI 易用性與易讀性基線，評估紀錄見 [docs/GUI_USABILITY_ASSESSMENT.md](docs/GUI_USABILITY_ASSESSMENT.md)。
 
 交付項：
 
+- 第一優先：修正 `External Link Analyzer` 手機版整頁水平溢出，簡化 `Link Checker` 初始狀態，讓匯入型頁面改為更清楚的選檔、分析、匯出流程。
 - 顯示歷史比對：新增、移除、修復、惡化、持續存在。
 - 顯示 cache 命中、TTL、上次檢查時間。
 - 顯示高重複引用 URL 與影響頁面數。

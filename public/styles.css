@@ -323,6 +323,83 @@ label {
   font-size: 13px;
 }
 
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.help-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+}
+
+.help-trigger:hover,
+.help-trigger:focus {
+  border-color: var(--primary);
+  outline: 2px solid rgba(23, 107, 114, 0.16);
+  outline-offset: 1px;
+}
+
+.help-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  display: none;
+  width: min(260px, calc(100vw - 48px));
+  border: 1px solid #b9c9c5;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(31, 41, 51, 0.16);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  transform: translateX(-50%);
+}
+
+.help-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid #b9c9c5;
+  border-bottom: 1px solid #b9c9c5;
+  background: #ffffff;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.help-wrap:hover .help-tooltip,
+.help-wrap:focus-within .help-tooltip,
+.help-wrap.is-open .help-tooltip {
+  display: block;
+}
+
 input[type="url"],
 input[type="text"],
 input[type="number"],
@@ -1002,6 +1079,25 @@ tr:last-child td {
 
   .advanced-summary {
     text-align: left;
+  }
+
+  .field-label {
+    position: relative;
+  }
+
+  .help-wrap {
+    position: static;
+  }
+
+  .help-tooltip {
+    left: 0;
+    width: min(280px, calc(100vw - 44px));
+    transform: none;
+  }
+
+  .help-tooltip::after {
+    left: 12px;
+    transform: rotate(45deg);
   }
 
   .broken-detail-line {

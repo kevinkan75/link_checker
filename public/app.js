@@ -23,6 +23,7 @@ const authorizedScanInput = document.querySelector("#authorized-scan");
 const noRobotsInput = document.querySelector("#no-robots");
 const authorizationNoteInput = document.querySelector("#authorization-note");
 const presetButtons = document.querySelectorAll("[data-preset]");
+const helpTriggers = document.querySelectorAll("[data-help-trigger]");
 const advancedSummary = document.querySelector("#advanced-summary");
 const advancedValidation = document.querySelector("#advanced-validation");
 const startButton = document.querySelector("#start-button");
@@ -148,6 +149,7 @@ let suppressNextUnloadWarning = false;
 
 startSessionHeartbeat();
 installUnfinishedScanGuard();
+installHelpTooltips();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -358,6 +360,57 @@ function installUnfinishedScanGuard() {
 
 function hasUnfinishedWork() {
   return scanInProgress || queueInProgress;
+}
+
+function installHelpTooltips() {
+  const closeAll = () => {
+    for (const trigger of helpTriggers) {
+      trigger.parentElement?.classList.remove("is-open");
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  };
+
+  const setOpen = (trigger, isOpen) => {
+    trigger.parentElement?.classList.toggle("is-open", isOpen);
+    trigger.setAttribute("aria-expanded", String(isOpen));
+  };
+
+  for (const trigger of helpTriggers) {
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const shouldOpen = !trigger.parentElement?.classList.contains("is-open");
+      closeAll();
+      setOpen(trigger, shouldOpen);
+    });
+    trigger.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        const shouldOpen = !trigger.parentElement?.classList.contains("is-open");
+        closeAll();
+        setOpen(trigger, shouldOpen);
+      }
+      if (event.key === "Escape") {
+        closeAll();
+        trigger.blur();
+      }
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".help-wrap")) {
+      closeAll();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAll();
+      if (event.target.closest?.("[data-help-trigger]")) {
+        event.target.blur();
+      }
+    }
+  });
 }
 
 function applyPreset(name) {
