@@ -5,9 +5,12 @@ $dist = Join-Path $root "dist"
 $packageName = "LinkChecker-portable"
 $packageDir = Join-Path $dist $packageName
 $zipPath = Join-Path $dist "$packageName.zip"
+$zipHashPath = Join-Path $dist "$packageName.zip.sha256"
+$externalManifestPath = Join-Path $dist "$packageName.build-manifest.json"
 $runtimeDir = Join-Path $packageDir "runtime"
 $launcherSource = Join-Path $root "launcher\StartLinkChecker.cs"
 $launcherExe = Join-Path $packageDir "Start Link Checker.exe"
+$packageManifestPath = Join-Path $packageDir "BUILD-MANIFEST.json"
 $selfSignedSubject = "CN=Link Checker Local Self-Signed Code Signing"
 $selfSignedCertExport = Join-Path $packageDir "LinkChecker-local-code-signing.cer"
 $timestampServer = "http://timestamp.digicert.com"
@@ -112,6 +115,240 @@ function Sign-PortableLauncher {
   Write-Output "Note: Self-signed signatures are not publicly trusted and may not remove SmartScreen warnings."
 }
 
+function Get-FileSha256 {
+  param(
+    [Parameter(Mandatory = $true)][string]$FilePath
+  )
+
+  if (-not (Test-Path -LiteralPath $FilePath)) {
+    return $null
+  }
+
+  return (Get-FileHash -LiteralPath $FilePath -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Get-RelativePath {
+  param(
+    [Parameter(Mandatory = $true)][string]$BasePath,
+    [Parameter(Mandatory = $true)][string]$FilePath
+  )
+
+  $baseUri = [Uri]([System.IO.Path]::GetFullPath($BasePath).TrimEnd('\') + '\')
+  $fileUri = [Uri]([System.IO.Path]::GetFullPath($FilePath))
+  return [Uri]::UnescapeDataString($baseUri.MakeRelativeUri($fileUri).ToString()).Replace('/', '\')
+}
+
+function Get-GitValue {
+  param(
+    [Parameter(Mandatory = $true)][string[]]$Arguments,
+    [string]$Fallback = "unknown"
+  )
+
+  try {
+    $value = & git -C $root @Arguments 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [String]::IsNullOrWhiteSpace($value)) {
+      return ($value | Select-Object -First 1).Trim()
+    }
+  }
+  catch {
+    return $Fallback
+  }
+
+  return $Fallback
+}
+
+function Get-SignatureInfo {
+  param(
+    [Parameter(Mandatory = $true)][string]$FilePath
+  )
+
+  if (-not (Test-Path -LiteralPath $FilePath)) {
+    return $null
+  }
+
+  $signature = Get-AuthenticodeSignature -FilePath $FilePath
+  $certificate = $signature.SignerCertificate
+  $timestampCertificate = $signature.TimeStamperCertificate
+
+  return [ordered]@{
+    status = [string]$signature.Status
+    statusMessage = $signature.StatusMessage
+    signatureType = [string]$signature.SignatureType
+    signerSubject = if ($certificate) { $certificate.Subject } else { $null }
+    signerIssuer = if ($certificate) { $certificate.Issuer } else { $null }
+    signerThumbprint = if ($certificate) { $certificate.Thumbprint } else { $null }
+    signerNotBefore = if ($certificate) { $certificate.NotBefore.ToUniversalTime().ToString("o") } else { $null }
+    signerNotAfter = if ($certificate) { $certificate.NotAfter.ToUniversalTime().ToString("o") } else { $null }
+    timestampSubject = if ($timestampCertificate) { $timestampCertificate.Subject } else { $null }
+  }
+}
+
+function Get-BuildMetadata {
+  param(
+    [Parameter(Mandatory = $true)][string]$NodeExe
+  )
+
+  $nodeVersion = "unknown"
+  try {
+    $nodeVersion = (& $NodeExe --version 2>$null | Select-Object -First 1).Trim()
+  }
+  catch {
+    $nodeVersion = "unknown"
+  }
+
+  return [ordered]@{
+    packageName = $packageName
+    generatedAt = (Get-Date).ToUniversalTime().ToString("o")
+    gitCommit = Get-GitValue -Arguments @("rev-parse", "HEAD")
+    gitBranch = Get-GitValue -Arguments @("branch", "--show-current")
+    gitStatus = Get-GitValue -Arguments @("status", "--short") -Fallback ""
+    nodeVersion = $nodeVersion
+  }
+}
+
+function Write-PackageBuildManifest {
+  param(
+    [Parameter(Mandatory = $true)][string]$PackageDir,
+    [Parameter(Mandatory = $true)][string]$ManifestPath,
+    [Parameter(Mandatory = $true)][string]$NodeExe,
+    [Parameter(Mandatory = $true)][string]$LauncherExe
+  )
+
+  $files = Get-ChildItem -LiteralPath $PackageDir -Recurse -File |
+    Where-Object { $_.FullName -ne $ManifestPath } |
+    Sort-Object FullName |
+    ForEach-Object {
+      [ordered]@{
+        path = Get-RelativePath -BasePath $PackageDir -FilePath $_.FullName
+        bytes = $_.Length
+        sha256 = Get-FileSha256 -FilePath $_.FullName
+      }
+    }
+
+  $manifest = [ordered]@{
+    manifestVersion = 1
+    scope = "portable-package"
+    build = Get-BuildMetadata -NodeExe $NodeExe
+    artifacts = [ordered]@{
+      launcher = [ordered]@{
+        path = "Start Link Checker.exe"
+        sha256 = Get-FileSha256 -FilePath $LauncherExe
+        signature = Get-SignatureInfo -FilePath $LauncherExe
+      }
+      node = [ordered]@{
+        path = "runtime\node.exe"
+        sha256 = Get-FileSha256 -FilePath (Join-Path $PackageDir "runtime\node.exe")
+        signature = Get-SignatureInfo -FilePath (Join-Path $PackageDir "runtime\node.exe")
+      }
+    }
+    files = $files
+    notes = @(
+      "This manifest is inside the portable package and therefore does not contain the zip file hash.",
+      "The zip hash is written next to the zip in $packageName.build-manifest.json and $packageName.zip.sha256."
+    )
+  }
+
+  $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
+}
+
+function Write-ExternalBuildManifest {
+  param(
+    [Parameter(Mandatory = $true)][string]$ZipPath,
+    [Parameter(Mandatory = $true)][string]$ManifestPath,
+    [Parameter(Mandatory = $true)][string]$NodeExe,
+    [Parameter(Mandatory = $true)][string]$LauncherExe
+  )
+
+  $manifest = [ordered]@{
+    manifestVersion = 1
+    scope = "portable-zip"
+    build = Get-BuildMetadata -NodeExe $NodeExe
+    artifacts = [ordered]@{
+      zip = [ordered]@{
+        path = [System.IO.Path]::GetFileName($ZipPath)
+        bytes = (Get-Item -LiteralPath $ZipPath).Length
+        sha256 = Get-FileSha256 -FilePath $ZipPath
+      }
+      launcher = [ordered]@{
+        path = "$packageName\Start Link Checker.exe"
+        sha256 = Get-FileSha256 -FilePath $LauncherExe
+        signature = Get-SignatureInfo -FilePath $LauncherExe
+      }
+      node = [ordered]@{
+        path = "$packageName\runtime\node.exe"
+        sha256 = Get-FileSha256 -FilePath (Join-Path $packageDir "runtime\node.exe")
+        signature = Get-SignatureInfo -FilePath (Join-Path $packageDir "runtime\node.exe")
+      }
+      packageManifest = [ordered]@{
+        path = "$packageName\BUILD-MANIFEST.json"
+        sha256 = Get-FileSha256 -FilePath $packageManifestPath
+      }
+    }
+  }
+
+  $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
+  Set-Content -LiteralPath $zipHashPath -Value "$($manifest.artifacts.zip.sha256)  $([System.IO.Path]::GetFileName($ZipPath))" -Encoding ASCII
+}
+
+function Write-PortableCommandScripts {
+  param(
+    [Parameter(Mandatory = $true)][string]$PackageDir
+  )
+
+  $checkLinksCmd = @'
+@echo off
+setlocal
+set "NODE_EXE=%~dp0runtime\node.exe"
+if not exist "%NODE_EXE%" (
+  echo Link Checker portable runtime was not found:
+  echo   %NODE_EXE%
+  echo Please extract the complete portable folder again, then retry.
+  exit /b 1
+)
+"%NODE_EXE%" "%~dp0link-checker.mjs" %*
+'@
+
+  $guiCmd = @'
+@echo off
+setlocal
+set "NODE_EXE=%~dp0runtime\node.exe"
+if not exist "%NODE_EXE%" (
+  echo Link Checker portable runtime was not found:
+  echo   %NODE_EXE%
+  echo Please extract the complete portable folder again, then retry.
+  exit /b 1
+)
+if /I "%~1"=="--system-ca" (
+  if defined NODE_OPTIONS (
+    echo %NODE_OPTIONS% | findstr /C:"--use-system-ca" >nul || set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"
+  ) else (
+    set "NODE_OPTIONS=--use-system-ca"
+  )
+  shift
+)
+"%NODE_EXE%" "%~dp0gui-server.mjs" %*
+'@
+
+  $analyzerCmd = @'
+@echo off
+setlocal
+set "NODE_EXE=%~dp0runtime\node.exe"
+if not exist "%NODE_EXE%" (
+  echo Link Checker portable runtime was not found:
+  echo   %NODE_EXE%
+  echo Please extract the complete portable folder again, then retry.
+  exit /b 1
+)
+echo External Link Analyzer:
+echo   http://127.0.0.1:8787/analyzer.html
+"%NODE_EXE%" "%~dp0gui-server.mjs" %*
+'@
+
+  Set-Content -LiteralPath (Join-Path $PackageDir "check-links.cmd") -Value $checkLinksCmd -Encoding ASCII
+  Set-Content -LiteralPath (Join-Path $PackageDir "gui.cmd") -Value $guiCmd -Encoding ASCII
+  Set-Content -LiteralPath (Join-Path $PackageDir "analyzer.cmd") -Value $analyzerCmd -Encoding ASCII
+}
+
 $nodeCommand = Get-Command node -ErrorAction Stop
 $nodeExe = $nodeCommand.Source
 if (-not (Test-Path -LiteralPath $nodeExe)) {
@@ -121,6 +358,8 @@ if (-not (Test-Path -LiteralPath $nodeExe)) {
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 Assert-ChildPath -Parent $root -Child $packageDir
 Assert-ChildPath -Parent $root -Child $zipPath
+Assert-ChildPath -Parent $root -Child $zipHashPath
+Assert-ChildPath -Parent $root -Child $externalManifestPath
 Assert-ChildPath -Parent $root -Child $launcherExe
 
 if (-not (Test-Path -LiteralPath $launcherSource)) {
@@ -133,6 +372,12 @@ if (Test-Path -LiteralPath $packageDir) {
 if (Test-Path -LiteralPath $zipPath) {
   Remove-Item -LiteralPath $zipPath -Force
 }
+if (Test-Path -LiteralPath $zipHashPath) {
+  Remove-Item -LiteralPath $zipHashPath -Force
+}
+if (Test-Path -LiteralPath $externalManifestPath) {
+  Remove-Item -LiteralPath $externalManifestPath -Force
+}
 
 New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
@@ -141,9 +386,7 @@ Copy-Item -LiteralPath (Join-Path $root "link-checker.mjs") -Destination $packag
 Copy-Item -LiteralPath (Join-Path $root "report-diff.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "gui-server.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "convert-ut1-rules.mjs") -Destination $packageDir
-Copy-Item -LiteralPath (Join-Path $root "check-links.cmd") -Destination $packageDir
-Copy-Item -LiteralPath (Join-Path $root "gui.cmd") -Destination $packageDir
-Copy-Item -LiteralPath (Join-Path $root "analyzer.cmd") -Destination $packageDir
+Write-PortableCommandScripts -PackageDir $packageDir
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "ROADMAP.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "docs") -Destination $packageDir -Recurse
@@ -187,6 +430,19 @@ $portableReadme = @(
   "  Enable the System CA checkbox for sites trusted by Windows but rejected by Node's bundled CA store.",
   "  You can also start gui.cmd --system-ca to load system roots at startup.",
   "",
+  "Build integrity:",
+  "- BUILD-MANIFEST.json lists the files included in this portable folder and their SHA256 hashes.",
+  "- LinkChecker-portable.build-manifest.json and LinkChecker-portable.zip.sha256 are written next to the zip package.",
+  "- Use the external manifest to verify the zip hash before distributing the package.",
+  "",
+  "Security model:",
+  "- The GUI server listens only on 127.0.0.1 and is not exposed to the network.",
+  "- This portable package does not install a Windows service.",
+  "- This portable package does not write registry startup entries.",
+  "- This portable package does not configure itself to run at Windows startup.",
+  "- This portable package does not connect to a remote control server.",
+  "- The portable .cmd files use only the bundled runtime\node.exe and stop if it is missing.",
+  "",
   "Notes:",
   "- Keep the whole folder together. Do not move only one cmd file.",
   "- Start Link Checker.exe starts the local server and opens the correct browser URL.",
@@ -203,7 +459,23 @@ $portableReadme = @(
 
 Set-Content -LiteralPath (Join-Path $packageDir "PORTABLE-README.txt") -Value $portableReadme -Encoding UTF8
 
+Write-PackageBuildManifest `
+  -PackageDir $packageDir `
+  -ManifestPath $packageManifestPath `
+  -NodeExe (Join-Path $runtimeDir "node.exe") `
+  -LauncherExe $launcherExe
+
 Compress-Archive -LiteralPath $packageDir -DestinationPath $zipPath -CompressionLevel Optimal
+
+Write-ExternalBuildManifest `
+  -ZipPath $zipPath `
+  -ManifestPath $externalManifestPath `
+  -NodeExe (Join-Path $runtimeDir "node.exe") `
+  -LauncherExe $launcherExe
 
 Write-Output "Created portable package:"
 Write-Output $zipPath
+Write-Output "Created build manifests:"
+Write-Output $packageManifestPath
+Write-Output $externalManifestPath
+Write-Output $zipHashPath
