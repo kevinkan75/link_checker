@@ -1,0 +1,308 @@
+# CLI Reference
+
+本文件保存 Local Link Checker 的完整 CLI 參數、規則檔格式與進階用法。第一次使用請先閱讀根目錄 [README.md](../README.md)。
+
+## 基本指令
+
+```powershell
+.\check-links.cmd https://example.com
+node .\link-checker.mjs https://example.com
+```
+
+常見組合：
+
+```powershell
+.\check-links.cmd https://example.com --max-pages 200 --max-depth 8
+.\check-links.cmd https://example.com --global-concurrency 20 --per-host-concurrency 4
+.\check-links.cmd https://example.com --request-delay 1.5 --retry-count 2
+.\check-links.cmd https://example.com --per-host-concurrency 3 --request-delay-min 0.3 --request-delay-max 1
+.\check-links.cmd https://example.com --max-redirects 10 --long-redirect-threshold 3
+.\check-links.cmd https://example.com --external
+.\check-links.cmd https://example.com --no-confirm-404
+.\check-links.cmd https://example.com --spa-links strict
+.\check-links.cmd https://www.cec.gov.tw --site-link-rules docs\rules\cec-site-link-rules.json
+.\check-links.cmd https://example.com --progress
+.\check-links.cmd https://example.com --verbose
+.\check-links.cmd https://example.com --output report.json
+.\check-links.cmd https://example.com --domain-rules rules.json
+.\check-links.cmd https://example.com --redact-query-keys ticket,caseId
+.\check-links.cmd https://example.com --max-html-bytes 5242880 --max-sources-per-url 50
+```
+
+## 參數總覽
+
+### 掃描範圍
+
+| 參數 | 說明 |
+| --- | --- |
+| `--max-pages <n>` | 最多爬行幾個同網域頁面，預設 `100` |
+| `--max-depth <n>` | 從起始頁往下爬行的最大深度，預設 `2` |
+| `--external` | 也檢查外部網域連結；預設只檢查站內連結並略過外部連結 |
+| `--confirm-404` / `--no-confirm-404` | 是否在主掃描後集中複查同站 `404 / 410`，預設開啟 |
+| `--canonical-strategy <safe|moderate|aggressive>` | 設定報告中 `canonicalUrl` 的正規化策略，預設 `safe`；不改變實際請求 URL |
+
+### 併發、延遲與重試
+
+| 參數 | 說明 |
+| --- | --- |
+| `--concurrency <n>` | 全域同時請求數，預設 `12` |
+| `--global-concurrency <n>` | 同 `--concurrency` |
+| `--per-host-concurrency <n>` | 每個 host 的同時請求數，預設 `4` |
+| `--request-delay-ms <n>` | 同一 host 兩次請求的最小間隔毫秒數，預設 `500` |
+| `--request-delay <s>` | 同一 host 兩次請求的最小間隔秒數，例如 `1.5` |
+| `--request-delay-min-ms <n>` / `--request-delay-max-ms <n>` | 啟用隨機請求前延遲，單位毫秒 |
+| `--request-delay-min <s>` / `--request-delay-max <s>` | 啟用隨機請求前延遲，單位秒 |
+| `--timeout <ms>` | 單一請求逾時毫秒數，預設 `15000` |
+| `--timeout-seconds <n>` | 單一請求逾時秒數 |
+| `--retry-count <n>` | 暫時性錯誤的重試次數，預設 `2` |
+| `--retry-after-max-ms <n>` | `429 / 503` 帶 `Retry-After` 時，單一 host cooldown 的等待上限，預設 `30000` |
+
+### Redirect
+
+| 參數 | 說明 |
+| --- | --- |
+| `--max-redirects <n>` | 最多跟隨幾次 HTTP redirect，預設 `10`，可設 `0` 到 `20` |
+| `--long-redirect-threshold <n>` | redirect 次數超過此值時標示為轉址鏈過長，預設 `3` |
+
+### Header 與請求策略
+
+| 參數 | 說明 |
+| --- | --- |
+| `--accept-language <value>` | 送出的語言標頭，預設 `zh-TW,zh;q=0.9,en;q=0.8` |
+| `--user-agent <value>` | 送出的 User-Agent；預設使用瀏覽器相容字串並包含 `LocalLinkChecker/1.0` 識別 |
+| `--no-keep-alive` | 送出 `Connection: close` 並停用 legacy HTTP agent keep-alive；預設 Keep-Alive 開啟 |
+| `--conservative` | 套用低併發、隨機延遲、偏好 `GET` 與外部連結 `Referer` 的保守檢查設定 |
+| `--prefer-get` | 使用輕量 `GET` 檢查，不先嘗試 `HEAD` |
+| `--external-referer` | 檢查外部連結時也送出來源頁作為 `Referer` |
+
+### 安全與授權
+
+| 參數 | 說明 |
+| --- | --- |
+| `--block-private-ip` | 阻擋 localhost、private、link-local、metadata 與 reserved IP，預設開啟 |
+| `--allow-localhost` | 允許 localhost / loopback 目標，只建議用於可信任的本機掃描 |
+| `--allow-private-ip` | 允許內網/private IP 目標，但不包含 localhost，metadata service IP 仍會阻擋 |
+| `--authorized-scan` | 記錄使用者宣告已取得掃描授權；工具不驗證授權 |
+| `--authorization-note <text>` | 把授權背景或內部工單備註寫入 report 的 `compliance` |
+| `--no-robots` | 不讀取 start origin 的 `robots.txt` audit metadata |
+
+### 相容性
+
+| 參數 | 說明 |
+| --- | --- |
+| `--legacy-tls` | 允許舊 TLS cipher，用於弱 DH 參數造成握手失敗的舊站 |
+| `--system-ca` | 使用作業系統或瀏覽器信任的系統根憑證 |
+
+### 規則檔與 SPA / CMS
+
+| 參數 | 說明 |
+| --- | --- |
+| `--domain-rules <file-or-url>` | 載入網域分類規則 JSON，可用本機檔案或 URL |
+| `--external-risk-rules <file-or-url>` | 載入外部連結治理規則 JSON |
+| `--site-link-rules <file-or-url>` | 載入 SPA/CMS payload 欄位推導規則 |
+| `--spa-links <auto|off|strict>` | 從 SPA / Nuxt inline payload 抽取明確 URL 與 `/` 開頭 path，預設 `auto` |
+
+### Redaction、body 與 sources 上限
+
+| 參數 | 說明 |
+| --- | --- |
+| `--redact-sensitive-query` / `--no-redact-sensitive-query` | 輸出檔是否遮罩高風險 query value，預設開啟 |
+| `--redact-query-keys <list>` | 額外遮罩的 query key，以逗號分隔 |
+| `--max-html-bytes <n>` | HTML/body 抽取最多讀取 bytes，預設 `5242880` |
+| `--max-body-preview-bytes <n>` | HTTP error HTML 診斷 preview 最多讀取 bytes，預設 `4096` |
+| `--max-download-probe-bytes <n>` | 不需要 body 的下載/媒體 probe 最多 drain bytes，預設 `65536` |
+| `--max-sources-per-url <n>` | 每個 URL 輸出最多保存幾筆來源，預設 `50`；完整數量仍保留在 `sourceCount` |
+| `--protection-body-hash` | 在 protection body signature 中輸出 SHA-256 `bodyHash`；預設關閉 |
+
+### 輸出與診斷
+
+| 參數 | 說明 |
+| --- | --- |
+| `--progress` | 執行時顯示單行即時狀態 |
+| `--verbose` | 逐行顯示爬行、請求、略過與檢查結果事件 |
+| `--output <file>` | 把完整結果輸出成 JSON |
+| `--json` | 在畫面上輸出完整 JSON；不會顯示進度或詳細事件，以避免破壞 JSON 輸出 |
+
+## 規則檔格式
+
+### Domain rules
+
+`--domain-rules` 的 JSON 格式：
+
+```json
+[
+  {
+    "category": "政府機關",
+    "domains": ["gov.tw", "example.gov.tw"]
+  },
+  {
+    "category": "合作單位",
+    "domains": ["partner.example.com"]
+  }
+]
+```
+
+### External risk rules
+
+`--external-risk-rules` 的 JSON 格式：
+
+```json
+{
+  "allowlist": [
+    "trusted-cdn.example.com",
+    { "id": "partner", "domains": ["partner.example.com"], "label": "合作單位" }
+  ],
+  "blocklist": [
+    "blocked.example.net"
+  ],
+  "watchlist": [
+    { "id": "campaign-sites", "domains": ["campaign.example.org"] }
+  ]
+}
+```
+
+也可以使用 `rules` 陣列：
+
+```json
+{
+  "rules": [
+    { "action": "allow", "domains": ["trusted.example.com"] },
+    { "action": "block", "domains": ["blocked.example.net"] },
+    { "action": "watch", "domains": ["review.example.org"] }
+  ]
+}
+```
+
+### Site link rules
+
+`--site-link-rules` 的 JSON 格式：
+
+```json
+{
+  "fields": {
+    "externalUrl": ["linkUrl", "url"],
+    "youtubeId": ["youtubeId"],
+    "routePath": ["routePath", "path"]
+  },
+  "routeMappings": [
+    {
+      "name": "article",
+      "when": { "articleId": "*" },
+      "template": "/central/article/{articleId}"
+    }
+  ]
+}
+```
+
+`fields.externalUrl` 會把欄位值視為完整 URL，`fields.youtubeId` 會轉成 YouTube watch URL，`fields.routePath` 會把 `/` 開頭路徑轉成站內 URL。`routeMappings` 可依 payload 欄位條件產生站台路由，`when` 支援精確比對與 `"*"` 非空值比對。
+
+CEC 範例規則位於：
+
+```text
+docs\rules\cec-site-link-rules.json
+```
+
+## SPA / Nuxt 與 CMS payload
+
+`--spa-links` 預設為 `auto`，偵測到 SPA / Nuxt 訊號或載入 site link rules 時，會從 inline script / payload 抽取明確 URL 與 `/` 開頭 path。`--spa-links off` 可回到舊行為；`--spa-links strict` 只抽 literal URL/path，不套用站台特定規則推導。
+
+針對 `directType`、`directPath`、`articleId`、`youtubeId` 這類站台或 CMS 欄位，使用 `--site-link-rules` 載入規則檔，不把站台邏輯硬寫進 crawler。
+
+JSON report 會保留來源類型，例如 `html_attribute`、`script_literal`、`spa_payload`、`site_rule_derived`。summary 也會輸出 `spaDetection`、`scanQuality` 與 `checkedByKind`，用來判斷這次掃描是否被 `_nuxt` asset 或其他靜態資源主導。
+
+## Report diff
+
+`report-diff.mjs` 用來比對兩份既有 `report.json`：
+
+```powershell
+node .\report-diff.mjs old-report.json new-report.json --output diff.json
+```
+
+這個指令只讀取已產生的 report，不重新掃描網站、不重新送 HTTP request，也不改寫原始 report。第一版會輸出：
+
+- URL 狀態變化：新增、移除、變更、新發生問題、已修復、持續存在、信心升降。
+- 外部連結治理風險變化：風險升高、風險降低。
+- Summary diagnostics 變化：`summary.scanQuality`、`summary.spaDetection`、`summary.checkedByKind`、`summary.hostDiagnostics`。
+- Normalization warnings：legacy report、`broken[]` fallback、duplicate key、partial report 等。
+
+## 執行狀態
+
+需要掌握檢查進度時，可以使用：
+
+```powershell
+.\check-links.cmd https://example.com --progress
+```
+
+需要追查每個事件時，可以使用：
+
+```powershell
+.\check-links.cmd https://example.com --verbose
+```
+
+也可以一起使用：
+
+```powershell
+.\check-links.cmd https://example.com --progress --verbose
+```
+
+## 相容性模式
+
+### 保守模式
+
+容易限流、挑戰或阻擋自動化檢查的網站，可以使用保守模式：
+
+```powershell
+.\check-links.cmd https://example.com --conservative
+```
+
+此模式會把全域併發降到 `3`、每 host 併發降到 `1`、加入 `2-5s` 隨機請求延遲、把暫時性錯誤重試降到 `1`，並使用瀏覽器相容 User-Agent、偏好輕量 `GET` 檢查、對外部連結送出來源頁 `Referer`。
+
+也可以逐項開啟相同行為：
+
+```powershell
+.\check-links.cmd https://example.com --prefer-get --external-referer --concurrency 3 --per-host-concurrency 1 --request-delay-min 2 --request-delay-max 5 --retry-count 1
+```
+
+### 舊 TLS 相容模式
+
+部分舊伺服器在瀏覽器或 `curl` 可以開啟，但 Node/OpenSSL 會因 `ERR_SSL_DH_KEY_TOO_SMALL` 失敗。只有遇到這類 TLS 握手錯誤時才啟用：
+
+```powershell
+.\check-links.cmd https://example.com --legacy-tls
+```
+
+此模式會降低檢查程序的 TLS cipher 安全等級，只建議用在原本無法完成 TLS 握手的舊站。
+
+### 系統憑證相容模式
+
+部分 Windows 信任的政府或內部網站，在 Node 中可能因 `UNABLE_TO_VERIFY_LEAF_SIGNATURE` 失敗，原因是 Node 無法建立與作業系統或瀏覽器相同的憑證鏈。這類網站可使用系統憑證模式：
+
+```powershell
+.\check-links.cmd https://example.com --system-ca
+```
+
+支援動態設定憑證的 Node 版本可在執行時啟用系統憑證；不支援時，CLI 會改用 `--use-system-ca` 重新啟動。GUI 可針對需要的檢查勾選 `System CA`，也可以用 `.\gui.cmd --system-ca` 啟動，讓 GUI 一開始就載入系統根憑證。
+
+## Redirect 判讀
+
+工具會手動追蹤 HTTP redirect，並在報告中保存：
+
+- `redirected`：是否發生轉址。
+- `redirectCount`：轉址次數。
+- `redirectType`：永久、暫時或混合轉址。
+- `redirectIssues`：跨 host、過長、轉址後錯誤、轉址循環等提醒或錯誤。
+- `redirectChain`：每一步 `from / status / to`。
+
+不直接算失效，只列為提醒：
+
+- `permanent_redirect`：`301`、`308`。
+- `temporary_redirect`：`302`、`303`、`307`。
+- `mixed_redirect`：同一 chain 同時有永久與暫時轉址。
+- `cross_host_redirect`：最終 host 與原始 host 不同。
+- `long_redirect_chain`：轉址次數超過 `--long-redirect-threshold`。
+
+會算入失效連結：
+
+- `redirect_to_error`：轉址後最終 HTTP 狀態為 `400` 以上。
+- `too_many_redirects`：超過 `--max-redirects`。
+- `redirect_loop`：redirect chain 中 URL 重複。

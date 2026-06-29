@@ -5,8 +5,11 @@
 ## 文件索引
 
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)：架構、掃描流程、資料模型、report schema、GUI API 與可重用設計點。
+- [CLI_REFERENCE.md](CLI_REFERENCE.md)：完整 CLI 參數、規則檔格式、Report diff 與進階用法。
 - [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：P6 report-to-report diff 的 normalization 原則。
 - [GUI_USABILITY_ASSESSMENT.md](GUI_USABILITY_ASSESSMENT.md)：GUI 易用性第一優先評估與執行紀錄。
+- [RELEASE_SECURITY_ASSESSMENT.md](RELEASE_SECURITY_ASSESSMENT.md)：`.cmd` / portable `.exe` 降低防毒與 SmartScreen 警戒的 release security 評估。
+- [DOCUMENTATION_IMPROVEMENT_RECORD.md](DOCUMENTATION_IMPROVEMENT_RECORD.md)：README / ROADMAP 易讀性與一致性建議採納紀錄。
 - [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)：已完成里程碑、驗收矩陣與設計理由。
 - [rules/cec-site-link-rules.json](rules/cec-site-link-rules.json)：CEC site link rules 範例。
 
