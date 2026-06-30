@@ -1,6 +1,6 @@
 # 開發路線圖
 
-本文件說明 Local Link Checker 各階段開發狀態、近期工作重點與後續規劃。已完成階段的詳細紀錄請參閱 [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)，技術規格請參閱 [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)。
+本文件說明 Local Link Checker 各階段開發狀態、近期工作重點與後續規劃。已完成階段的詳細紀錄請參閱 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)，技術規格請參閱 [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)。
 
 ## 目前狀態摘要
 
@@ -128,17 +128,17 @@
 **狀態：** 後續評估  
 **目標：** 在核心契約與誤判降低穩定後，補 release / packaging governance。  
 **主要交付：** HTML / Excel 報表、portable package manifest、package smoke test、dependency audit、license summary、SBOM、正式公開信任簽章與 checksum 評估。  
-**參考文件：** [docs/RELEASE_SECURITY_ASSESSMENT.md](docs/RELEASE_SECURITY_ASSESSMENT.md)。
+**參考文件：** [docs/archive/RELEASE_SECURITY_ASSESSMENT.md](docs/archive/RELEASE_SECURITY_ASSESSMENT.md)。
 
 ## 已完成工作摘要
 
 | 階段 | 完成摘要 | 詳細紀錄 |
 | --- | --- | --- |
-| P0-P5.5 | 完成本機工具、URL inventory、`404 / 410` 二次確認、外部連結治理、SPA / Nuxt 抽取改善 | [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md) |
+| P0-P5.5 | 完成本機工具、URL inventory、`404 / 410` 二次確認、外部連結治理、SPA / Nuxt 抽取改善 | [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) |
 | P6 | 完成 report-to-report diff 第一版，支援 URL、external risk 與 summary diagnostics 的 report diff | [docs/archive/P6_IMPLEMENTATION_ANALYSIS.md](docs/archive/P6_IMPLEMENTATION_ANALYSIS.md) |
 | P6.5a | 完成輸出契約、manifest、redaction、sources/body limit、Header / Accept-Encoding / Keep-Alive | [docs/archive/P6_5A_ASSESSMENT.md](docs/archive/P6_5A_ASSESSMENT.md) |
 | P6.5b | 完成 SSRF、partial report、robots / compliance、Retry-After / host diagnostics 與 WAF signature schema | [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md) |
-| Release security 小修 | portable `.cmd` 嚴格使用 bundled runtime、build manifest、artifact SHA256、localhost-only 說明與 self-signed 限制 | [docs/RELEASE_SECURITY_ASSESSMENT.md](docs/RELEASE_SECURITY_ASSESSMENT.md) |
+| Release security 小修 | portable `.cmd` 嚴格使用 bundled runtime、build manifest、artifact SHA256、localhost-only 說明與 self-signed 限制 | [docs/archive/RELEASE_SECURITY_ASSESSMENT.md](docs/archive/RELEASE_SECURITY_ASSESSMENT.md) |
 
 ## 全域原則
 
@@ -177,7 +177,7 @@
 - P9：rules schema、profile 與 GUI / Analyzer 呈現。
 - P11：release / packaging governance、SBOM、dependency audit 與正式簽章評估。
 
-README / ROADMAP 易讀性與一致性建議採納紀錄請參閱 [docs/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/DOCUMENTATION_IMPROVEMENT_RECORD.md)。
+README / ROADMAP 易讀性與一致性建議採納紀錄請參閱 [docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md)。
 
 ## 細部規格索引
 
@@ -242,5 +242,5 @@ README / ROADMAP 易讀性與一致性建議採納紀錄請參閱 [docs/DOCUMENT
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：完整 CLI 參數與規則檔格式。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：技術規格。
-- [docs/ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md)：已完成里程碑與驗收紀錄。
-- [docs/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/DOCUMENTATION_IMPROVEMENT_RECORD.md)：README / ROADMAP 易讀性與一致性採納紀錄。
+- [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)：已完成里程碑與驗收紀錄。
+- [docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md)：README / ROADMAP 易讀性與一致性採納紀錄。

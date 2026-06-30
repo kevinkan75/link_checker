@@ -1,6 +1,6 @@
 # SPA Link Extraction Implementation Notes
 
-狀態：歷史實作筆記。P5.5a / P5.5b / P5.5c 已依本文件完成；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，完成紀錄請看 [../ROADMAP_HISTORY.md](../ROADMAP_HISTORY.md)。
+狀態：歷史實作筆記。P5.5a / P5.5b / P5.5c 已依本文件完成；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，完成紀錄請看 [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)。
 
 ## 1. 需求目標
 

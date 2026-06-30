@@ -1,6 +1,6 @@
 # Local Link Checker Technical Specification
 
-本文件提供給其他專案做技術分析、架構比較或功能重用評估。使用者操作說明請看 [../README.md](../README.md)，開發主線請看 [../ROADMAP.md](../ROADMAP.md)，已完成里程碑請看 [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)。
+本文件提供給其他專案做技術分析、架構比較或功能重用評估。使用者操作說明請看 [../README.md](../README.md)，開發主線請看 [../ROADMAP.md](../ROADMAP.md)，已完成里程碑請看 [archive/ROADMAP_HISTORY.md](archive/ROADMAP_HISTORY.md)。
 
 ## 1. 系統目的
 

@@ -1,6 +1,6 @@
 # www.cec.gov.tw 檢測落差改善分析報告
 
-狀態：歷史分析紀錄。P5.5a / P5.5b / P5.5c 已依本報告完成；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，完成紀錄請看 [../ROADMAP_HISTORY.md](../ROADMAP_HISTORY.md)。
+狀態：歷史分析紀錄。P5.5a / P5.5b / P5.5c 已依本報告完成；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，完成紀錄請看 [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md)。
 
 ## 1. 事件摘要
 

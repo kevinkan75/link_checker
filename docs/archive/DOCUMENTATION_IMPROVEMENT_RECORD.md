@@ -50,7 +50,7 @@
 
 | 建議 | 採納狀態 | 落點 |
 | --- | --- | --- |
-| 明確區分路線圖與開發紀錄 | 已採納 | ROADMAP 開頭定位為開發路線圖，歷史紀錄連到 `docs/ROADMAP_HISTORY.md` |
+| 明確區分路線圖與開發紀錄 | 已採納 | ROADMAP 開頭定位為開發路線圖，歷史紀錄連到 `docs/archive/ROADMAP_HISTORY.md` |
 | 新增目前狀態摘要 | 已採納 | ROADMAP `目前狀態摘要` |
 | 將一致性結論改名 | 已採納 | 改以 `目前狀態摘要` 與 `採納決策摘要` 分流 |
 | 將階段總覽提前 | 已採納 | ROADMAP 前段 |
@@ -90,5 +90,5 @@
 - `README.md`：改為入口型文件，快速開始與 GUI 優先。
 - `ROADMAP.md`：改為開發主線入口，前段呈現目前狀態與 P7 下一步。
 - `docs/CLI_REFERENCE.md`：新增完整 CLI 參數、規則檔格式與進階用法。
-- `docs/DOCUMENTATION_IMPROVEMENT_RECORD.md`：新增本採納紀錄。
+- `docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md`：新增本採納紀錄。
 - `docs/README.md`：補入新文件索引。
