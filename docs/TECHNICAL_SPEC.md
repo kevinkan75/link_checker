@@ -431,7 +431,7 @@ TTL policy draft：
 | `timeout / network_error` | 第一版可不快取，或最多 15 分鐘 |
 | `security_blocked` | 可快取，但 key 必須包含 security policy |
 
-P7c report additions：
+P7b 起，report 會記錄 cache 行為：
 
 - `options.cache`
 - `options.cacheFile`

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { lookup as dnsLookup } from "node:dns/promises";
 import http from "node:http";
@@ -21,6 +21,10 @@ const DEFAULT_MAX_DOWNLOAD_PROBE_BYTES = 64 * 1024;
 const DEFAULT_MAX_SOURCES_PER_URL = 50;
 const DEFAULT_KEEP_ALIVE_MSECS = 1000;
 const DEFAULT_RETRY_AFTER_MAX_MS = 30000;
+const DEFAULT_CACHE_FILE = ".cache/link-check-cache.json";
+const DEFAULT_CACHE_TTL_HOURS = 24;
+const CACHE_SCHEMA_VERSION = "1.0.0";
+const CACHE_POLICY_VERSION = "p7-cache-policy-v1";
 const REDACTED_QUERY_VALUE = "REDACTED";
 const DEFAULT_REDACT_QUERY_KEYS = [
   "access_token",
@@ -131,6 +135,10 @@ const DEFAULTS = {
   maxSourcesPerUrl: DEFAULT_MAX_SOURCES_PER_URL,
   keepAlive: true,
   keepAliveMsecs: DEFAULT_KEEP_ALIVE_MSECS,
+  cache: false,
+  cacheFile: DEFAULT_CACHE_FILE,
+  cacheTtlHours: DEFAULT_CACHE_TTL_HOURS,
+  refreshCache: false,
   confirm404: true,
   confirmationMaxUrls: 100,
   confirmationMaxPerHost: 20,
@@ -527,6 +535,10 @@ class LinkChecker {
     this.options.maxBodyPreviewBytes = normalizeByteLimit(this.options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
     this.options.maxDownloadProbeBytes = normalizeByteLimit(this.options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
     this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+    this.options.cache = this.options.cache === true;
+    this.options.cacheFile = normalizeCacheFile(this.options.cacheFile);
+    this.options.cacheTtlHours = normalizeCacheTtlHours(this.options.cacheTtlHours);
+    this.options.refreshCache = this.options.refreshCache === true;
     this.options.retryAfterMaxMs = normalizeRetryAfterMaxMs(this.options.retryAfterMaxMs);
     this.options.protectionBodyHash = this.options.protectionBodyHash === true;
     this.securityPolicy = normalizeSecurityPolicy(this.options);
@@ -564,6 +576,20 @@ class LinkChecker {
     this.validationError = null;
     this.statusCache = new Map();
     this.bodyCache = new Map();
+    this.persistentCache = null;
+    this.persistentCacheLoadPromise = null;
+    this.persistentCacheWritePromise = Promise.resolve();
+    this.persistentCacheStats = {
+      enabled: this.options.cache,
+      file: this.options.cacheFile,
+      hits: 0,
+      misses: 0,
+      expired: 0,
+      refreshed: 0,
+      written: 0,
+      bypassed: 0,
+      errors: 0,
+    };
     this.results = new Map();
     this.sources = new Map();
     this.externalLinks = new Map();
@@ -1074,9 +1100,174 @@ class LinkChecker {
     if (this.statusCache.has(key)) {
       this.inventoryMetrics.statusCacheHits += 1;
     } else {
-      this.statusCache.set(key, this.fetchWithCache(url, false));
+      const cached = await this.readPersistentCachedResult(url);
+      if (cached) {
+        this.setResultForUrl(url, cached);
+        this.statusCache.set(key, Promise.resolve(cached));
+      } else {
+        this.statusCache.set(key, this.fetchStatusWithPersistentCache(url));
+      }
     }
     return this.statusCache.get(key);
+  }
+
+  async fetchStatusWithPersistentCache(url) {
+    const result = await this.fetchWithCache(url, false);
+    await this.writePersistentCachedResult(url, result);
+    return result;
+  }
+
+  async ensurePersistentCacheLoaded() {
+    if (!this.options.cache) {
+      return null;
+    }
+    if (this.persistentCache) {
+      return this.persistentCache;
+    }
+    if (this.persistentCacheLoadPromise) {
+      return this.persistentCacheLoadPromise;
+    }
+
+    this.persistentCacheLoadPromise = (async () => {
+      try {
+        const text = await readFile(this.options.cacheFile, "utf8");
+        const parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
+        this.persistentCache = normalizePersistentCache(parsed);
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          this.persistentCacheStats.errors += 1;
+        }
+        this.persistentCache = createEmptyPersistentCache();
+      }
+      return this.persistentCache;
+    })();
+    return this.persistentCacheLoadPromise;
+  }
+
+  async readPersistentCachedResult(url) {
+    if (!this.options.cache) {
+      return null;
+    }
+    if (this.options.refreshCache) {
+      this.persistentCacheStats.refreshed += 1;
+      return null;
+    }
+
+    const cache = await this.ensurePersistentCacheLoaded();
+    const cacheKey = this.buildPersistentCacheKey(url).key;
+    const entry = cache.entries[cacheKey];
+    if (!entry) {
+      this.persistentCacheStats.misses += 1;
+      return null;
+    }
+    if (isPersistentCacheEntryExpired(entry)) {
+      delete cache.entries[cacheKey];
+      this.persistentCacheStats.expired += 1;
+      return null;
+    }
+
+    this.persistentCacheStats.hits += 1;
+    const result = {
+      ...entry.result,
+      url,
+      canonicalUrl: this.getCanonicalKey(url),
+      checkedAt: entry.checkedAt || entry.result?.checkedAt || new Date().toISOString(),
+      cache: {
+        hit: true,
+        key: entry.key,
+        checkedAt: entry.checkedAt || null,
+        expiresAt: entry.expiresAt || null,
+        ttlCategory: entry.ttlCategory || null,
+      },
+    };
+    return stripBody(result);
+  }
+
+  async writePersistentCachedResult(url, result) {
+    if (!this.options.cache) {
+      return;
+    }
+    const ttl = getPersistentCacheTtlMs(result, this.options);
+    if (!Number.isFinite(ttl) || ttl <= 0) {
+      this.persistentCacheStats.bypassed += 1;
+      return;
+    }
+
+    const cache = await this.ensurePersistentCacheLoaded();
+    const cacheEntry = this.buildPersistentCacheEntry(url, result, ttl);
+    cache.entries[cacheEntry.key] = cacheEntry;
+    pruneExpiredPersistentCacheEntries(cache);
+    this.persistentCacheStats.written += 1;
+    this.persistentCacheWritePromise = this.persistentCacheWritePromise
+      .catch(() => {})
+      .then(() => this.savePersistentCache());
+    await this.persistentCacheWritePromise;
+  }
+
+  async savePersistentCache() {
+    if (!this.options.cache || !this.persistentCache) {
+      return;
+    }
+    this.persistentCache.updatedAt = new Date().toISOString();
+    try {
+      await mkdir(dirname(this.options.cacheFile), { recursive: true });
+      await writeFile(this.options.cacheFile, `${JSON.stringify(this.persistentCache, null, 2)}\n`, "utf8");
+    } catch {
+      this.persistentCacheStats.errors += 1;
+    }
+  }
+
+  buildPersistentCacheEntry(url, result, ttlMs) {
+    const checkedAt = result.checkedAt || new Date().toISOString();
+    const keyData = this.buildPersistentCacheKey(url);
+    const stripped = stripBody(result);
+    const storedResult = redactCacheStoredResult(stripped, this.options);
+    const finalUrl = result.finalUrl || url;
+    return {
+      key: keyData.key,
+      canonicalUrlHash: keyData.keyParts.canonicalUrlHash,
+      displayUrl: redactSensitiveQueryValue(url, { ...this.options, redactSensitiveQuery: true }),
+      keyParts: keyData.keyParts,
+      checkedAt,
+      expiresAt: new Date(Date.parse(checkedAt) + ttlMs).toISOString(),
+      ttlCategory: getPersistentCacheTtlCategory(result),
+      lastStatus: result.status ?? null,
+      lastFinalUrlHash: hashLabel(finalUrl),
+      result: storedResult,
+    };
+  }
+
+  buildPersistentCacheKey(url) {
+    const referer = this.getRequestReferer(url);
+    const keyParts = {
+      canonicalUrlHash: hashLabel(this.getCanonicalKey(url)),
+      canonicalStrategy: this.options.canonicalStrategy,
+      methodPolicy: this.options.preferGet ? "GET" : "HEAD",
+      userAgentHash: hashLabel(this.options.userAgent),
+      acceptLanguage: this.options.acceptLanguage,
+      refererMode: getRefererMode(url, referer),
+      refererHash: referer ? hashLabel(referer) : null,
+      checkExternal: this.options.checkExternal,
+      robotsPolicy: {
+        mode: this.scanPolicy?.robotsTxt?.mode || "unknown",
+        status: this.scanPolicy?.robotsTxt?.status || "unknown",
+      },
+      securityPolicy: {
+        blockPrivateIp: this.options.blockPrivateIp,
+        allowLocalhost: this.options.allowLocalhost,
+        allowPrivateIp: this.options.allowPrivateIp,
+      },
+      requestPolicy: {
+        maxRedirects: this.options.maxRedirects,
+        longRedirectThreshold: this.options.longRedirectThreshold,
+        legacyTls: this.options.legacyTls,
+        systemCa: this.options.systemCa,
+      },
+    };
+    return {
+      key: hashLabel(stableStringify(keyParts)),
+      keyParts,
+    };
   }
 
   async fetchWithCache(url, requireBody) {
@@ -1511,6 +1702,10 @@ class LinkChecker {
         blockPrivateIp: this.options.blockPrivateIp,
         allowLocalhost: this.options.allowLocalhost,
         allowPrivateIp: this.options.allowPrivateIp,
+        cache: this.options.cache,
+        cacheFile: this.options.cacheFile,
+        cacheTtlHours: this.options.cacheTtlHours,
+        refreshCache: this.options.refreshCache,
         robotsTxt: this.options.robotsTxt,
         authorizedScan: this.options.authorizedScan,
         authorizationNote: this.options.authorizationNote,
@@ -1551,6 +1746,7 @@ class LinkChecker {
         nuxtAssetsChecked: checkedByKind.nuxtAssets,
         checkedByKind,
         inventorySummary,
+        cache: this.buildCacheSummary(),
         spaDetection,
         scanQuality,
         robotsTxt: this.robotsTxt,
@@ -1585,6 +1781,14 @@ class LinkChecker {
     }
 
     return runStatus;
+  }
+
+  buildCacheSummary() {
+    return {
+      ...this.persistentCacheStats,
+      policyVersion: CACHE_POLICY_VERSION,
+      cacheSchemaVersion: CACHE_SCHEMA_VERSION,
+    };
   }
 
   buildSpaDetectionSummary() {
@@ -1908,6 +2112,19 @@ function normalizeIntegerLimit(value, fallback) {
     return fallback;
   }
   return Math.min(number, 100000);
+}
+
+function normalizeCacheFile(value) {
+  const text = String(value || DEFAULT_CACHE_FILE).trim();
+  return text || DEFAULT_CACHE_FILE;
+}
+
+function normalizeCacheTtlHours(value) {
+  const number = Number(value ?? DEFAULT_CACHE_TTL_HOURS);
+  if (!Number.isFinite(number) || number <= 0) {
+    return DEFAULT_CACHE_TTL_HOURS;
+  }
+  return Math.min(number, 24 * 365);
 }
 
 function normalizeRetryAfterMaxMs(value) {
@@ -5433,6 +5650,123 @@ function getResultHost(result) {
   return "unknown";
 }
 
+function createEmptyPersistentCache() {
+  return {
+    cacheSchemaVersion: CACHE_SCHEMA_VERSION,
+    policyVersion: CACHE_POLICY_VERSION,
+    generatedBy: buildReportGenerator(),
+    updatedAt: new Date().toISOString(),
+    entries: {},
+  };
+}
+
+function normalizePersistentCache(value) {
+  if (
+    !value
+    || value.cacheSchemaVersion !== CACHE_SCHEMA_VERSION
+    || value.policyVersion !== CACHE_POLICY_VERSION
+    || !value.entries
+    || typeof value.entries !== "object"
+    || Array.isArray(value.entries)
+  ) {
+    return createEmptyPersistentCache();
+  }
+
+  return {
+    cacheSchemaVersion: CACHE_SCHEMA_VERSION,
+    policyVersion: CACHE_POLICY_VERSION,
+    generatedBy: value.generatedBy || buildReportGenerator(),
+    updatedAt: value.updatedAt || new Date().toISOString(),
+    entries: value.entries,
+  };
+}
+
+function pruneExpiredPersistentCacheEntries(cache, nowMs = Date.now()) {
+  for (const [key, entry] of Object.entries(cache.entries || {})) {
+    if (Date.parse(entry?.expiresAt || "") <= nowMs) {
+      delete cache.entries[key];
+    }
+  }
+}
+
+function isPersistentCacheEntryExpired(entry, nowMs = Date.now()) {
+  return Date.parse(entry?.expiresAt || "") <= nowMs;
+}
+
+function getPersistentCacheTtlCategory(result) {
+  if (result.classification === "security_blocked") {
+    return "security_blocked";
+  }
+  if (result.ok || (result.status >= 300 && result.status < 400)) {
+    return "success";
+  }
+  if (result.status === 404 || result.status === 410) {
+    return "missing";
+  }
+  if (
+    result.status === 403
+    || result.status === 429
+    || result.status >= 500
+    || result.classification === "protected"
+    || result.suspectedWaf
+    || result.suspectedBot
+  ) {
+    return "temporary_failure";
+  }
+  if (result.issueType === "timeout" || result.classification === "network_error") {
+    return "network_error";
+  }
+  return "temporary_failure";
+}
+
+function getPersistentCacheTtlMs(result, options) {
+  const hourMs = 60 * 60 * 1000;
+  const minuteMs = 60 * 1000;
+  const successMs = normalizeCacheTtlHours(options.cacheTtlHours) * hourMs;
+  const category = getPersistentCacheTtlCategory(result);
+  if (category === "success" || category === "security_blocked") {
+    return successMs;
+  }
+  if (category === "missing") {
+    return Math.min(successMs, 4 * hourMs);
+  }
+  if (category === "temporary_failure") {
+    return Math.min(successMs, 30 * minuteMs);
+  }
+  return null;
+}
+
+function redactCacheStoredResult(result, options) {
+  const redactionOptions = {
+    ...options,
+    redactSensitiveQuery: true,
+  };
+  const redacted = redactOutputValue(stripBody(result), redactionOptions);
+  delete redacted.cache;
+  return redacted;
+}
+
+function hashLabel(value) {
+  return `sha256:${createHash("sha256").update(String(value || "")).digest("hex")}`;
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function getRefererMode(url, referer) {
+  if (!referer) {
+    return "none";
+  }
+  return sameOrigin(url, referer) ? "same_origin_source" : "external_source";
+}
+
 function stripBody(result) {
   const { body, diagnosticBody, ...withoutBody } = result;
   return withoutBody;
@@ -5951,6 +6285,36 @@ function parseArgs(argv) {
       explicitOptions.add("redactSensitiveQuery");
       continue;
     }
+    if (arg === "--cache") {
+      options.cache = true;
+      explicitOptions.add("cache");
+      continue;
+    }
+    if (arg === "--no-cache") {
+      options.cache = false;
+      explicitOptions.add("cache");
+      continue;
+    }
+    if (arg === "--refresh-cache") {
+      options.cache = true;
+      options.refreshCache = true;
+      explicitOptions.add("cache");
+      explicitOptions.add("refreshCache");
+      continue;
+    }
+    if (arg === "--cache-file") {
+      options.cacheFile = args.shift();
+      if (!options.cacheFile || options.cacheFile.startsWith("-")) {
+        throw new Error("--cache-file requires a file path");
+      }
+      explicitOptions.add("cacheFile");
+      continue;
+    }
+    if (arg === "--cache-ttl-hours") {
+      options.cacheTtlHours = readPositiveNumber(args.shift(), "--cache-ttl-hours");
+      explicitOptions.add("cacheTtlHours");
+      continue;
+    }
     if (arg === "--json") {
       json = true;
       continue;
@@ -6178,6 +6542,10 @@ function parseArgs(argv) {
   options.spaLinks = normalizeSpaLinkMode(options.spaLinks);
   options.redactSensitiveQuery = options.redactSensitiveQuery !== false;
   options.redactQueryKeys = normalizeRedactQueryKeys(options.redactQueryKeys);
+  options.cache = options.cache === true;
+  options.cacheFile = normalizeCacheFile(options.cacheFile);
+  options.cacheTtlHours = normalizeCacheTtlHours(options.cacheTtlHours);
+  options.refreshCache = options.refreshCache === true;
   options.maxHtmlBytes = normalizeByteLimit(options.maxHtmlBytes, DEFAULTS.maxHtmlBytes);
   options.maxBodyPreviewBytes = normalizeByteLimit(options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
   options.maxDownloadProbeBytes = normalizeByteLimit(options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
@@ -6293,6 +6661,14 @@ function readNonNegativeNumber(value, name) {
   return number;
 }
 
+function readPositiveNumber(value, name) {
+  const number = Number.parseFloat(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(`${name} must be a positive number`);
+  }
+  return number;
+}
+
 function normalizeOptionalDelay(value) {
   if (!Number.isFinite(value)) {
     return null;
@@ -6381,6 +6757,12 @@ Options:
                       Maximum bytes to drain for non-body download/media probes. Default: ${DEFAULTS.maxDownloadProbeBytes}
   --max-sources-per-url <n>
                       Maximum source records saved per URL in outputs. Default: ${DEFAULTS.maxSourcesPerUrl}
+  --cache             Enable persistent TTL URL status-result cache. Default: off.
+  --cache-file <file> Cache file path. Default: ${DEFAULTS.cacheFile}
+  --cache-ttl-hours <n>
+                      TTL for successful cached results. Default: ${DEFAULTS.cacheTtlHours}
+  --refresh-cache     Ignore existing cache entries and write fresh results.
+  --no-cache          Disable persistent cache.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -6422,6 +6804,9 @@ function printSummary(report) {
   }
   if (summary.hostDiagnostics?.warnings?.length > 0) {
     console.log(`Host diagnostics warnings: ${summary.hostDiagnostics.warnings.join(", ")}`);
+  }
+  if (summary.cache?.enabled) {
+    console.log(`Cache: ${summary.cache.hits || 0} hit(s), ${summary.cache.misses || 0} miss(es), ${summary.cache.expired || 0} expired, ${summary.cache.written || 0} written`);
   }
   if (summary.brokenLinks > 0) {
     for (const [issueType, count] of Object.entries(summary.brokenByType || {})) {

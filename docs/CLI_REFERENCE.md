@@ -27,6 +27,7 @@ node .\link-checker.mjs https://example.com
 .\check-links.cmd https://example.com --domain-rules rules.json
 .\check-links.cmd https://example.com --redact-query-keys ticket,caseId
 .\check-links.cmd https://example.com --max-html-bytes 5242880 --max-sources-per-url 50
+.\check-links.cmd https://example.com --cache --cache-ttl-hours 24
 ```
 
 ## 參數總覽
@@ -113,6 +114,20 @@ node .\link-checker.mjs https://example.com
 | `--max-download-probe-bytes <n>` | 不需要 body 的下載/媒體 probe 最多 drain bytes，預設 `65536` |
 | `--max-sources-per-url <n>` | 每個 URL 輸出最多保存幾筆來源，預設 `50`；完整數量仍保留在 `sourceCount` |
 | `--protection-body-hash` | 在 protection body signature 中輸出 SHA-256 `bodyHash`；預設關閉 |
+
+### P7 TTL cache
+
+| 參數 | 說明 |
+| --- | --- |
+| `--cache` | 啟用 persistent TTL URL status-result cache；預設關閉 |
+| `--cache-file <file>` | 指定 cache 檔案路徑，預設 `.cache/link-check-cache.json` |
+| `--cache-ttl-hours <n>` | 成功結果的 TTL 小時數，預設 `24`；`404 / 410`、`429`、`5xx` 等會使用較短 TTL |
+| `--refresh-cache` | 忽略既有 cache entry，重新檢查並回寫新結果；會自動啟用 cache |
+| `--no-cache` | 停用 persistent cache |
+
+P7 cache 只服務不需要 body 的 URL status check。頁面爬行需要 `requireBody: true` 時仍會實際抓取 HTML body，因此不會因 cache 命中而跳過 HTML link extraction、SPA payload extraction 或 site link rules。
+
+Cache file 是本機效能最佳化資料，不是正式 report。cache key 使用實際 canonical URL 的 hash 與 policy fingerprint；落盤展示值會強制遮罩敏感 query value，即使輸出 redaction 被停用也一樣。
 
 ### 輸出與診斷
 
