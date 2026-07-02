@@ -1,5 +1,6 @@
 dist/
 logs/
 report.json
+.cache/
 
 *.log

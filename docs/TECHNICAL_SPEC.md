@@ -366,6 +366,87 @@ P5.5 diagnostics：
 - `externalRisk`
 - `sourceCount`
 
+### 7.6 P7 TTL URL result cache draft
+
+P7 將引入 persistent TTL URL result cache。此 cache 是本機效能最佳化資料，不取代 `report.json` 主契約，也不應改變 URL discovery、HTML body 抓取或掃描分類語意。第一版只服務 `requireBody: false` 的 URL status check；`requireBody: true` 的頁面 crawl 必須保留實際 GET body，避免 cache 命中造成 `extractLinks()`、SPA payload extraction、site link rules 與 inventory 少資料。
+
+預設建議：
+
+- `--cache` 第一版預設關閉。
+- cache file 預設 `.cache/link-check-cache.json`。
+- cache schema 使用獨立 `cacheSchemaVersion`，不沿用 report `schemaVersion`。
+- GUI cache 控制不納入 P7 第一版；GUI 可自然保存含有 `summary.cache` 的 report。
+
+Cache file draft shape：
+
+```js
+{
+  cacheSchemaVersion,
+  policyVersion,
+  generatedBy,
+  updatedAt,
+  entries: {
+    [cacheKey]: {
+      key,
+      canonicalUrlHash,
+      displayUrl,
+      keyParts,
+      checkedAt,
+      expiresAt,
+      ttlCategory,
+      lastStatus,
+      lastFinalUrlHash,
+      result
+    }
+  }
+}
+```
+
+`displayUrl` 僅能保存 redacted URL 或不含敏感 query value 的展示值。cache key 與實際 request URL 不使用 redacted URL，以避免不同實際 URL 被錯誤合併；落盤資料則不得保存敏感 query value 明文。
+
+Cache key fingerprint 至少包含：
+
+- `canonicalUrlHash`
+- `canonicalStrategy`
+- method policy：`HEAD` / `GET` / `preferGet`
+- `userAgentHash`
+- `acceptLanguage`
+- referer mode
+- `checkExternal`
+- robots policy mode / status
+- security policy：`blockPrivateIp`、`allowLocalhost`、`allowPrivateIp`
+- request policy：`maxRedirects`、`longRedirectThreshold`、`legacyTls`、`systemCa`
+
+`timeoutMs` 與 `retryCount` 是否納入 key 可在 P7b 實作時決定；若不納入，文件與 report summary 需說明 cache result 代表最近一次結果，不保證相同 retry policy。
+
+TTL policy draft：
+
+| result | TTL policy |
+| --- | --- |
+| `200 / 204 / 3xx` | 使用 `--cache-ttl-hours`，預設建議 24 小時 |
+| `404 / 410` | 短於成功結果，建議 2-6 小時 |
+| `403 / protected / suspectedWaf / suspectedBot` | 短 TTL，建議 15-60 分鐘 |
+| `429` | 短 TTL，建議 15-60 分鐘 |
+| `5xx` | 短 TTL，建議 15-60 分鐘 |
+| `timeout / network_error` | 第一版可不快取，或最多 15 分鐘 |
+| `security_blocked` | 可快取，但 key 必須包含 security policy |
+
+P7c report additions：
+
+- `options.cache`
+- `options.cacheFile`
+- `options.cacheTtlHours`
+- `options.refreshCache`
+- `summary.cache.enabled`
+- `summary.cache.file`
+- `summary.cache.hits`
+- `summary.cache.misses`
+- `summary.cache.expired`
+- `summary.cache.refreshed`
+- `summary.cache.written`
+- `summary.cache.bypassed`
+- `summary.cache.errors`
+
 ## 8. GUI Server API
 
 GUI server 是本機 HTTP server，不是遠端服務。主要 API：

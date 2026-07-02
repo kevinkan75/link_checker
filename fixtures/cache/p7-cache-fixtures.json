@@ -1,0 +1,127 @@
+{
+  "cacheSchemaVersion": "p7-draft-1",
+  "policyVersion": "p7-cache-policy-v1",
+  "generatedBy": {
+    "name": "link-checker.mjs",
+    "version": "p7a-fixture"
+  },
+  "updatedAt": "2026-07-02T00:00:00.000Z",
+  "requiredKeyParts": [
+    "canonicalUrlHash",
+    "canonicalStrategy",
+    "methodPolicy",
+    "userAgentHash",
+    "acceptLanguage",
+    "refererMode",
+    "checkExternal",
+    "robotsPolicy",
+    "securityPolicy",
+    "requestPolicy"
+  ],
+  "ttlPolicy": {
+    "successHours": 24,
+    "missingHours": 4,
+    "temporaryFailureMinutes": 30,
+    "networkErrorMinutes": 15
+  },
+  "entries": {
+    "sha256:success-key": {
+      "key": "sha256:success-key",
+      "canonicalUrlHash": "sha256:canonical-success",
+      "displayUrl": "https://example.test/page?token=REDACTED",
+      "keyParts": {
+        "canonicalUrlHash": "sha256:canonical-success",
+        "canonicalStrategy": "safe",
+        "methodPolicy": "HEAD",
+        "userAgentHash": "sha256:user-agent",
+        "acceptLanguage": "zh-TW,zh;q=0.9,en;q=0.8",
+        "refererMode": "source",
+        "checkExternal": true,
+        "robotsPolicy": {
+          "mode": "record_only",
+          "status": "robots_compliant"
+        },
+        "securityPolicy": {
+          "blockPrivateIp": true,
+          "allowLocalhost": false,
+          "allowPrivateIp": false
+        },
+        "requestPolicy": {
+          "maxRedirects": 10,
+          "longRedirectThreshold": 3,
+          "legacyTls": false,
+          "systemCa": false
+        }
+      },
+      "checkedAt": "2026-07-02T00:00:00.000Z",
+      "expiresAt": "2026-07-03T00:00:00.000Z",
+      "ttlCategory": "success",
+      "lastStatus": 200,
+      "lastFinalUrlHash": "sha256:final-success",
+      "result": {
+        "ok": true,
+        "status": 200,
+        "method": "HEAD",
+        "contentType": "text/html; charset=utf-8",
+        "contentLength": 1280,
+        "classification": "ok",
+        "issueType": null,
+        "redirected": false,
+        "redirectCount": 0
+      }
+    },
+    "sha256:missing-key": {
+      "key": "sha256:missing-key",
+      "canonicalUrlHash": "sha256:canonical-missing",
+      "displayUrl": "https://example.test/missing",
+      "keyParts": {
+        "canonicalUrlHash": "sha256:canonical-missing",
+        "canonicalStrategy": "safe",
+        "methodPolicy": "HEAD",
+        "userAgentHash": "sha256:user-agent",
+        "acceptLanguage": "zh-TW,zh;q=0.9,en;q=0.8",
+        "refererMode": "source",
+        "checkExternal": true,
+        "robotsPolicy": {
+          "mode": "record_only",
+          "status": "robots_compliant"
+        },
+        "securityPolicy": {
+          "blockPrivateIp": true,
+          "allowLocalhost": false,
+          "allowPrivateIp": false
+        },
+        "requestPolicy": {
+          "maxRedirects": 10,
+          "longRedirectThreshold": 3,
+          "legacyTls": false,
+          "systemCa": false
+        }
+      },
+      "checkedAt": "2026-07-02T00:00:00.000Z",
+      "expiresAt": "2026-07-02T04:00:00.000Z",
+      "ttlCategory": "missing",
+      "lastStatus": 404,
+      "lastFinalUrlHash": "sha256:final-missing",
+      "result": {
+        "ok": false,
+        "status": 404,
+        "method": "HEAD",
+        "contentType": "text/html; charset=utf-8",
+        "contentLength": 512,
+        "classification": "http_error",
+        "issueType": "not_found",
+        "redirected": false,
+        "redirectCount": 0
+      }
+    }
+  },
+  "pendingImplementationCases": [
+    "cache hit avoids second status request",
+    "expired entry is treated as miss",
+    "refresh cache bypasses existing entry and writes new result",
+    "policy fingerprint mismatch is treated as miss",
+    "requireBody true never skips HTML body fetch",
+    "summary.cache records hit miss expired refreshed written bypassed errors"
+  ]
+}
