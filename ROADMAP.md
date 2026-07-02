@@ -51,7 +51,8 @@
 ### P7：TTL 檢查快取
 
 **狀態：** 待規劃  
-**目標：** 對可驗證的 URL result 建立 TTL cache，降低重複檢查成本；不先處理 page HTML cache。
+**目標：** 對可驗證的 URL result 建立 TTL cache，降低重複檢查成本；不先處理 page HTML cache。  
+**實作前評估：** [docs/P7_CACHE_EVALUATION.md](docs/P7_CACHE_EVALUATION.md)。
 
 **實作前置條件：**
 
@@ -60,6 +61,12 @@
 3. 確認 cache key 是否包含 security policy 與 robots policy。
 4. 確認 GUI 是否需要顯示 cache hit / miss。
 5. 建立 cache regression fixtures。
+
+**建議分段：**
+
+- P7a：規格與測試骨架，先固定 cache schema、key policy、TTL policy 與 redaction 邊界。
+- P7b：CLI 與核心 cache，接入 `requireBody: false` 的 URL status check，不碰 page HTML cache。
+- P7c：report、文件與收斂，補 `summary.cache`、CLI 文件與完整回歸測試。
 
 **主要交付：**
 
