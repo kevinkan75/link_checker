@@ -31,7 +31,7 @@ Local Link Checker 是可在本機執行的網站連結檢查工具。它會從�
 - SPA / Nuxt payload literal 抽取、站台規則推導與 `scanQuality` 診斷。
 - GUI 批次佇列、即時進度、問題連結表格與報告下載。
 
-目前版本已支援網站連結檢查、外部連結清單、GUI 批次檢查、報告比對與主要診斷功能。詳細開發歷程與後續規劃請參閱 [ROADMAP.md](ROADMAP.md)。
+目前版本已支援網站連結檢查、外部連結清單、GUI 批次檢查、報告比對、TTL URL result cache 與主要診斷功能。詳細開發歷程與後續規劃請參閱 [ROADMAP.md](ROADMAP.md)。
 
 ## 適用情境
 
@@ -259,7 +259,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a 與 P6.5b 已完成，後續規劃 P7 TTL URL result cache。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b 與 P7 TTL URL result cache 已完成第一版，後續規劃 P8 incremental scan。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：完整 CLI 參數、規則檔格式與進階使用。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。

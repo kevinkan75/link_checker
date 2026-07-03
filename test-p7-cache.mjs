@@ -48,12 +48,12 @@ function makeCacheChecker(startUrl, cacheFile, options = {}) {
 }
 
 function assertCacheFixtureShape(fixture) {
-  assert(fixture.cacheSchemaVersion === "p7-draft-1", "Unexpected P7 cache fixture schema version.");
+  assert(fixture.cacheSchemaVersion === "p7-fixture-1", "Unexpected P7 cache fixture schema version.");
   assert(fixture.policyVersion === "p7-cache-policy-v1", "Unexpected P7 cache policy version.");
   assert(Array.isArray(fixture.requiredKeyParts), "requiredKeyParts must be an array.");
   assert(fixture.entries && typeof fixture.entries === "object", "entries must be an object keyed by cache key.");
-  assert(Array.isArray(fixture.pendingImplementationCases), "pendingImplementationCases must be an array.");
-  assert(fixture.pendingImplementationCases.length >= 5, "P7 fixture should document pending implementation cases.");
+  assert(Array.isArray(fixture.validatedImplementationCases), "validatedImplementationCases must be an array.");
+  assert(fixture.validatedImplementationCases.length >= 5, "P7 fixture should document validated implementation cases.");
 }
 
 function assertRequiredKeyParts(fixture) {
@@ -99,6 +99,18 @@ function assertTtlPolicy(fixture) {
   assert(policy.networkErrorMinutes <= policy.temporaryFailureMinutes, "Network error TTL should not exceed temporary failure TTL.");
 }
 
+function assertCacheSummaryShape(summary) {
+  const requiredCounters = ["hits", "misses", "expired", "refreshed", "written", "bypassed", "errors"];
+  assert(summary && typeof summary === "object", "summary.cache must be present.");
+  assert(summary.enabled === true, "summary.cache.enabled should reflect cache option.");
+  assert(typeof summary.file === "string" && summary.file.length > 0, "summary.cache.file should be present.");
+  assert(summary.policyVersion === "p7-cache-policy-v1", "summary.cache.policyVersion should be present.");
+  assert(typeof summary.cacheSchemaVersion === "string", "summary.cache.cacheSchemaVersion should be present.");
+  for (const key of requiredCounters) {
+    assert(Number.isInteger(summary[key]) && summary[key] >= 0, `summary.cache.${key} should be a non-negative integer.`);
+  }
+}
+
 async function assertPersistentCacheHit() {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p7-cache-hit-"));
   try {
@@ -122,6 +134,42 @@ async function assertPersistentCacheHit() {
       assert(Object.keys(cache.entries).length === 1, "Cache file should contain one entry.");
       assert(!cacheText.includes("secret-value"), "Cache file must not store raw sensitive query values.");
       assert(cacheText.includes("token=REDACTED"), "Cache display URL should redact sensitive query values.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function assertReportCacheSummary() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p7-summary-"));
+  try {
+    const cacheFile = path.join(tempDir, "cache.json");
+    let requests = 0;
+    await withServer((request, response) => {
+      requests += 1;
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("ok");
+    }, async (origin) => {
+      const url = `${origin}/summary`;
+      const firstChecker = makeCacheChecker(origin, cacheFile);
+      await firstChecker.checkUrl(url, { requireBody: false });
+      const firstReport = firstChecker.buildReport();
+      const firstSummary = firstReport.summary.cache;
+
+      assert(firstReport.options.cache === true, "report.options.cache should be true.");
+      assert(firstReport.options.cacheFile === cacheFile, "report.options.cacheFile should record the effective cache file.");
+      assert(firstReport.options.cacheTtlHours === 24, "report.options.cacheTtlHours should record the effective TTL.");
+      assert(firstReport.options.refreshCache === false, "report.options.refreshCache should default to false.");
+      assertCacheSummaryShape(firstSummary);
+      assert(firstSummary.written === 1, "First report should record one cache write.");
+
+      const secondChecker = makeCacheChecker(origin, cacheFile);
+      await secondChecker.checkUrl(url, { requireBody: false });
+      const secondSummary = secondChecker.buildReport().summary.cache;
+
+      assertCacheSummaryShape(secondSummary);
+      assert(secondSummary.hits === 1, "Second report should record one persistent cache hit.");
+      assert(requests === 1, "Report summary cache hit should avoid a second HTTP request.");
     });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -237,6 +285,7 @@ async function main() {
   assertEntryShape(fixture);
   assertTtlPolicy(fixture);
   await assertPersistentCacheHit();
+  await assertReportCacheSummary();
   await assertRefreshCacheBypassesEntry();
   await assertExpiredCacheMiss();
   await assertPolicyMismatchMiss();

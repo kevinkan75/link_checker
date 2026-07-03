@@ -169,6 +169,18 @@
         },
         "protectionBodyHash": {
           "type": "boolean"
+        },
+        "cache": {
+          "type": "boolean"
+        },
+        "cacheFile": {
+          "type": "string"
+        },
+        "cacheTtlHours": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "refreshCache": {
+          "type": "boolean"
         }
       }
     },
@@ -304,9 +316,42 @@
         "robotsTxt": {
           "$ref": "#/$defs/robotsTxtSummary"
         },
+        "cache": {
+          "$ref": "#/$defs/cacheSummary"
+        },
         "hostDiagnostics": {
           "$ref": "#/$defs/hostDiagnostics"
         }
+      }
+    },
+    "cacheSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "enabled",
+        "file",
+        "hits",
+        "misses",
+        "expired",
+        "refreshed",
+        "written",
+        "bypassed",
+        "errors",
+        "policyVersion",
+        "cacheSchemaVersion"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "file": { "type": "string" },
+        "hits": { "$ref": "#/$defs/nonNegativeInteger" },
+        "misses": { "$ref": "#/$defs/nonNegativeInteger" },
+        "expired": { "$ref": "#/$defs/nonNegativeInteger" },
+        "refreshed": { "$ref": "#/$defs/nonNegativeInteger" },
+        "written": { "$ref": "#/$defs/nonNegativeInteger" },
+        "bypassed": { "$ref": "#/$defs/nonNegativeInteger" },
+        "errors": { "$ref": "#/$defs/nonNegativeInteger" },
+        "policyVersion": { "type": "string" },
+        "cacheSchemaVersion": { "type": "string" }
       }
     },
     "hostDiagnostics": {
@@ -493,6 +538,10 @@
     "positiveInteger": {
       "type": "integer",
       "minimum": 1
+    },
+    "positiveNumber": {
+      "type": "number",
+      "exclusiveMinimum": 0
     },
     "nonNegativeInteger": {
       "type": "integer",

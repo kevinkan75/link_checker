@@ -366,9 +366,9 @@ P5.5 diagnostics：
 - `externalRisk`
 - `sourceCount`
 
-### 7.6 P7 TTL URL result cache draft
+### 7.6 P7 TTL URL result cache
 
-P7 將引入 persistent TTL URL result cache。此 cache 是本機效能最佳化資料，不取代 `report.json` 主契約，也不應改變 URL discovery、HTML body 抓取或掃描分類語意。第一版只服務 `requireBody: false` 的 URL status check；`requireBody: true` 的頁面 crawl 必須保留實際 GET body，避免 cache 命中造成 `extractLinks()`、SPA payload extraction、site link rules 與 inventory 少資料。
+P7 已引入 persistent TTL URL result cache。此 cache 是本機效能最佳化資料，不取代 `report.json` 主契約，也不應改變 URL discovery、HTML body 抓取或掃描分類語意。第一版只服務 `requireBody: false` 的 URL status check；`requireBody: true` 的頁面 crawl 必須保留實際 GET body，避免 cache 命中造成 `extractLinks()`、SPA payload extraction、site link rules 與 inventory 少資料。
 
 預設建議：
 
@@ -377,7 +377,7 @@ P7 將引入 persistent TTL URL result cache。此 cache 是本機效能最佳�
 - cache schema 使用獨立 `cacheSchemaVersion`，不沿用 report `schemaVersion`。
 - GUI cache 控制不納入 P7 第一版；GUI 可自然保存含有 `summary.cache` 的 report。
 
-Cache file draft shape：
+Cache file shape：
 
 ```js
 {
@@ -417,9 +417,9 @@ Cache key fingerprint 至少包含：
 - security policy：`blockPrivateIp`、`allowLocalhost`、`allowPrivateIp`
 - request policy：`maxRedirects`、`longRedirectThreshold`、`legacyTls`、`systemCa`
 
-`timeoutMs` 與 `retryCount` 是否納入 key 可在 P7b 實作時決定；若不納入，文件與 report summary 需說明 cache result 代表最近一次結果，不保證相同 retry policy。
+`timeoutMs` 與 `retryCount` 第一版不納入 cache key；cache result 代表最近一次在相同主要 request policy 下取得的結果，不保證相同 timeout / retry policy。
 
-TTL policy draft：
+TTL policy：
 
 | result | TTL policy |
 | --- | --- |
@@ -431,7 +431,7 @@ TTL policy draft：
 | `timeout / network_error` | 第一版可不快取，或最多 15 分鐘 |
 | `security_blocked` | 可快取，但 key 必須包含 security policy |
 
-P7b 起，report 會記錄 cache 行為：
+P7 起，report 會記錄 cache 行為：
 
 - `options.cache`
 - `options.cacheFile`

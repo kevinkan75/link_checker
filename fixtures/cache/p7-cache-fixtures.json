@@ -1,9 +1,9 @@
 {
-  "cacheSchemaVersion": "p7-draft-1",
+  "cacheSchemaVersion": "p7-fixture-1",
   "policyVersion": "p7-cache-policy-v1",
   "generatedBy": {
     "name": "link-checker.mjs",
-    "version": "p7a-fixture"
+    "version": "p7-fixture"
   },
   "updatedAt": "2026-07-02T00:00:00.000Z",
   "requiredKeyParts": [
@@ -116,7 +116,7 @@
       }
     }
   },
-  "pendingImplementationCases": [
+  "validatedImplementationCases": [
     "cache hit avoids second status request",
     "expired entry is treated as miss",
     "refresh cache bypasses existing entry and writes new result",

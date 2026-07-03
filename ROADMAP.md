@@ -4,11 +4,12 @@
 
 ## 目前狀態摘要
 
-- P0-P6.5b 已完成。
-- 目前下一個主線為 P7：TTL URL result cache。
+- P0-P7 已完成第一版。
+- 目前下一個主線為 P8：增量掃描。
 - P6 已完成 report-to-report diff 第一版。
 - P6.5a 已完成輸出契約、manifest、redaction、body/source limit、Header / Accept-Encoding 與 Keep-Alive。
 - P6.5b 已完成 SSRF、`runStatus`、robots / compliance、Retry-After / host diagnostics 與 WAF signature schema。
+- P7 已完成 persistent TTL URL result cache、CLI 參數、report `summary.cache` 與回歸測試。
 - 後續 Stage 0 僅允許文件或 GUI/CLI 落差小修，不得改變掃描語意或既有 report 主契約。
 
 ## 階段命名說明
@@ -30,7 +31,7 @@
 | 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | 後續呈現放 P9 | TTL cache、incremental scan、robots enforcement、adaptive backoff |
 | 3 | P6.5a | 已完成 | schema/generator、manifest、redaction、response limit、sources 上限、Header / Accept-Encoding / Keep-Alive | 無 | robots / compliance 語意 |
 | 4 | P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | 無 | WAF/Bot 繞過 |
-| 5 | P7 | 待規劃 | TTL URL result cache | 定義 cache key、TTL、CLI 參數與驗收 fixtures | page HTML cache 優先化 |
+| 5 | P7 | 已完成第一版 | TTL URL result cache | 後續僅保留 P8/P9 整合呈現 | page HTML cache 優先化 |
 | 6 | P8 | 待規劃 | report diff / cache / scan state 上的增量掃描 | 等 P7 完成後設計 scan state | 跳過 HTML inventory 發現的新 URL |
 | 7 | P9 | 待規劃 | GUI 易用性、Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 先拆 GUI / 大型報告 / profile-rules 三組 | 空 UI 或未落地的展示層 |
 | 8 | P10 | 待規劃 | 治理與分級排程、WAF 協調建議、`--respect-robots` | P9 後設計 | 常駐 scheduler 優先化 |
@@ -50,39 +51,40 @@
 
 ### P7：TTL 檢查快取
 
-**狀態：** 待規劃  
+**狀態：** 已完成第一版
+
 **目標：** 對可驗證的 URL result 建立 TTL cache，降低重複檢查成本；不先處理 page HTML cache。  
 **實作前評估：** [docs/P7_CACHE_EVALUATION.md](docs/P7_CACHE_EVALUATION.md)。
 
-**實作前置條件：**
+**已完成決策：**
 
-1. 確認 P6.5b report 欄位已穩定。
-2. 確認 cache 是否需納入 redaction policy。
-3. 確認 cache key 是否包含 security policy 與 robots policy。
-4. 確認 GUI 是否需要顯示 cache hit / miss。
-5. 建立 cache regression fixtures。
+1. P6.5b report 欄位已穩定。
+2. cache 落盤展示值強制套用 sensitive query redaction。
+3. cache key 已包含 security policy、robots policy 與 request policy fingerprint。
+4. GUI 第一版不新增 cache 表單；report 會保留 `summary.cache`。
+5. 已建立 `test-p7-cache.mjs` 與 cache regression fixtures。
 
-**建議分段：**
+**實作分段：**
 
-- P7a：規格與測試骨架，先固定 cache schema、key policy、TTL policy 與 redaction 邊界。
-- P7b：CLI 與核心 cache，接入 `requireBody: false` 的 URL status check，不碰 page HTML cache。
-- P7c：report、文件與收斂，補 `summary.cache`、CLI 文件與完整回歸測試。
+- P7a：已完成規格與測試骨架，固定 cache schema、key policy、TTL policy 與 redaction 邊界。
+- P7b：已完成 CLI 與核心 cache，接入 `requireBody: false` 的 URL status check，不碰 page HTML cache。
+- P7c：已完成 report、文件與收斂，補 `summary.cache`、CLI 文件與完整回歸測試。
 
 **主要交付：**
 
 - cache file：`.cache/link-check-cache.json`。
-- cache key：`canonicalUrl`、method policy、userAgent hash、accept language、referer mode、robots policy。
-- cache value：result、`checkedAt`、`expiresAt`、`stableCount`、`lastStatus`、`lastFinalUrl`。
+- cache key：canonical URL hash、method policy、userAgent hash、accept language、referer mode、robots policy、security policy、request policy。
+- cache value：result、`checkedAt`、`expiresAt`、`ttlCategory`、`lastStatus`、`lastFinalUrlHash`。
 - CLI：`--cache`、`--cache-file <file>`、`--cache-ttl-hours <n>`、`--no-cache`、`--refresh-cache`。
-- report summary：cache hit / miss / expired / refreshed。
+- report summary：cache hit / miss / expired / refreshed / written / bypassed / errors。
 
-**驗收重點：**
+**驗收重點（已通過）：**
 
 - 相同 canonical key、method policy、UA hash、語言與 referer mode 時可命中 cache。
 - `404/410` 快取 TTL 應短於穩定 `200/204/3xx`。
 - `429/timeout/5xx` 應短 TTL，避免長時間保留暫時性失敗。
 - `--refresh-cache` 應忽略既有 cache 並回寫新結果。
-- report summary 顯示 cache hit / miss / expired / refreshed。
+- report summary 顯示 cache hit / miss / expired / refreshed / written / bypassed / errors。
 
 **不納入本階段：**
 
