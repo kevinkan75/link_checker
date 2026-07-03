@@ -99,8 +99,10 @@
 
 **狀態：** 待規劃  
 **依賴關係：** P8 需在 P7 TTL 檢查快取完成後執行，不應提前導入 changed-only 或 scan state 流程。  
+**實作前分析：** [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
 **目標：** 依據 report diff、scan state 與 TTL cache 優先檢查新頁面、變更頁面、新 URL 與上次錯誤 URL。  
-**主要交付：** `--incremental`、`--state-file <file>`、`--changed-only`、`--sitemap <url-or-file>`。  
+**主要交付：** `--incremental`、`--baseline-report <file>`、`--state-file <file>`、`--changed-only`、`--sitemap <url-or-file>`。
+**建議切分：** P8a baseline/state loader、P8b incremental priority、P8c changed-only/reuse、P8d sitemap、P8e 文件與呈現。
 **驗收重點：** changed-only 模式仍保留完整 summary，不只輸出 delta。  
 **排除範圍：** 不因 sitemap 或 state 跳過 HTML inventory 發現的新 URL。
 
