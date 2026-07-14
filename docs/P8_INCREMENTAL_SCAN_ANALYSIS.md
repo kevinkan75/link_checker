@@ -314,6 +314,48 @@ P8 開發應在 `codex/p8-incremental-scan` 分支進行，不直接在 `main` �
 - sitemap unchanged 只能降低 priority，不可跳過頁面 discovery。
 - 設定 sitemap URL 數量與深度上限。
 
+#### 2026-07-14 P8d analysis record
+
+P8d 應分成三段保守落地，避免把 sitemap 誤用成 discovery 的替代品。
+
+1. P8d-1：sitemap 讀取與摘要
+   - 新增 `--sitemap <url-or-file>`。
+   - 支援 `urlset` 與 `sitemapindex`。
+   - 讀取 `<loc>` 與 `<lastmod>`。
+   - 輸出 `summary.incremental.sitemap`。
+   - 不改 `pageQueue`、不改 validation 行為。
+
+2. P8d-2：priority signal
+   - 只有 URL 同時存在於 current inventory 與 sitemap 時才影響 priority。
+   - sitemap 有新 `lastmod` 時提高 priority。
+   - sitemap `lastmod` 未變時只降低 priority，不跳過檢查。
+   - 可加入 `sitemap_changed`、`sitemap_known`、`sitemap_only` 等 reason / summary 訊號。
+
+3. P8d-3：保守 seed
+   - 只在明確使用 `--sitemap` 時啟用。
+   - 只 seed same-origin、page-like URL。
+   - 受 `maxPages`、`maxDepth` 與新增 `--sitemap-max-urls` 控制。
+   - sitemap seed 的頁面仍必須實際抓取 HTML body。
+   - sitemap-only URL 不可直接寫入 checked 結果；必須進入本輪 inventory / validation 後才可出現在 report。
+
+風險控制：
+
+- 遠端 sitemap fetch 必須走既有 URL security policy / SSRF 防護，不可使用裸 `fetch()`。
+- 大 sitemap 必須有 byte limit、URL count limit 與 index child limit。
+- cross-origin sitemap URL 預設忽略或只記錄 warning，不自動掃描。
+- robots.txt 已能解析 `sitemapUrls`，但 P8d 第一版不自動抓 robots sitemap；先只支援顯式 `--sitemap`。
+- sitemap 不得讓 `requireBody: true` 的 page crawl 命中舊結果或被略過。
+
+P8d 驗收：
+
+- `--sitemap file.xml` 可讀 `urlset`。
+- `--sitemap index.xml` 可讀 sitemap index。
+- `lastmod` 只影響 priority，不跳過 discovery。
+- `requireBody: true` 頁面 crawl 不被 sitemap 跳過。
+- sitemap-only URL 若 seed，也要實際抓 HTML 才能產生 sources / inventory。
+- 超過 sitemap URL 上限會截斷並在 summary 記錄。
+- state / report 不保存敏感 query 明文。
+
 ### P8e：文件、GUI 與 Analyzer 最小呈現
 
 目標：讓使用者能分辨 current check 與 reused result。

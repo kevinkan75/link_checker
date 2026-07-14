@@ -32,7 +32,7 @@
 | 3 | P6.5a | 已完成 | schema/generator、manifest、redaction、response limit、sources 上限、Header / Accept-Encoding / Keep-Alive | 無 | robots / compliance 語意 |
 | 4 | P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | 無 | WAF/Bot 繞過 |
 | 5 | P7 | 已完成第一版 | TTL URL result cache | 後續僅保留 P8/P9 整合呈現 | page HTML cache 優先化 |
-| 6 | P8 | 分支開發中 | report diff / cache / scan state 上的增量掃描；P8a/P8b/P8c 已完成 | P8d sitemap 評估 | 跳過 HTML inventory 發現的新 URL |
+| 6 | P8 | 分支開發中 | report diff / cache / scan state 上的增量掃描；P8a/P8b/P8c 已完成；P8d 已完成分析 | P8d sitemap 保守實作 | 跳過 HTML inventory 發現的新 URL |
 | 7 | P9 | 待規劃 | GUI 易用性、Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 先拆 GUI / 大型報告 / profile-rules 三組 | 空 UI 或未落地的展示層 |
 | 8 | P10 | 待規劃 | 治理與分級排程、WAF 協調建議、`--respect-robots` | P9 後設計 | 常駐 scheduler 優先化 |
 | 9 | P11 | 待規劃 | 輔助格式、release / packaging governance | P10 後評估 | 早於核心契約與誤判降低 |
@@ -97,7 +97,7 @@
 
 ### P8：增量掃描
 
-**狀態：** 分支開發中（`codex/p8-incremental-scan`，不在 `main` 直接開發；P8a/P8b/P8c 已完成）  
+**狀態：** 分支開發中（`codex/p8-incremental-scan`，不在 `main` 直接開發；P8a/P8b/P8c 已完成，P8d 已完成分析）  
 **依賴關係：** P8 需在 P7 TTL 檢查快取完成後執行；第一階段應先導入最小 scan state 與 priority，不應提前啟用 changed-only / result reuse。  
 **實作前分析：** [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
 **目標：** 依據 report diff、scan state 與 TTL cache 優先檢查新頁面、變更頁面、新 URL 與上次錯誤 URL。  
