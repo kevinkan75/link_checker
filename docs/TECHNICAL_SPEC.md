@@ -447,6 +447,52 @@ P7 起，report 會記錄 cache 行為：
 - `summary.cache.bypassed`
 - `summary.cache.errors`
 
+### 7.7 P8a incremental scan state
+
+P8a/P8b 已引入增量掃描的第一階段：baseline/state loader、最小 scan state、classification summary 與 validation priority boost。此階段仍保持完整 HTML discovery，不跳過頁面 body fetch，不復用舊 status result。
+
+CLI：
+
+- `--incremental`
+- `--baseline-report <file>`
+- `--state-file <file>`，預設 `.cache/link-check-state.json`
+- `--no-incremental-state-write`
+
+P8a/P8b 會從 baseline report 或 scan state 建立 previous canonical set，並把本次 inventory 分成：
+
+- `new`
+- `known`
+- `previous_error`
+- `policy_mismatch`
+- `ttl_expired`
+- `unstable_redirect`
+- `disappeared`
+
+P8b 只調整 validation priority，不省略 status validation。`new`、`policy_mismatch`、`previous_error`、`unstable_redirect` 與 `ttl_expired` 會排在穩定已知 URL 前面；穩定已知 URL 只降低優先順序，不會被跳過。`summary.incremental.reused` 固定為 `0`，`changed-only` 與 reused result 留給後續 P8c。
+
+Report 會記錄：
+
+- `options.incremental`
+- `options.baselineReport`
+- `options.stateFile`
+- `options.incrementalStateWrite`
+- `summary.incremental.enabled`
+- `summary.incremental.mode`
+- `summary.incremental.previousUrls`
+- `summary.incremental.currentUrls`
+- `summary.incremental.new`
+- `summary.incremental.known`
+- `summary.incremental.previousError`
+- `summary.incremental.policyMismatch`
+- `summary.incremental.ttlExpired`
+- `summary.incremental.unstableRedirect`
+- `summary.incremental.disappeared`
+- `summary.incremental.reused`
+- `summary.incremental.priority`
+- `summary.incremental.warnings`
+
+Scan state 是本機效能最佳化與追蹤資料，不取代 `report.json` 主契約。State key 使用 canonical URL hash，`displayUrl` 強制套用 sensitive query redaction；state 不保存 response body，也不保存未遮罩 sensitive query value。最小 state entry 保存 first/last seen、last checked summary、policy fingerprint、source count 與 previous error signal。
+
 ## 8. GUI Server API
 
 GUI server 是本機 HTTP server，不是遠端服務。主要 API：

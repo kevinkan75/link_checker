@@ -25,6 +25,9 @@ const DEFAULT_CACHE_FILE = ".cache/link-check-cache.json";
 const DEFAULT_CACHE_TTL_HOURS = 24;
 const CACHE_SCHEMA_VERSION = "1.0.0";
 const CACHE_POLICY_VERSION = "p7-cache-policy-v1";
+const DEFAULT_INCREMENTAL_STATE_FILE = ".cache/link-check-state.json";
+const INCREMENTAL_STATE_SCHEMA_VERSION = "1.0.0";
+const INCREMENTAL_POLICY_VERSION = "p8-incremental-policy-v1";
 const REDACTED_QUERY_VALUE = "REDACTED";
 const DEFAULT_REDACT_QUERY_KEYS = [
   "access_token",
@@ -139,6 +142,10 @@ const DEFAULTS = {
   cacheFile: DEFAULT_CACHE_FILE,
   cacheTtlHours: DEFAULT_CACHE_TTL_HOURS,
   refreshCache: false,
+  incremental: false,
+  baselineReport: null,
+  stateFile: DEFAULT_INCREMENTAL_STATE_FILE,
+  incrementalStateWrite: true,
   confirm404: true,
   confirmationMaxUrls: 100,
   confirmationMaxPerHost: 20,
@@ -539,6 +546,10 @@ class LinkChecker {
     this.options.cacheFile = normalizeCacheFile(this.options.cacheFile);
     this.options.cacheTtlHours = normalizeCacheTtlHours(this.options.cacheTtlHours);
     this.options.refreshCache = this.options.refreshCache === true;
+    this.options.baselineReport = normalizeOptionalPath(this.options.baselineReport);
+    this.options.stateFile = normalizeOptionalPath(this.options.stateFile) || DEFAULT_INCREMENTAL_STATE_FILE;
+    this.options.incremental = this.options.incremental === true || Boolean(this.options.baselineReport);
+    this.options.incrementalStateWrite = this.options.incrementalStateWrite !== false;
     this.options.retryAfterMaxMs = normalizeRetryAfterMaxMs(this.options.retryAfterMaxMs);
     this.options.protectionBodyHash = this.options.protectionBodyHash === true;
     this.securityPolicy = normalizeSecurityPolicy(this.options);
@@ -590,6 +601,22 @@ class LinkChecker {
       bypassed: 0,
       errors: 0,
     };
+    this.incrementalState = null;
+    this.incrementalInputsLoaded = false;
+    this.incremental = {
+      enabled: this.options.incremental,
+      stateFile: this.options.stateFile,
+      baselineReport: this.options.baselineReport,
+      stateWriteEnabled: this.options.incrementalStateWrite,
+      stateRead: false,
+      baselineRead: false,
+      stateWritten: false,
+      previous: new Map(),
+      warnings: [],
+      policyFingerprint: null,
+      statePolicyFingerprint: null,
+      baselinePolicyFingerprint: null,
+    };
     this.results = new Map();
     this.sources = new Map();
     this.externalLinks = new Map();
@@ -625,17 +652,22 @@ class LinkChecker {
     this.reporter?.start(this);
     try {
       await this.inspectRobotsTxt();
+      await this.loadIncrementalInputs();
       const workers = Array.from(
         { length: this.options.concurrency },
         () => this.pageWorker(),
       );
       await Promise.all(workers);
       await this.confirmNotFoundResults();
-      return this.buildReport();
+      const report = this.buildReport();
+      await this.saveIncrementalState(report);
+      return report;
     } catch (error) {
       this.validationError = this.validationError || error;
       this.stopped = true;
-      return this.buildReport();
+      const report = this.buildReport();
+      await this.saveIncrementalState(report);
+      return report;
     } finally {
       this.reporter?.stop();
     }
@@ -722,6 +754,270 @@ class LinkChecker {
   updatePolicyRecords() {
     this.scanPolicy = buildScanPolicy(this.robotsTxt, this.options);
     this.compliance = buildComplianceRecord(this.scanPolicy, this.options);
+  }
+
+  async loadIncrementalInputs() {
+    if (!this.options.incremental || this.incrementalInputsLoaded) {
+      return;
+    }
+    this.incrementalInputsLoaded = true;
+    this.incremental.policyFingerprint = buildIncrementalPolicyFingerprint({
+      options: this.options,
+      scanPolicy: this.scanPolicy,
+    });
+
+    if (this.options.stateFile) {
+      await this.loadIncrementalState();
+    }
+    if (this.options.baselineReport) {
+      await this.loadBaselineReport();
+    }
+  }
+
+  async loadIncrementalState() {
+    try {
+      const text = await readFile(this.options.stateFile, "utf8");
+      const parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
+      this.incrementalState = normalizeIncrementalState(parsed);
+      this.incremental.stateRead = true;
+      this.incremental.statePolicyFingerprint = this.incrementalState.policyFingerprint || null;
+      for (const [key, entry] of Object.entries(this.incrementalState.urls || {})) {
+        const canonicalUrlHash = entry?.canonicalUrlHash || key;
+        if (!canonicalUrlHash) {
+          continue;
+        }
+        this.mergeIncrementalPreviousRecord(canonicalUrlHash, {
+          source: "state",
+          policyFingerprint: entry?.policyFingerprint || this.incrementalState.policyFingerprint || null,
+          firstSeenAt: entry?.firstSeenAt || null,
+          lastSeenAt: entry?.lastSeenAt || null,
+          lastCheckedAt: entry?.lastCheckedAt || null,
+          lastStatus: entry?.lastStatus ?? null,
+          lastOk: entry?.lastOk ?? null,
+          lastIssueType: entry?.lastIssueType || null,
+          lastClassification: entry?.lastClassification || null,
+          lastFinalUrlHash: entry?.lastFinalUrlHash || null,
+          ttlExpiresAt: entry?.ttlExpiresAt || null,
+          previousError: entry?.previousError === true,
+          resultSummary: entry?.resultSummary || null,
+        });
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        this.incremental.warnings.push({
+          code: "state_read_failed",
+          message: error.message,
+        });
+      }
+      this.incrementalState = createEmptyIncrementalState(this);
+    }
+  }
+
+  async loadBaselineReport() {
+    try {
+      const text = await readFile(this.options.baselineReport, "utf8");
+      const report = JSON.parse(text.replace(/^\uFEFF/, ""));
+      const normalized = normalizeBaselineReportForIncremental(report);
+      this.incremental.baselineRead = true;
+      this.incremental.baselinePolicyFingerprint = normalized.policyFingerprint;
+      for (const warning of normalized.warnings) {
+        this.incremental.warnings.push(warning);
+      }
+      for (const record of normalized.records) {
+        this.mergeIncrementalPreviousRecord(record.canonicalUrlHash, {
+          ...record,
+          source: "baseline_report",
+          policyFingerprint: record.policyFingerprint || normalized.policyFingerprint,
+        });
+      }
+    } catch (error) {
+      this.incremental.warnings.push({
+        code: "baseline_report_read_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  mergeIncrementalPreviousRecord(canonicalUrlHash, record) {
+    const existing = this.incremental.previous.get(canonicalUrlHash);
+    if (!existing) {
+      this.incremental.previous.set(canonicalUrlHash, {
+        ...record,
+        sources: [record.source],
+      });
+      return;
+    }
+
+    if (!existing.sources.includes(record.source)) {
+      existing.sources.push(record.source);
+    }
+    existing.previousError = existing.previousError || record.previousError === true;
+    existing.resultSummary = existing.resultSummary || record.resultSummary || null;
+    existing.policyFingerprint = existing.policyFingerprint || record.policyFingerprint || null;
+    existing.lastCheckedAt = existing.lastCheckedAt || record.lastCheckedAt || null;
+    existing.lastStatus = existing.lastStatus ?? record.lastStatus ?? null;
+    existing.lastOk = existing.lastOk ?? record.lastOk ?? null;
+    existing.lastIssueType = existing.lastIssueType || record.lastIssueType || null;
+    existing.lastClassification = existing.lastClassification || record.lastClassification || null;
+    existing.lastFinalUrlHash = existing.lastFinalUrlHash || record.lastFinalUrlHash || null;
+    existing.ttlExpiresAt = existing.ttlExpiresAt || record.ttlExpiresAt || null;
+  }
+
+  classifyIncrementalInventoryItem(canonicalUrl) {
+    if (!this.options.incremental) {
+      return null;
+    }
+
+    const canonicalUrlHash = hashLabel(canonicalUrl);
+    const hashCandidates = getIncrementalCanonicalHashCandidates(canonicalUrl, this.options);
+    const previous = findIncrementalPreviousRecord(this.incremental.previous, hashCandidates);
+    let classification = "new";
+    let reason = "not_seen_before";
+    let priorityBoost = 50;
+
+    if (previous) {
+      const policyMismatch = Boolean(previous.policyFingerprint && this.incremental.policyFingerprint && previous.policyFingerprint !== this.incremental.policyFingerprint);
+      if (policyMismatch) {
+        classification = "policy_mismatch";
+        reason = "policy_fingerprint_changed";
+        priorityBoost = 45;
+      } else if (previous.previousError || isPreviousIncrementalError(previous.resultSummary)) {
+        classification = "previous_error";
+        reason = "previous_result_needs_recheck";
+        priorityBoost = 40;
+      } else if (isPreviousIncrementalRedirectUnstable(previous.resultSummary)) {
+        classification = "unstable_redirect";
+        reason = "previous_redirect_needs_recheck";
+        priorityBoost = 35;
+      } else if (isIncrementalTtlExpired(previous.ttlExpiresAt)) {
+        classification = "ttl_expired";
+        reason = "state_ttl_expired";
+        priorityBoost = 30;
+      } else {
+        classification = "known";
+        reason = "seen_before";
+        priorityBoost = -5;
+      }
+    }
+
+    return {
+      classification,
+      reason,
+      priorityBoost,
+      canonicalUrlHash,
+      canonicalUrlHashCandidates: hashCandidates,
+      previousSources: previous?.sources || [],
+      previousCheckedAt: previous?.lastCheckedAt || previous?.resultSummary?.checkedAt || null,
+      ttlExpiresAt: previous?.ttlExpiresAt || null,
+    };
+  }
+
+  getIncrementalPriorityBoost(item) {
+    return this.options.incremental ? (item.incremental?.priorityBoost || 0) : 0;
+  }
+
+  buildIncrementalSummary() {
+    if (!this.options.incremental) {
+      return {
+        enabled: false,
+        policyVersion: INCREMENTAL_POLICY_VERSION,
+        stateSchemaVersion: INCREMENTAL_STATE_SCHEMA_VERSION,
+      };
+    }
+
+    const counts = {
+      new: 0,
+      known: 0,
+      previous_error: 0,
+      policy_mismatch: 0,
+      ttl_expired: 0,
+      unstable_redirect: 0,
+    };
+    const priority = {
+      boosted: 0,
+      deferred: 0,
+      neutral: 0,
+      totalBoost: 0,
+      byClassification: {},
+    };
+    const currentHashes = new Set();
+    for (const key of getIncrementalCanonicalHashCandidates(this.startUrl, this.options)) {
+      currentHashes.add(key);
+    }
+    for (const item of this.inventory.values()) {
+      const incremental = item.incremental || this.classifyIncrementalInventoryItem(item.canonicalUrl);
+      if (incremental?.canonicalUrlHash) {
+        currentHashes.add(incremental.canonicalUrlHash);
+      }
+      for (const key of incremental?.canonicalUrlHashCandidates || []) {
+        currentHashes.add(key);
+      }
+      if (Object.prototype.hasOwnProperty.call(counts, incremental?.classification)) {
+        counts[incremental.classification] += 1;
+      }
+      const boost = incremental?.priorityBoost || 0;
+      if (boost > 0) {
+        priority.boosted += 1;
+      } else if (boost < 0) {
+        priority.deferred += 1;
+      } else {
+        priority.neutral += 1;
+      }
+      priority.totalBoost += boost;
+      if (incremental?.classification) {
+        priority.byClassification[incremental.classification] = boost;
+      }
+    }
+
+    let disappeared = 0;
+    for (const key of this.incremental.previous.keys()) {
+      if (!currentHashes.has(key)) {
+        disappeared += 1;
+      }
+    }
+
+    return {
+      enabled: true,
+      mode: "classify_only",
+      policyVersion: INCREMENTAL_POLICY_VERSION,
+      stateSchemaVersion: INCREMENTAL_STATE_SCHEMA_VERSION,
+      stateFile: this.options.stateFile,
+      baselineReport: this.options.baselineReport || null,
+      stateWriteEnabled: this.options.incrementalStateWrite,
+      stateRead: this.incremental.stateRead,
+      baselineRead: this.incremental.baselineRead,
+      previousUrls: this.incremental.previous.size,
+      currentUrls: this.inventory.size,
+      new: counts.new,
+      known: counts.known,
+      previousError: counts.previous_error,
+      policyMismatch: counts.policy_mismatch,
+      ttlExpired: counts.ttl_expired,
+      unstableRedirect: counts.unstable_redirect,
+      disappeared,
+      reused: 0,
+      priority,
+      policyFingerprint: this.incremental.policyFingerprint,
+      warnings: this.incremental.warnings,
+    };
+  }
+
+  async saveIncrementalState(report) {
+    if (!this.options.incremental || !this.options.incrementalStateWrite || !this.options.stateFile) {
+      return;
+    }
+
+    const state = buildIncrementalStateFromReport(this);
+    try {
+      await mkdir(dirname(this.options.stateFile), { recursive: true });
+      await writeFile(this.options.stateFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+      this.incremental.stateWritten = true;
+    } catch (error) {
+      this.incremental.warnings.push({
+        code: "state_write_failed",
+        message: error.message,
+      });
+    }
   }
 
   applyRetryAfterCooldown(requestUrl, cooldownMs, result, scheduler = this.hostScheduler) {
@@ -985,6 +1281,7 @@ class LinkChecker {
         bodyValidationScheduled: false,
         checked: false,
         bodyFetched: false,
+        incremental: this.classifyIncrementalInventoryItem(canonicalUrl),
       });
     }
 
@@ -1052,7 +1349,7 @@ class LinkChecker {
   }
 
   enqueueValidation(inventoryEntry, url, options, { deferPump = false } = {}) {
-    const priority = getValidationPriority(inventoryEntry.item, url);
+    const priority = getValidationPriority(inventoryEntry.item, url) + this.getIncrementalPriorityBoost(inventoryEntry.item);
     this.validationQueue.push({ inventoryEntry, url, options, priority });
     this.validationQueue.sort((left, right) => right.priority - left.priority);
     if (!deferPump) {
@@ -1706,6 +2003,10 @@ class LinkChecker {
         cacheFile: this.options.cacheFile,
         cacheTtlHours: this.options.cacheTtlHours,
         refreshCache: this.options.refreshCache,
+        incremental: this.options.incremental,
+        baselineReport: this.options.baselineReport,
+        stateFile: this.options.stateFile,
+        incrementalStateWrite: this.options.incrementalStateWrite,
         robotsTxt: this.options.robotsTxt,
         authorizedScan: this.options.authorizedScan,
         authorizationNote: this.options.authorizationNote,
@@ -1747,6 +2048,7 @@ class LinkChecker {
         checkedByKind,
         inventorySummary,
         cache: this.buildCacheSummary(),
+        incremental: this.buildIncrementalSummary(),
         spaDetection,
         scanQuality,
         robotsTxt: this.robotsTxt,
@@ -2119,6 +2421,14 @@ function normalizeCacheFile(value) {
   return text || DEFAULT_CACHE_FILE;
 }
 
+function normalizeOptionalPath(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = String(value).trim();
+  return text || null;
+}
+
 function normalizeCacheTtlHours(value) {
   const number = Number(value ?? DEFAULT_CACHE_TTL_HOURS);
   if (!Number.isFinite(number) || number <= 0) {
@@ -2133,6 +2443,256 @@ function normalizeRetryAfterMaxMs(value) {
     return DEFAULTS.retryAfterMaxMs;
   }
   return Math.min(number, 300000);
+}
+
+function createEmptyIncrementalState(checker) {
+  return {
+    stateSchemaVersion: INCREMENTAL_STATE_SCHEMA_VERSION,
+    policyVersion: INCREMENTAL_POLICY_VERSION,
+    generator: buildReportGenerator(),
+    startUrl: checker?.startUrl || null,
+    startOrigin: checker?.startOrigin || null,
+    policyFingerprint: checker?.incremental?.policyFingerprint || null,
+    updatedAt: new Date().toISOString(),
+    urls: {},
+  };
+}
+
+function normalizeIncrementalState(value) {
+  if (!value || typeof value !== "object") {
+    return {
+      stateSchemaVersion: INCREMENTAL_STATE_SCHEMA_VERSION,
+      policyVersion: INCREMENTAL_POLICY_VERSION,
+      policyFingerprint: null,
+      urls: {},
+    };
+  }
+  return {
+    stateSchemaVersion: value.stateSchemaVersion || INCREMENTAL_STATE_SCHEMA_VERSION,
+    policyVersion: value.policyVersion || INCREMENTAL_POLICY_VERSION,
+    generator: value.generator || null,
+    startUrl: value.startUrl || null,
+    startOrigin: value.startOrigin || null,
+    policyFingerprint: value.policyFingerprint || null,
+    updatedAt: value.updatedAt || null,
+    urls: value.urls && typeof value.urls === "object" ? value.urls : {},
+  };
+}
+
+function normalizeBaselineReportForIncremental(report) {
+  const warnings = [];
+  if (!report?.schemaVersion) {
+    warnings.push({ code: "legacy_report", message: "Baseline report has no schemaVersion." });
+  }
+  if (report?.runStatus?.status && report.runStatus.status !== "complete") {
+    warnings.push({ code: "partial_report", message: `Baseline report status is ${report.runStatus.status}.` });
+  }
+
+  const recordsByKey = new Map();
+  const policyFingerprint = buildIncrementalPolicyFingerprintFromReport(report);
+  const addRecord = (item, source) => {
+    const key = item?.canonicalUrl || item?.url;
+    if (!key) {
+      warnings.push({ code: "missing_canonical_key", message: `Baseline ${source} item has no canonicalUrl or url.` });
+      return;
+    }
+    const canonicalUrlHash = hashLabel(key);
+    if (recordsByKey.has(canonicalUrlHash)) {
+      return;
+    }
+    const resultSummary = buildIncrementalResultSummary(item);
+    recordsByKey.set(canonicalUrlHash, {
+      canonicalUrlHash,
+      source,
+      policyFingerprint,
+      lastCheckedAt: item?.checkedAt || null,
+      lastStatus: item?.status ?? null,
+      lastOk: item?.ok ?? null,
+      lastIssueType: item?.issueType || null,
+      lastClassification: item?.classification || null,
+      lastFinalUrlHash: item?.finalUrl ? hashLabel(item.finalUrl) : null,
+      ttlExpiresAt: item?.cache?.expiresAt || null,
+      previousError: isPreviousIncrementalError(resultSummary),
+      resultSummary,
+    });
+  };
+
+  if (Array.isArray(report?.checked)) {
+    for (const item of report.checked) {
+      addRecord(item, "checked");
+    }
+  } else if (Array.isArray(report?.broken)) {
+    warnings.push({ code: "fallback_to_broken", message: "Baseline report has no checked[]; using broken[] fallback." });
+    for (const item of report.broken) {
+      addRecord({ ...item, ok: item.ok ?? false }, "broken");
+    }
+  } else {
+    warnings.push({ code: "missing_checked", message: "Baseline report has no checked[] or broken[] items." });
+  }
+
+  if (Array.isArray(report?.externalLinks)) {
+    for (const item of report.externalLinks) {
+      addRecord(item, "externalLinks");
+    }
+  }
+
+  return {
+    policyFingerprint,
+    warnings,
+    records: [...recordsByKey.values()],
+  };
+}
+
+function buildIncrementalPolicyFingerprint({ options = {}, scanPolicy = null } = {}) {
+  const keyParts = {
+    canonicalStrategy: options.canonicalStrategy || DEFAULTS.canonicalStrategy,
+    userAgentHash: options.userAgent ? hashLabel(options.userAgent) : null,
+    acceptLanguage: options.acceptLanguage || null,
+    checkExternal: options.checkExternal === true,
+    preferGet: options.preferGet === true,
+    externalReferer: options.externalReferer === true,
+    spaLinks: options.spaLinks || DEFAULTS.spaLinks,
+    robotsPolicy: {
+      mode: scanPolicy?.robotsTxt?.mode || "unknown",
+      status: scanPolicy?.robotsTxt?.status || "unknown",
+      pathEnforcement: scanPolicy?.robotsTxt?.pathEnforcement === true,
+    },
+    securityPolicy: {
+      blockPrivateIp: options.blockPrivateIp !== false,
+      allowLocalhost: options.allowLocalhost === true,
+      allowPrivateIp: options.allowPrivateIp === true,
+    },
+    rules: {
+      domainCategoryRulesSource: options.domainCategoryRulesSource || null,
+      externalRiskRulesSource: options.externalRiskRulesSource || null,
+      siteLinkRulesSource: options.siteLinkRulesSource || null,
+    },
+  };
+  return hashLabel(stableStringify(keyParts));
+}
+
+function buildIncrementalPolicyFingerprintFromReport(report) {
+  if (!report?.options) {
+    return null;
+  }
+  return buildIncrementalPolicyFingerprint({
+    options: report.options,
+    scanPolicy: report.scanPolicy || null,
+  });
+}
+
+function buildIncrementalResultSummary(result = {}) {
+  return {
+    checkedAt: result.checkedAt || null,
+    status: result.status ?? null,
+    ok: result.ok ?? null,
+    issueType: result.issueType || null,
+    classification: result.classification || null,
+    finalUrlHash: result.finalUrl ? hashLabel(result.finalUrl) : null,
+    redirected: result.redirected === true,
+    redirectCount: result.redirectCount || 0,
+    confirmationOutcome: result.confirmation?.outcome || null,
+    transientFailure: result.transientFailure === true,
+    needsReview: result.needsReview === true || result.confirmation?.outcome === "needs_review",
+    suspectedWaf: result.suspectedWaf === true || result.protection?.suspectedWaf === true,
+    suspectedBot: result.suspectedBot === true || result.protection?.suspectedBot === true,
+  };
+}
+
+function getIncrementalCanonicalHashCandidates(canonicalUrl, options = DEFAULTS) {
+  const values = [canonicalUrl];
+  const redacted = redactSensitiveQueryValue(canonicalUrl, { ...options, redactSensitiveQuery: true });
+  if (redacted && redacted !== canonicalUrl) {
+    values.push(redacted);
+  }
+  return [...new Set(values.filter(Boolean).map((value) => hashLabel(value)))];
+}
+
+function findIncrementalPreviousRecord(records, hashCandidates = []) {
+  for (const key of hashCandidates) {
+    const record = records.get(key);
+    if (record) {
+      return record;
+    }
+  }
+  return null;
+}
+
+function isPreviousIncrementalError(summary = {}) {
+  if (!summary) {
+    return false;
+  }
+  if (summary.needsReview || summary.transientFailure || summary.suspectedWaf || summary.suspectedBot) {
+    return true;
+  }
+  if (summary.ok === false) {
+    return true;
+  }
+  if (summary.status === 404 || summary.status === 410 || summary.status === 429) {
+    return true;
+  }
+  if (summary.status >= 500) {
+    return true;
+  }
+  return ["protected", "security_blocked", "network_error", "timeout", "not_found", "access_denied"].includes(summary.classification)
+    || ["protected", "security_blocked", "network_error", "timeout", "not_found", "access_denied"].includes(summary.issueType);
+}
+
+function isPreviousIncrementalRedirectUnstable(summary = {}) {
+  if (!summary) {
+    return false;
+  }
+  return summary.redirected === true
+    || (summary.redirectCount || 0) > 0
+    || summary.confirmationOutcome === "needs_review";
+}
+
+function isIncrementalTtlExpired(value, nowMs = Date.now()) {
+  if (!value) {
+    return false;
+  }
+  const expiresAt = Date.parse(value);
+  return Number.isFinite(expiresAt) && expiresAt <= nowMs;
+}
+
+function buildIncrementalStateFromReport(checker) {
+  const now = new Date().toISOString();
+  const previousState = checker.incrementalState || { urls: {} };
+  const urls = {};
+
+  for (const item of checker.inventory.values()) {
+    const canonicalUrlHash = hashLabel(item.canonicalUrl);
+    const previous = previousState.urls?.[canonicalUrlHash] || {};
+    const result = checker.results.get(item.canonicalUrl) || null;
+    const resultSummary = result ? buildIncrementalResultSummary(result) : previous.resultSummary || null;
+    urls[canonicalUrlHash] = {
+      canonicalUrlHash,
+      displayUrl: redactSensitiveQueryValue(item.representativeUrl || item.canonicalUrl, { ...checker.options, redactSensitiveQuery: true }),
+      firstSeenAt: previous.firstSeenAt || now,
+      lastSeenAt: now,
+      lastCheckedAt: result?.checkedAt || previous.lastCheckedAt || null,
+      lastStatus: result?.status ?? previous.lastStatus ?? null,
+      lastOk: result?.ok ?? previous.lastOk ?? null,
+      lastIssueType: result?.issueType || previous.lastIssueType || null,
+      lastClassification: result?.classification || previous.lastClassification || item.incremental?.classification || null,
+      lastFinalUrlHash: result?.finalUrl ? hashLabel(result.finalUrl) : previous.lastFinalUrlHash || null,
+      lastSourceCount: item.sources.length,
+      previousError: isPreviousIncrementalError(resultSummary),
+      policyFingerprint: checker.incremental.policyFingerprint,
+      resultSummary,
+    };
+  }
+
+  return {
+    stateSchemaVersion: INCREMENTAL_STATE_SCHEMA_VERSION,
+    policyVersion: INCREMENTAL_POLICY_VERSION,
+    generator: buildReportGenerator(),
+    startUrl: redactSensitiveQueryValue(checker.startUrl, { ...checker.options, redactSensitiveQuery: true }),
+    startOrigin: checker.startOrigin,
+    policyFingerprint: checker.incremental.policyFingerprint,
+    updatedAt: now,
+    urls,
+  };
 }
 
 function normalizeConnectionOptions(options = {}) {
@@ -6315,6 +6875,34 @@ function parseArgs(argv) {
       explicitOptions.add("cacheTtlHours");
       continue;
     }
+    if (arg === "--incremental") {
+      options.incremental = true;
+      explicitOptions.add("incremental");
+      continue;
+    }
+    if (arg === "--baseline-report") {
+      options.baselineReport = args.shift();
+      if (!options.baselineReport || options.baselineReport.startsWith("-")) {
+        throw new Error("--baseline-report requires a file path");
+      }
+      options.incremental = true;
+      explicitOptions.add("baselineReport");
+      explicitOptions.add("incremental");
+      continue;
+    }
+    if (arg === "--state-file") {
+      options.stateFile = args.shift();
+      if (!options.stateFile || options.stateFile.startsWith("-")) {
+        throw new Error("--state-file requires a file path");
+      }
+      explicitOptions.add("stateFile");
+      continue;
+    }
+    if (arg === "--no-incremental-state-write") {
+      options.incrementalStateWrite = false;
+      explicitOptions.add("incrementalStateWrite");
+      continue;
+    }
     if (arg === "--json") {
       json = true;
       continue;
@@ -6545,6 +7133,10 @@ function parseArgs(argv) {
   options.cache = options.cache === true;
   options.cacheFile = normalizeCacheFile(options.cacheFile);
   options.cacheTtlHours = normalizeCacheTtlHours(options.cacheTtlHours);
+  options.baselineReport = normalizeOptionalPath(options.baselineReport);
+  options.stateFile = normalizeOptionalPath(options.stateFile) || DEFAULT_INCREMENTAL_STATE_FILE;
+  options.incremental = options.incremental === true || Boolean(options.baselineReport);
+  options.incrementalStateWrite = options.incrementalStateWrite !== false;
   options.refreshCache = options.refreshCache === true;
   options.maxHtmlBytes = normalizeByteLimit(options.maxHtmlBytes, DEFAULTS.maxHtmlBytes);
   options.maxBodyPreviewBytes = normalizeByteLimit(options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
@@ -6763,6 +7355,12 @@ Options:
                       TTL for successful cached results. Default: ${DEFAULTS.cacheTtlHours}
   --refresh-cache     Ignore existing cache entries and write fresh results.
   --no-cache          Disable persistent cache.
+  --incremental       Enable P8 incremental classification and scan state.
+  --baseline-report <file>
+                      Use an existing report.json as a one-time incremental baseline.
+  --state-file <file> Incremental scan state path. Default: ${DEFAULTS.stateFile}
+  --no-incremental-state-write
+                      Read baseline/state but do not write updated incremental state.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -6807,6 +7405,9 @@ function printSummary(report) {
   }
   if (summary.cache?.enabled) {
     console.log(`Cache: ${summary.cache.hits || 0} hit(s), ${summary.cache.misses || 0} miss(es), ${summary.cache.expired || 0} expired, ${summary.cache.written || 0} written`);
+  }
+  if (summary.incremental?.enabled) {
+    console.log(`Incremental: ${summary.incremental.new || 0} new, ${summary.incremental.known || 0} known, ${summary.incremental.previousError || 0} previous error, ${summary.incremental.policyMismatch || 0} policy mismatch, ${summary.incremental.ttlExpired || 0} TTL expired, ${summary.incremental.unstableRedirect || 0} unstable redirect, ${summary.incremental.disappeared || 0} disappeared`);
   }
   if (summary.brokenLinks > 0) {
     for (const [issueType, count] of Object.entries(summary.brokenByType || {})) {
