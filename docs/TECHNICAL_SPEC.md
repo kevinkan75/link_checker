@@ -449,7 +449,7 @@ P7 起，report 會記錄 cache 行為：
 
 ### 7.7 P8a incremental scan state
 
-P8a/P8b 已引入增量掃描的第一階段：baseline/state loader、最小 scan state、classification summary 與 validation priority boost。此階段仍保持完整 HTML discovery，不跳過頁面 body fetch，不復用舊 status result。
+P8a/P8b/P8c 已引入增量掃描的第一階段：baseline/state loader、最小 scan state、classification summary、validation priority boost 與保守 changed-only result reuse。此階段仍保持完整 HTML discovery，不跳過頁面 body fetch。
 
 CLI：
 
@@ -457,6 +457,7 @@ CLI：
 - `--baseline-report <file>`
 - `--state-file <file>`，預設 `.cache/link-check-state.json`
 - `--no-incremental-state-write`
+- `--changed-only`
 
 P8a/P8b 會從 baseline report 或 scan state 建立 previous canonical set，並把本次 inventory 分成：
 
@@ -468,7 +469,18 @@ P8a/P8b 會從 baseline report 或 scan state 建立 previous canonical set，�
 - `unstable_redirect`
 - `disappeared`
 
-P8b 只調整 validation priority，不省略 status validation。`new`、`policy_mismatch`、`previous_error`、`unstable_redirect` 與 `ttl_expired` 會排在穩定已知 URL 前面；穩定已知 URL 只降低優先順序，不會被跳過。`summary.incremental.reused` 固定為 `0`，`changed-only` 與 reused result 留給後續 P8c。
+P8b 只調整 validation priority，不省略 status validation。`new`、`policy_mismatch`、`previous_error`、`unstable_redirect` 與 `ttl_expired` 會排在穩定已知 URL 前面；穩定已知 URL 只降低優先順序，不會被跳過。
+
+P8c 的 `--changed-only` 是顯式 opt-in，只復用 `requireBody: false` 的穩定已知 status result。復用條件：
+
+- classification 為 `known`
+- policy fingerprint 相同
+- TTL 存在且未過期
+- 非 previous error
+- 非 unstable redirect
+- 有可復用的 body-stripped result
+
+Reused result 會在 checked item 內加入 `incremental.reused=true`、`reuseSource`、`baselineCheckedAt` 與 reason。`requireBody: true` 的 page crawl 仍必須實際抓取 HTML body，確保 current inventory、sources、SPA payload extraction 與 site link rules 不被舊資料取代。
 
 Report 會記錄：
 
@@ -488,6 +500,7 @@ Report 會記錄：
 - `summary.incremental.unstableRedirect`
 - `summary.incremental.disappeared`
 - `summary.incremental.reused`
+- `summary.incremental.reuse`
 - `summary.incremental.priority`
 - `summary.incremental.warnings`
 

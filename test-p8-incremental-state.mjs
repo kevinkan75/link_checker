@@ -332,10 +332,85 @@ async function assertIncrementalPriorityOrder() {
   }
 }
 
+async function assertChangedOnlyReusesOnlyStableKnownResults() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-changed-only-"));
+  try {
+    const requestCounts = new Map();
+    await withServer((request, response) => {
+      requestCounts.set(request.url, (requestCounts.get(request.url) || 0) + 1);
+      if (request.url === "/") {
+        response.writeHead(200, { "content-type": "text/html" });
+        response.end(`
+          <a href="/stable">stable</a>
+          <a href="/previous-error">previous error</a>
+        `);
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("ok");
+    }, async (origin) => {
+      const baselineFile = path.join(tempDir, "baseline.json");
+      const stateFile = path.join(tempDir, "state.json");
+      const checkedAt = new Date().toISOString();
+      await writeFile(baselineFile, `${JSON.stringify({
+        schemaVersion: "1.2.0",
+        runStatus: { status: "complete" },
+        startUrl: origin,
+        checked: [
+          {
+            url: `${origin}/stable`,
+            canonicalUrl: `${origin}/stable`,
+            ok: true,
+            status: 200,
+            issueType: "ok",
+            classification: "ok",
+            checkedAt,
+          },
+          {
+            url: `${origin}/previous-error`,
+            canonicalUrl: `${origin}/previous-error`,
+            ok: false,
+            status: 500,
+            issueType: "server_error",
+            classification: "server_error",
+            checkedAt,
+          },
+        ],
+      }, null, 2)}\n`, "utf8");
+
+      const report = await makeChecker(origin, {
+        incremental: true,
+        changedOnly: true,
+        baselineReport: baselineFile,
+        stateFile,
+        maxDepth: 0,
+        concurrency: 1,
+        perHostConcurrency: 1,
+      }).run();
+      const summary = report.summary.incremental;
+      const stable = report.checked.find((item) => item.url.endsWith("/stable"));
+      const previousError = report.checked.find((item) => item.url.endsWith("/previous-error"));
+
+      assert(summary.mode === "changed_only", "Changed-only mode should be visible in the summary.");
+      assert(summary.reused === 1, "Only the stable known URL should be reused.");
+      assert(summary.reuse.enabled === true, "Reuse summary should be enabled.");
+      assert(summary.previousError === 1, "Previous error should remain classified for recheck.");
+      assert(requestCounts.get("/stable") === undefined, "Stable known URL should not make a status request in changed-only mode.");
+      assert(requestCounts.get("/previous-error") === 1, "Previous error must still be requested.");
+      assert(stable?.incremental?.reused === true, "Reused result should be marked on the checked item.");
+      assert(stable?.incremental?.reason === "stable_known_policy_match_ttl_valid", "Reused result should explain why it was reused.");
+      assert(previousError?.incremental?.reused !== true, "Previous error result must not be reused.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 await assertBaselineClassificationAndStateRedaction();
 await assertStateReadClassifiesKnown();
 await assertRedactedBaselineStillMatchesSensitiveUrl();
 await assertPolicyMismatchClassification();
 await assertIncrementalPriorityOrder();
+await assertChangedOnlyReusesOnlyStableKnownResults();
 
 console.log("ok p8 incremental state");

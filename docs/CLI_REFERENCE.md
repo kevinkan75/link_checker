@@ -137,12 +137,15 @@ Cache file 是本機效能最佳化資料，不是正式 report。cache key 使�
 | `--baseline-report <file>` | 使用既有 `report.json` 作為一次性 baseline；會自動啟用 `--incremental` |
 | `--state-file <file>` | 指定 scan state 檔案路徑，預設 `.cache/link-check-state.json` |
 | `--no-incremental-state-write` | 讀取 baseline/state 並輸出 summary，但不回寫新的 scan state |
+| `--changed-only` | 啟用保守 result reuse；仍會完整爬頁建立本次 inventory，只復用穩定已知 URL 的 status result |
 
 P8a 只影響 URL status validation 的分類與優先順序。頁面 crawl 仍會實際抓取 HTML body 並建立本次 inventory，因此不會因 baseline report 或 state 而跳過 HTML link extraction、SPA payload extraction 或 site link rules。
 
-Report 會輸出 `summary.incremental`，包含 `new`、`known`、`previousError`、`policyMismatch`、`ttlExpired`、`unstableRedirect`、`disappeared`、`priority` 與 `reused`。P8a/P8b 的 `reused` 固定為 `0`；`changed-only` / result reuse 留到後續 P8c。
+Report 會輸出 `summary.incremental`，包含 `new`、`known`、`previousError`、`policyMismatch`、`ttlExpired`、`unstableRedirect`、`disappeared`、`priority`、`reuse` 與 `reused`。未使用 `--changed-only` 時 `reused` 固定為 `0`。
 
 P8b 會把 `new`、`previousError`、`policyMismatch`、`ttlExpired` 與 `unstableRedirect` 排在穩定已知 URL 前面，但仍會檢查所有已排入 validation queue 的 URL。
+
+P8c 的 `--changed-only` 只復用 `known` 且符合 policy match、TTL valid、非 previous error、非 unstable redirect 的 status result。`requireBody: true` 的頁面 crawl 不會復用舊結果。
 
 ### 輸出與診斷
 

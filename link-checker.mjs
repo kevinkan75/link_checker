@@ -146,6 +146,7 @@ const DEFAULTS = {
   baselineReport: null,
   stateFile: DEFAULT_INCREMENTAL_STATE_FILE,
   incrementalStateWrite: true,
+  changedOnly: false,
   confirm404: true,
   confirmationMaxUrls: 100,
   confirmationMaxPerHost: 20,
@@ -550,6 +551,10 @@ class LinkChecker {
     this.options.stateFile = normalizeOptionalPath(this.options.stateFile) || DEFAULT_INCREMENTAL_STATE_FILE;
     this.options.incremental = this.options.incremental === true || Boolean(this.options.baselineReport);
     this.options.incrementalStateWrite = this.options.incrementalStateWrite !== false;
+    this.options.changedOnly = this.options.changedOnly === true;
+    if (this.options.changedOnly) {
+      this.options.incremental = true;
+    }
     this.options.retryAfterMaxMs = normalizeRetryAfterMaxMs(this.options.retryAfterMaxMs);
     this.options.protectionBodyHash = this.options.protectionBodyHash === true;
     this.securityPolicy = normalizeSecurityPolicy(this.options);
@@ -611,6 +616,12 @@ class LinkChecker {
       stateRead: false,
       baselineRead: false,
       stateWritten: false,
+      reuse: {
+        enabled: this.options.changedOnly,
+        reused: 0,
+        bypassed: 0,
+        bySource: {},
+      },
       previous: new Map(),
       warnings: [],
       policyFingerprint: null,
@@ -800,6 +811,7 @@ class LinkChecker {
           ttlExpiresAt: entry?.ttlExpiresAt || null,
           previousError: entry?.previousError === true,
           resultSummary: entry?.resultSummary || null,
+          reusableResult: entry?.reusableResult || null,
         });
       }
     } catch (error) {
@@ -861,6 +873,7 @@ class LinkChecker {
     existing.lastClassification = existing.lastClassification || record.lastClassification || null;
     existing.lastFinalUrlHash = existing.lastFinalUrlHash || record.lastFinalUrlHash || null;
     existing.ttlExpiresAt = existing.ttlExpiresAt || record.ttlExpiresAt || null;
+    existing.reusableResult = existing.reusableResult || record.reusableResult || null;
   }
 
   classifyIncrementalInventoryItem(canonicalUrl) {
@@ -914,6 +927,30 @@ class LinkChecker {
 
   getIncrementalPriorityBoost(item) {
     return this.options.incremental ? (item.incremental?.priorityBoost || 0) : 0;
+  }
+
+  readIncrementalReusableResult(url) {
+    if (!this.options.changedOnly || !this.options.incremental) {
+      return null;
+    }
+
+    const hashCandidates = getIncrementalCanonicalHashCandidates(this.getCanonicalKey(url), this.options);
+    const previous = findIncrementalPreviousRecord(this.incremental.previous, hashCandidates);
+    const reuseDecision = getIncrementalReuseDecision(previous, this.incremental.policyFingerprint);
+    if (!reuseDecision.reusable) {
+      this.incremental.reuse.bypassed += 1;
+      return null;
+    }
+
+    const result = buildIncrementalReusedResult(url, previous, {
+      canonicalStrategy: this.options.canonicalStrategy,
+      reason: reuseDecision.reason,
+    });
+    this.incremental.reuse.reused += 1;
+    for (const source of previous.sources || ["state"]) {
+      this.incremental.reuse.bySource[source] = (this.incremental.reuse.bySource[source] || 0) + 1;
+    }
+    return result;
   }
 
   buildIncrementalSummary() {
@@ -978,7 +1015,7 @@ class LinkChecker {
 
     return {
       enabled: true,
-      mode: "classify_only",
+      mode: this.options.changedOnly ? "changed_only" : "classify_only",
       policyVersion: INCREMENTAL_POLICY_VERSION,
       stateSchemaVersion: INCREMENTAL_STATE_SCHEMA_VERSION,
       stateFile: this.options.stateFile,
@@ -995,7 +1032,13 @@ class LinkChecker {
       ttlExpired: counts.ttl_expired,
       unstableRedirect: counts.unstable_redirect,
       disappeared,
-      reused: 0,
+      reused: this.incremental.reuse.reused,
+      reuse: {
+        enabled: this.options.changedOnly,
+        reused: this.incremental.reuse.reused,
+        bypassed: this.incremental.reuse.bypassed,
+        bySource: this.incremental.reuse.bySource,
+      },
       priority,
       policyFingerprint: this.incremental.policyFingerprint,
       warnings: this.incremental.warnings,
@@ -1397,7 +1440,8 @@ class LinkChecker {
     if (this.statusCache.has(key)) {
       this.inventoryMetrics.statusCacheHits += 1;
     } else {
-      const cached = await this.readPersistentCachedResult(url);
+      const incrementalReused = this.readIncrementalReusableResult(url);
+      const cached = incrementalReused || await this.readPersistentCachedResult(url);
       if (cached) {
         this.setResultForUrl(url, cached);
         this.statusCache.set(key, Promise.resolve(cached));
@@ -2007,6 +2051,7 @@ class LinkChecker {
         baselineReport: this.options.baselineReport,
         stateFile: this.options.stateFile,
         incrementalStateWrite: this.options.incrementalStateWrite,
+        changedOnly: this.options.changedOnly,
         robotsTxt: this.options.robotsTxt,
         authorizedScan: this.options.authorizedScan,
         authorizationNote: this.options.authorizationNote,
@@ -2511,9 +2556,10 @@ function normalizeBaselineReportForIncremental(report) {
       lastIssueType: item?.issueType || null,
       lastClassification: item?.classification || null,
       lastFinalUrlHash: item?.finalUrl ? hashLabel(item.finalUrl) : null,
-      ttlExpiresAt: item?.cache?.expiresAt || null,
+      ttlExpiresAt: getIncrementalResultTtlExpiresAt(item),
       previousError: isPreviousIncrementalError(resultSummary),
       resultSummary,
+      reusableResult: stripBody(item),
     });
   };
 
@@ -2655,6 +2701,62 @@ function isIncrementalTtlExpired(value, nowMs = Date.now()) {
   return Number.isFinite(expiresAt) && expiresAt <= nowMs;
 }
 
+function getIncrementalResultTtlExpiresAt(result = {}, options = DEFAULTS) {
+  if (result.cache?.expiresAt) {
+    return result.cache.expiresAt;
+  }
+  const checkedAt = Date.parse(result.checkedAt || "");
+  if (!Number.isFinite(checkedAt)) {
+    return null;
+  }
+  const ttlMs = getPersistentCacheTtlMs(result, options);
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
+    return null;
+  }
+  return new Date(checkedAt + ttlMs).toISOString();
+}
+
+function getIncrementalReuseDecision(previous, policyFingerprint) {
+  if (!previous?.reusableResult) {
+    return { reusable: false, reason: "missing_reusable_result" };
+  }
+  if (previous.policyFingerprint && policyFingerprint && previous.policyFingerprint !== policyFingerprint) {
+    return { reusable: false, reason: "policy_mismatch" };
+  }
+  if (previous.previousError || isPreviousIncrementalError(previous.resultSummary)) {
+    return { reusable: false, reason: "previous_error" };
+  }
+  if (isPreviousIncrementalRedirectUnstable(previous.resultSummary)) {
+    return { reusable: false, reason: "unstable_redirect" };
+  }
+  if (!previous.ttlExpiresAt) {
+    return { reusable: false, reason: "missing_ttl" };
+  }
+  if (isIncrementalTtlExpired(previous.ttlExpiresAt)) {
+    return { reusable: false, reason: "ttl_expired" };
+  }
+  return { reusable: true, reason: "stable_known_policy_match_ttl_valid" };
+}
+
+function buildIncrementalReusedResult(url, previous, { canonicalStrategy = DEFAULTS.canonicalStrategy, reason } = {}) {
+  const result = stripBody(previous.reusableResult || {});
+  return stripBody({
+    ...result,
+    url,
+    canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
+    normalizedFrom: result.normalizedFrom || url,
+    incremental: {
+      mode: "changed_only",
+      classification: "known",
+      reused: true,
+      reuseSource: previous.sources?.[0] || "state",
+      reuseSources: previous.sources || [],
+      baselineCheckedAt: previous.lastCheckedAt || result.checkedAt || null,
+      reason,
+    },
+  });
+}
+
 function buildIncrementalStateFromReport(checker) {
   const now = new Date().toISOString();
   const previousState = checker.incrementalState || { urls: {} };
@@ -2680,6 +2782,8 @@ function buildIncrementalStateFromReport(checker) {
       previousError: isPreviousIncrementalError(resultSummary),
       policyFingerprint: checker.incremental.policyFingerprint,
       resultSummary,
+      ttlExpiresAt: result ? getIncrementalResultTtlExpiresAt(result, checker.options) : previous.ttlExpiresAt || null,
+      reusableResult: result ? redactCacheStoredResult(stripBody(result), checker.options) : previous.reusableResult || null,
     };
   }
 
@@ -6903,6 +7007,13 @@ function parseArgs(argv) {
       explicitOptions.add("incrementalStateWrite");
       continue;
     }
+    if (arg === "--changed-only") {
+      options.changedOnly = true;
+      options.incremental = true;
+      explicitOptions.add("changedOnly");
+      explicitOptions.add("incremental");
+      continue;
+    }
     if (arg === "--json") {
       json = true;
       continue;
@@ -7137,6 +7248,10 @@ function parseArgs(argv) {
   options.stateFile = normalizeOptionalPath(options.stateFile) || DEFAULT_INCREMENTAL_STATE_FILE;
   options.incremental = options.incremental === true || Boolean(options.baselineReport);
   options.incrementalStateWrite = options.incrementalStateWrite !== false;
+  options.changedOnly = options.changedOnly === true;
+  if (options.changedOnly) {
+    options.incremental = true;
+  }
   options.refreshCache = options.refreshCache === true;
   options.maxHtmlBytes = normalizeByteLimit(options.maxHtmlBytes, DEFAULTS.maxHtmlBytes);
   options.maxBodyPreviewBytes = normalizeByteLimit(options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
@@ -7361,6 +7476,8 @@ Options:
   --state-file <file> Incremental scan state path. Default: ${DEFAULTS.stateFile}
   --no-incremental-state-write
                       Read baseline/state but do not write updated incremental state.
+  --changed-only      Reuse stable known status results when policy and TTL are valid.
+                      Still crawls pages and builds the current inventory.
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -7408,6 +7525,9 @@ function printSummary(report) {
   }
   if (summary.incremental?.enabled) {
     console.log(`Incremental: ${summary.incremental.new || 0} new, ${summary.incremental.known || 0} known, ${summary.incremental.previousError || 0} previous error, ${summary.incremental.policyMismatch || 0} policy mismatch, ${summary.incremental.ttlExpired || 0} TTL expired, ${summary.incremental.unstableRedirect || 0} unstable redirect, ${summary.incremental.disappeared || 0} disappeared`);
+    if (summary.incremental.reuse?.enabled) {
+      console.log(`  reused status results: ${summary.incremental.reused || 0}`);
+    }
   }
   if (summary.brokenLinks > 0) {
     for (const [issueType, count] of Object.entries(summary.brokenByType || {})) {
