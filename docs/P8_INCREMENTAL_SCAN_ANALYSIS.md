@@ -197,6 +197,32 @@ P8 需要明確區分「可沿用的事實」與「必須由本次掃描產生�
 
 結論：P8 可以開始，但第一輪應聚焦在「資料模型、state、分類與排序」，不要直接啟用 `changed-only` result reuse。
 
+## 2026-07-14 branch planning record
+
+P8 開發應在 `codex/p8-incremental-scan` 分支進行，不直接在 `main` 上實作。此分支目前用於收斂 P8a/P8b 的資料模型、CLI skeleton、scan state、classification 與 priority 行為；`main` 應維持 P7 完成後的穩定基線。
+
+讀取既有分析文件後，採納下列規劃結論：
+
+- P8 第一階段做 P8a + 最小 P8b，不先做 `changed-only` / result reuse。
+- P8 只影響 URL status validation 的分類與優先順序，不影響 HTML discovery、SPA payload extraction、site link rules、current inventory 或 sources。
+- baseline report 與 scan state 只能用來判斷 previous canonical set、known/new/disappeared、previous error 與 policy mismatch；不得用來取代本輪 crawl 結果。
+- P7 cache 只服務 `requireBody: false` status result；`requireBody: true` 的頁面 body fetch 必須維持實際抓取。
+- `summary.incremental` 與最小 scan state 先落地，讓分類與 state 安全性可被測試，再進一步調整 priority。
+- `changed-only` / reused result 必須等 P8a/P8b 穩定後再做，且 reused result 必須明確標記，避免被誤認為本輪實測。
+- sitemap 僅能作為 seed 或 priority signal，不得取代 HTML discovery。
+- GUI 與 Analyzer 呈現延後到 P8e；第一版不做 state 管理頁，也不把 `changed-only` 做成主要入口。
+
+第一個開發工作包：
+
+1. 新增 `--incremental`、`--baseline-report <file>`、`--state-file <file>`、`--no-incremental-state-write`。
+2. 預設 state file 使用 `.cache/link-check-state.json`。
+3. 從 baseline report / scan state 建立 previous canonical set。
+4. 建立 policy fingerprint，至少涵蓋 canonical strategy、user agent、Accept-Language、external check、referer、robots/security policy 與 rules source。
+5. 在 report `options` 與 `summary.incremental` 記錄 incremental 設定與分類統計。
+6. 寫入最小 scan state，保存 redacted display URL、first/last seen、last checked summary、policy fingerprint 與 previous error signal。
+7. 接入 validation priority，但不跳過 status validation、不復用舊 result。
+8. 補 P8 regression test，並維持 `test-p7-cache.mjs`、`test-report-diff.mjs` 通過。
+
 建議採用下列落地原則：
 
 - 先做 P8a + P8b：讀取 baseline report / scan state、建立 previous canonical set、輸出 `summary.incremental`，並用 incremental classification 調整 validation priority。

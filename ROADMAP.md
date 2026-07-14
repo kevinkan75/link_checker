@@ -97,7 +97,7 @@
 
 ### P8：增量掃描
 
-**狀態：** 待規劃  
+**狀態：** 分支規劃中（`codex/p8-incremental-scan`，不在 `main` 直接開發）  
 **依賴關係：** P8 需在 P7 TTL 檢查快取完成後執行；第一階段應先導入最小 scan state 與 priority，不應提前啟用 changed-only / result reuse。  
 **實作前分析：** [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
 **目標：** 依據 report diff、scan state 與 TTL cache 優先檢查新頁面、變更頁面、新 URL 與上次錯誤 URL。  
