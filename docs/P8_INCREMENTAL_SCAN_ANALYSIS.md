@@ -193,18 +193,70 @@ P8 需要明確區分「可沿用的事實」與「必須由本次掃描產生�
 
 ## Suggested Implementation Slices
 
+## 2026-07-14 feasibility recommendation
+
+結論：P8 可以開始，但第一輪應聚焦在「資料模型、state、分類與排序」，不要直接啟用 `changed-only` result reuse。
+
+建議採用下列落地原則：
+
+- 先做 P8a + P8b：讀取 baseline report / scan state、建立 previous canonical set、輸出 `summary.incremental`，並用 incremental classification 調整 validation priority。
+- scan state 需要先做，但只做最小版；否則 P8 只能像一次性的 report diff，無法長期記住 `firstSeenAt`、`lastSeenAt`、上次分類與 policy fingerprint。
+- 第一版 scan state 預設可放在 `.cache/link-check-state.json`，並允許 `--state-file <file>` 覆寫。
+- P8a 可以同時支援 `--baseline-report <file>` 與 `--state-file <file>`；baseline report 適合第一次啟用或手動指定比較基準，scan state 則是長期增量記憶。
+- P8a / P8b 不應跳過任何 status validation；只標記 `new`、`known`、`disappeared`、`previous_error`、`policy_mismatch` 等分類與優先順序。
+- P8c 的 `--changed-only` / reused result 必須等 P8a/P8b 測試穩定後再做，且只能復用 `stable_known`、policy match、TTL valid、非 previous error 的 status result。
+- sitemap 可做為 seed 或 priority signal，但不得取代 HTML discovery 或 current inventory。
+
+最小 scan state 欄位建議：
+
+```js
+{
+  stateSchemaVersion,
+  policyVersion,
+  startUrl,
+  startOrigin,
+  policyFingerprint,
+  updatedAt,
+  urls: {
+    [canonicalKey]: {
+      displayUrl,
+      firstSeenAt,
+      lastSeenAt,
+      lastCheckedAt,
+      lastStatus,
+      lastOk,
+      lastIssueType,
+      lastClassification,
+      lastSourceCount,
+      lastFinalUrlHash,
+      previousError
+    }
+  }
+}
+```
+
+第一階段不納入：
+
+- state 管理 UI。
+- 清除 state。
+- 多 profile state。
+- sitemap state。
+- result reuse。
+- `changed-only`。
+- 複雜 source hash / page hash。
+
 ### P8a：baseline/state loader
 
 目標：先建立資料模型與報告摘要，不改掃描行為。
 
 - 新增 `--baseline-report <file>`。
-- 新增 `--incremental`、`--state-file <file>` 與 `--no-incremental-state-write` 的 CLI skeleton。
+- 新增 `--incremental`、`--state-file <file>` 與 `--no-incremental-state-write` 的 CLI skeleton；預設 state 檔可先放 `.cache/link-check-state.json`。
 - 從 baseline report/state 建立 previous canonical set。
 - 建立 policy fingerprint，至少涵蓋 canonical strategy、UA、Accept-Language、checkExternal、preferGet、externalReferer、robots/security policy、rules source。
 - 在 report `options` 中記錄 incremental 設定。
 - 在 report `summary.incremental` 顯示 new / known / disappeared / policyMismatch / baselineWarnings 計數。
 - 不啟用 reused result。
-- 寫入 state 時只保存 redacted display URL、hash 與 result summary，不保存 response body。
+- 寫入最小 scan state，至少保存 redacted display URL、firstSeenAt、lastSeenAt、last checked summary、policy fingerprint 與 previous error signal；不保存 response body。
 
 ### P8b：incremental priority
 
