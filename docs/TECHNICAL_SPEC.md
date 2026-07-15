@@ -439,6 +439,8 @@ P7 起，report 會記錄 cache 行為：
 - `options.refreshCache`
 - `summary.cache.enabled`
 - `summary.cache.file`
+- `summary.cache.policyVersion`
+- `summary.cache.cacheSchemaVersion`
 - `summary.cache.hits`
 - `summary.cache.misses`
 - `summary.cache.expired`

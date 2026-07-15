@@ -9,7 +9,7 @@
 - P6 已完成 report-to-report diff 第一版。
 - P6.5a 已完成輸出契約、manifest、redaction、body/source limit、Header / Accept-Encoding 與 Keep-Alive。
 - P6.5b 已完成 SSRF、`runStatus`、robots / compliance、Retry-After / host diagnostics 與 WAF signature schema。
-- P7 已完成 persistent TTL URL result cache、CLI 參數、report `summary.cache` 與回歸測試。
+- P7 已完成 persistent TTL URL result cache、CLI 參數、report `summary.cache`、回歸測試與發布收尾。
 - 後續 Stage 0 僅允許文件或 GUI/CLI 落差小修，不得改變掃描語意或既有 report 主契約。
 
 ## 階段命名說明
@@ -56,6 +56,8 @@
 **目標：** 對可驗證的 URL result 建立 TTL cache，降低重複檢查成本；不先處理 page HTML cache。  
 **實作前評估：** [docs/P7_CACHE_EVALUATION.md](docs/P7_CACHE_EVALUATION.md)。
 
+**發布收尾：** [docs/P7_RELEASE_CLOSURE.md](docs/P7_RELEASE_CLOSURE.md)。
+
 **已完成決策：**
 
 1. P6.5b report 欄位已穩定。
@@ -63,6 +65,7 @@
 3. cache key 已包含 security policy、robots policy 與 request policy fingerprint。
 4. GUI 第一版不新增 cache 表單；report 會保留 `summary.cache`。
 5. 已建立 `test-p7-cache.mjs` 與 cache regression fixtures。
+6. 已完成 P7 發布收尾，後續 cache 呈現與 incremental scan 整合移交 P8/P9。
 
 **實作分段：**
 
