@@ -13,6 +13,8 @@ function assert(condition, message) {
   }
 }
 
+const RECENT_CHECKED_AT = new Date().toISOString();
+
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }
@@ -53,14 +55,14 @@ function baselineReportFor(origin, overrides = {}) {
         canonicalUrl: `${origin}/known?token=secret-value`,
         ok: true,
         status: 200,
-        checkedAt: "2026-07-14T00:00:00.000Z",
+        checkedAt: RECENT_CHECKED_AT,
       },
       {
         url: `${origin}/gone`,
         canonicalUrl: `${origin}/gone`,
         ok: true,
         status: 200,
-        checkedAt: "2026-07-14T00:00:00.000Z",
+        checkedAt: RECENT_CHECKED_AT,
       },
     ],
     ...overrides,
@@ -162,14 +164,14 @@ async function assertRedactedBaselineStillMatchesSensitiveUrl() {
             canonicalUrl: `${origin}/`,
             ok: true,
             status: 200,
-            checkedAt: "2026-07-14T00:00:00.000Z",
+            checkedAt: RECENT_CHECKED_AT,
           },
           {
             url: `${origin}/known?token=REDACTED`,
             canonicalUrl: `${origin}/known?token=REDACTED`,
             ok: true,
             status: 200,
-            checkedAt: "2026-07-14T00:00:00.000Z",
+            checkedAt: RECENT_CHECKED_AT,
           },
         ],
       }, null, 2)}\n`, "utf8");
@@ -211,7 +213,7 @@ async function assertPolicyMismatchClassification() {
             canonicalUrl: `${origin}/known?token=secret-value`,
             ok: true,
             status: 200,
-            checkedAt: "2026-07-14T00:00:00.000Z",
+            checkedAt: RECENT_CHECKED_AT,
           },
         ],
         options: {
@@ -282,7 +284,7 @@ async function assertIncrementalPriorityOrder() {
             canonicalUrl: `${origin}/stable`,
             ok: true,
             status: 200,
-            checkedAt: "2026-07-14T00:00:00.000Z",
+            checkedAt: RECENT_CHECKED_AT,
           },
           {
             url: `${origin}/previous-error`,
@@ -291,7 +293,7 @@ async function assertIncrementalPriorityOrder() {
             status: 500,
             issueType: "server_error",
             classification: "server_error",
-            checkedAt: "2026-07-14T00:00:00.000Z",
+            checkedAt: RECENT_CHECKED_AT,
           },
           {
             url: `${origin}/redirected`,
@@ -301,7 +303,7 @@ async function assertIncrementalPriorityOrder() {
             redirected: true,
             redirectCount: 1,
             finalUrl: `${origin}/redirected-final`,
-            checkedAt: "2026-07-14T00:00:00.000Z",
+            checkedAt: RECENT_CHECKED_AT,
           },
         ],
       }, null, 2)}\n`, "utf8");
