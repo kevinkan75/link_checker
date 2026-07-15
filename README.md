@@ -219,6 +219,16 @@ node .\report-diff.mjs old-report.json new-report.json --output diff.json
 
 若需設定站台特定規則，請參閱 [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) 與 [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)。CEC 範例規則位於 [docs/rules/cec-site-link-rules.json](docs/rules/cec-site-link-rules.json)。
 
+### TTL URL result cache
+
+CLI 可用 `--cache` 啟用 persistent TTL URL status-result cache，降低重複檢查成本：
+
+```powershell
+.\check-links.cmd https://example.com --cache --cache-ttl-hours 24
+```
+
+cache 預設關閉，檔案預設寫到 `.cache/link-check-cache.json`。若需要忽略舊結果並重新檢查，可使用 `--refresh-cache`。P7 cache 只服務不需要 HTML body 的 URL status check；頁面爬行仍會實際抓取 HTML，因此不會跳過連結抽取或 SPA payload 抽取。
+
 ### GUI / CLI 功能差異
 
 | 功能 | GUI | CLI |
@@ -230,6 +240,7 @@ node .\report-diff.mjs old-report.json new-report.json --output diff.json
 | 網域分類規則 | 尚未提供規則檔欄位 | `--domain-rules` |
 | 外部連結治理規則 | 尚未提供規則檔欄位 | `--external-risk-rules` |
 | SPA / CMS 站台規則 | 尚未提供規則檔欄位 | `--site-link-rules` |
+| TTL URL result cache | 不提供表單控制，report 可保存摘要 | `--cache`、`--refresh-cache` |
 
 ## 安全邊界與授權
 
@@ -263,5 +274,6 @@ dist\LinkChecker-portable.zip
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：完整 CLI 參數、規則檔格式與進階使用。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
+- [docs/P7_RELEASE_CLOSURE.md](docs/P7_RELEASE_CLOSURE.md)：P7 TTL URL result cache 發布收尾與驗收紀錄。
 - [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
 - [docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md)：README / ROADMAP 易讀性與一致性建議採納紀錄。
