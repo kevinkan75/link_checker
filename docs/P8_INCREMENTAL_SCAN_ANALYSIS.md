@@ -305,6 +305,28 @@ P8 開發應在 `codex/p8-incremental-scan` 分支進行，不直接在 `main` �
 - current inventory 與 sources 仍完整建立；舊 sources 不可帶入本次 report。
 - confirmation 結果不可無條件復用；`confirmed_missing` 可作參考，但本次若仍分類為 not_found，應按 P4 規則重新確認或明確標示未確認。
 
+#### 2026-07-16 P8c strengthening assessment
+
+結論：P8c 補強有必要，但定位為發布前回歸保護，不是目前功能阻塞。現有實作已符合 P8c 邊界：`--changed-only` 為顯式 opt-in、只復用 stable known / policy match / TTL valid / 非 previous error / 非 unstable redirect 的 status result，且 `requireBody: true` 的 page crawl 仍必須實際抓取 HTML body。
+
+補強優先順序：
+
+1. 高必要：補測 `policy_mismatch`、`ttl_expired`、`unstable_redirect` 不得復用，並確認 summary 分類正確、`reused === 0`、server 有收到實際 request。
+2. 高必要：補測 `requireBody: true` 不得復用，確保 changed-only 不會跳過 HTML discovery、SPA payload extraction、site link rules、current inventory 或 sources。
+3. 中必要：補測 reused result provenance，包括 `incremental.reused`、`reuseSource`、`baselineCheckedAt` 與固定 vocabulary `reason`，支援後續 P8e GUI / Analyzer 呈現。
+4. 低必要：暫不改 P8c 功能邏輯；先補 regression tests，若測試揭露漏洞再修正。
+
+決策：P8c 可維持「已完成第一版」狀態；進 P8d sitemap 前建議先補 3-5 個 regression tests，避免 sitemap、GUI 或 Analyzer 整合時放鬆 changed-only 的安全邊界。
+
+#### 2026-07-16 P8c strengthening gate record
+
+P8c 補強已依 Phase 1-3 完成測試收斂，Phase 4 門檻如下：
+
+1. `test-p8-incremental-state.mjs` 通過。
+2. 已新增 focused regression coverage：`policy_mismatch`、`ttl_expired`、`unstable_redirect` 不得復用；changed-only 仍抓取 HTML 並建立 current inventory / sources；reused result provenance 可追溯。
+3. 產品邏輯未因補強而修改；本輪只新增 P8c regression assertions。
+4. P8c 狀態維持「已完成第一版」。P8d 可接續從 sitemap 讀取與摘要開始，但不得放鬆 changed-only 的安全邊界。
+
 ### P8d：sitemap
 
 目標：用 sitemap 輔助 seed 與優先級，不取代 HTML discovery。
