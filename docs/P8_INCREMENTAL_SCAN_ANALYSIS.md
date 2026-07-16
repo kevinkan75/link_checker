@@ -406,6 +406,21 @@ P8d-2 已完成 sitemap priority signal，仍不改 discovery 或 validation cov
 
 驗收測試：`test-p8-sitemap.mjs` 覆蓋第二輪 state read 後，`sitemap_changed` URL 排在 `sitemap_known` URL 前面，且 summary priority 統計正確。
 
+#### 2026-07-16 P8d-3 implementation record
+
+P8d-3 已完成 sitemap 保守 seed，仍維持「不以 sitemap 取代 HTML discovery」的邊界：
+
+- 只在明確使用 `--sitemap` 時啟用 seed。
+- 只 seed same-origin、page-like sitemap URL。
+- seed depth 固定為 `1`，受 `maxDepth` 控制；`maxDepth: 0` 不 seed。
+- 受 `maxPages` 與 `--sitemap-max-urls` 控制，不超出既有 crawl page 上限。
+- seed URL 會先建立 current inventory 與 `sourceType: "sitemap"` source，再進入 `pageQueue`。
+- seed URL 仍必須實際抓取 HTML body；若頁面 HTML 中有新 link，仍由本次 HTML discovery 建立 sources / inventory / checked results。
+- `summary.incremental.sitemap.seed` 記錄 enabled、depth、attempted、seeded、ignored 與 ignoredByReason。
+- 非 page-like、cross-origin、invalid、已排入或超過限制的 sitemap URL 只會進 ignored 統計，不會被 crawl。
+
+驗收測試：`test-p8-sitemap.mjs` 覆蓋遠端 sitemap 保守 seed、seeded page 的 HTML link discovery、sitemap source 投影，以及 `maxDepth` / non-page-like URL 過濾。
+
 ### P8e：文件、GUI 與 Analyzer 最小呈現
 
 目標：讓使用者能分辨 current check 與 reused result。

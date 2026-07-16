@@ -505,6 +505,16 @@ P8d-2 新增 sitemap priority signal，但仍只影響 current inventory 內的 
 - scan state 會保存 current inventory URL 的 `lastSitemapLastmod`，供下一輪比對。
 - sitemap-only URL 仍不會因 priority signal 直接進入 validation queue 或 `checked[]`。
 
+P8d-3 新增 sitemap 保守 seed：
+
+- 只在明確使用 `--sitemap` 時啟用。
+- 只 seed same-origin、page-like sitemap URL。
+- seed depth 固定為 `1`，受 `maxDepth` 控制；`maxDepth: 0` 不 seed。
+- 受 `maxPages` 與 `--sitemap-max-urls` 控制。
+- seed URL 先建立 current inventory 與 `sourceType: "sitemap"` source，再進入 `pageQueue`。
+- seed URL 仍必須實際抓取 HTML body；頁面內新 link 仍由本次 HTML discovery 建立 sources / inventory / checked results。
+- `summary.incremental.sitemap.seed` 記錄 enabled、depth、attempted、seeded、ignored 與 ignoredByReason。
+
 Report 會記錄：
 
 - `options.incremental`

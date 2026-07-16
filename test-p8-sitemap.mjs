@@ -161,7 +161,7 @@ async function assertSitemapMaxUrlsTruncatesSummary() {
   }
 }
 
-async function assertRemoteSitemapDoesNotSeedValidationInP8d1() {
+async function assertRemoteSitemapSeedsConservativelyInP8d3() {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-remote-"));
   try {
     const requestCounts = new Map();
@@ -176,8 +176,22 @@ async function assertRemoteSitemapDoesNotSeedValidationInP8d1() {
     <loc>${origin}/sitemap-only</loc>
     <lastmod>2026-07-16</lastmod>
   </url>
+  <url>
+    <loc>${origin}/sitemap-broken</loc>
+    <lastmod>2026-07-16</lastmod>
+  </url>
 </urlset>
 `);
+        return;
+      }
+      if (request.url === "/sitemap-only") {
+        response.writeHead(200, { "content-type": "text/html" });
+        response.end('<a href="/from-sitemap-seed">from seed</a>');
+        return;
+      }
+      if (request.url === "/sitemap-broken") {
+        response.writeHead(404, { "content-type": "text/plain" });
+        response.end("missing");
         return;
       }
       response.writeHead(200, { "content-type": "text/html" });
@@ -188,18 +202,75 @@ async function assertRemoteSitemapDoesNotSeedValidationInP8d1() {
       const report = await makeChecker(origin, {
         sitemap: sitemapSource,
         stateFile,
+        maxDepth: 1,
       }).run();
       const sitemap = report.summary.incremental.sitemap;
+      const seed = sitemap.seed;
+      const sitemapOnly = report.checked.find((item) => item.url.endsWith("/sitemap-only"));
+      const sitemapBroken = report.broken.find((item) => item.url.endsWith("/sitemap-broken"));
+      const fromSeed = report.checked.find((item) => item.url.endsWith("/from-sitemap-seed"));
 
       assert(sitemap.status === "ok", "Remote sitemap should load successfully.");
       assert(sitemap.sourceType === "url", "Remote sitemap should be marked as URL source.");
       assert(report.options.sitemap.includes("token=REDACTED"), "Report options should redact sensitive sitemap source query values.");
       assert(!JSON.stringify(report).includes("secret-value"), "Report output must not expose sensitive sitemap source query values.");
       assert(sitemap.type === "urlset", "Remote sitemap should classify urlset.");
-      assert(sitemap.urlCount === 1, "Remote sitemap should count sitemap-only URL.");
+      assert(sitemap.urlCount === 2, "Remote sitemap should count sitemap-only URLs.");
       assert(requestCounts.get("/sitemap.xml?token=secret-value") === 1, "Remote sitemap should be fetched once.");
-      assert(requestCounts.get("/sitemap-only") === undefined, "P8d-1 must not seed sitemap-only URLs into validation.");
-      assert(!report.checked.some((item) => item.url.endsWith("/sitemap-only")), "P8d-1 must not write sitemap-only URLs into checked results.");
+      assert(requestCounts.get("/sitemap-only") === 1, "P8d-3 should crawl same-origin page-like sitemap-only URLs.");
+      assert(requestCounts.get("/sitemap-broken") >= 1, "P8d-3 should validate sitemap seeded pages through current crawl.");
+      assert(seed.enabled === true, "Sitemap seed summary should be enabled.");
+      assert(seed.attempted === 2, "Sitemap seed summary should count attempted sitemap URLs.");
+      assert(seed.seeded === 2, "Sitemap seed summary should count seeded URLs.");
+      assert(seed.ignored === 0, "Sitemap seed summary should not ignore the valid sitemap URL.");
+      assert(sitemapOnly, "Seeded sitemap URL should appear in checked results after page crawl.");
+      assert(sitemapBroken?.sourceCount === 1, "Broken seeded sitemap URL should have a current sitemap source.");
+      assert(sitemapBroken?.sources?.[0]?.sourceType === "sitemap", "Broken seeded sitemap URL source should be marked as sitemap.");
+      assert(fromSeed, "Seeded sitemap page should still discover and validate current HTML links.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function assertSitemapSeedRespectsDepthAndPageFilters() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-seed-limits-"));
+  try {
+    const requestCounts = new Map();
+    await withServer((request, response) => {
+      requestCounts.set(request.url, (requestCounts.get(request.url) || 0) + 1);
+      response.writeHead(200, { "content-type": request.url.endsWith(".png") ? "image/png" : "text/html" });
+      response.end("<p>ok</p>");
+    }, async (origin) => {
+      const sitemapFile = path.join(tempDir, "sitemap.xml");
+      const stateFile = path.join(tempDir, "state.json");
+      await writeFile(sitemapFile, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${origin}/allowed-page</loc></url>
+  <url><loc>${origin}/asset.png</loc></url>
+</urlset>
+`, "utf8");
+
+      const noDepthReport = await makeChecker(origin, {
+        sitemap: sitemapFile,
+        stateFile,
+        maxDepth: 0,
+      }).run();
+      assert(noDepthReport.summary.incremental.sitemap.seed.seeded === 0, "Sitemap seed should respect maxDepth 0.");
+      assert(noDepthReport.summary.incremental.sitemap.seed.ignoredByReason.max_depth === 2, "Sitemap seed should record max_depth ignores.");
+      assert(requestCounts.get("/allowed-page") === undefined, "maxDepth 0 should prevent sitemap seed crawl.");
+
+      const stateFileSecond = path.join(tempDir, "state-second.json");
+      const filteredReport = await makeChecker(origin, {
+        sitemap: sitemapFile,
+        stateFile: stateFileSecond,
+        maxDepth: 1,
+      }).run();
+      const seed = filteredReport.summary.incremental.sitemap.seed;
+      assert(seed.seeded === 1, "Sitemap seed should include same-origin page-like URL.");
+      assert(seed.ignoredByReason.non_page_like === 1, "Sitemap seed should ignore non-page-like URLs.");
+      assert(requestCounts.get("/allowed-page") === 1, "Allowed sitemap page should be crawled.");
+      assert(requestCounts.get("/asset.png") === undefined, "Non-page-like sitemap URL should not be crawled.");
     });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -276,7 +347,8 @@ async function assertSitemapLastmodSignalsAffectPriority() {
 await assertSitemapUrlsetFileSummary();
 await assertSitemapIndexFileSummary();
 await assertSitemapMaxUrlsTruncatesSummary();
-await assertRemoteSitemapDoesNotSeedValidationInP8d1();
+await assertRemoteSitemapSeedsConservativelyInP8d3();
+await assertSitemapSeedRespectsDepthAndPageFilters();
 await assertSitemapLastmodSignalsAffectPriority();
 
 console.log("ok p8 sitemap");

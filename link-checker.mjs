@@ -640,6 +640,7 @@ class LinkChecker {
     this.sitemap = buildInitialSitemapSummary(this.options);
     this.sitemapEntries = [];
     this.sitemapByHash = new Map();
+    this.sitemapSeed = createEmptySitemapSeedSummary(this.options);
     this.results = new Map();
     this.sources = new Map();
     this.externalLinks = new Map();
@@ -677,6 +678,7 @@ class LinkChecker {
       await this.inspectRobotsTxt();
       await this.loadIncrementalInputs();
       await this.loadSitemapInput();
+      this.seedSitemapPages();
       const workers = Array.from(
         { length: this.options.concurrency },
         () => this.pageWorker(),
@@ -790,6 +792,7 @@ class LinkChecker {
       this.sitemapEntries = loaded.entries;
       this.sitemapByHash = buildSitemapEntryHashMap(loaded.entries, this);
       this.sitemap = buildLoadedSitemapSummary(loaded, this.options);
+      this.sitemapSeed = createEmptySitemapSeedSummary(this.options);
       for (const warning of loaded.warnings) {
         this.incremental.warnings.push({
           code: "sitemap_warning",
@@ -801,11 +804,80 @@ class LinkChecker {
       this.sitemapEntries = [];
       this.sitemapByHash = new Map();
       this.sitemap = buildSitemapErrorSummary(this.options.sitemap, error, this.options);
+      this.sitemapSeed = createEmptySitemapSeedSummary(this.options);
       this.incremental.warnings.push({
         code: "sitemap_read_failed",
         message: error.message || String(error),
       });
     }
+  }
+
+  seedSitemapPages() {
+    if (!this.options.sitemap || this.sitemapEntries.length === 0) {
+      return;
+    }
+
+    this.sitemapSeed.enabled = true;
+    this.sitemapSeed.depth = 1;
+    for (const entry of this.sitemapEntries) {
+      this.sitemapSeed.attempted += 1;
+      const decision = this.getSitemapSeedDecision(entry);
+      if (!decision.ok) {
+        recordSitemapSeedIgnored(this.sitemapSeed, decision.reason);
+        continue;
+      }
+
+      const url = decision.url;
+      const source = {
+        page: this.startUrl,
+        tag: "sitemap",
+        attribute: "loc",
+        text: entry.url,
+        sourceType: "sitemap",
+        sitemapSource: this.options.sitemap,
+      };
+      const link = {
+        value: entry.url,
+        tag: "sitemap",
+        attribute: "loc",
+        sourceType: "sitemap",
+      };
+      this.addSource(url, source);
+      this.addInventoryItem(url, source, link, {
+        isExternal: false,
+        shouldCheck: true,
+        shouldCrawl: true,
+        needsStatusCheck: true,
+        needsBodyFetch: true,
+      });
+      this.enqueuePage(url, 1);
+      this.sitemapSeed.seeded += 1;
+    }
+  }
+
+  getSitemapSeedDecision(entry) {
+    if (this.options.maxDepth < 1) {
+      return { ok: false, reason: "max_depth" };
+    }
+    if (this.queuedPages.size >= this.options.maxPages) {
+      return { ok: false, reason: "max_pages" };
+    }
+    let url;
+    try {
+      url = normalizeUrl(entry.url);
+    } catch {
+      return { ok: false, reason: "invalid_url" };
+    }
+    if (!sameOrigin(url, this.startUrl)) {
+      return { ok: false, reason: "cross_origin" };
+    }
+    if (!looksLikePage(url)) {
+      return { ok: false, reason: "non_page_like" };
+    }
+    if (this.queuedPages.has(url) || this.crawledPages.has(url)) {
+      return { ok: false, reason: "already_queued_or_crawled" };
+    }
+    return { ok: true, url };
   }
 
   async loadIncrementalInputs() {
@@ -1158,6 +1230,7 @@ class LinkChecker {
       },
       sitemap: {
         ...(this.sitemap || buildInitialSitemapSummary(this.options)),
+        seed: this.sitemapSeed || createEmptySitemapSeedSummary(this.options),
         priority: sitemapPriority,
       },
       priority,
@@ -2647,6 +2720,22 @@ function buildInitialSitemapSummary(options = DEFAULTS) {
     warnings: [],
     error: null,
   };
+}
+
+function createEmptySitemapSeedSummary(options = DEFAULTS) {
+  return {
+    enabled: Boolean(options.sitemap),
+    depth: 1,
+    attempted: 0,
+    seeded: 0,
+    ignored: 0,
+    ignoredByReason: {},
+  };
+}
+
+function recordSitemapSeedIgnored(summary, reason) {
+  summary.ignored += 1;
+  summary.ignoredByReason[reason] = (summary.ignoredByReason[reason] || 0) + 1;
 }
 
 function buildLoadedSitemapSummary(loaded, options = DEFAULTS) {

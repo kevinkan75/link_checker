@@ -153,6 +153,8 @@ P8d-1 的 `--sitemap` 會自動啟用 incremental summary，支援本地檔案�
 
 P8d-2 會對同時存在於 current inventory 與 sitemap 的 URL 加入 priority signal：`lastmod` 較 state 中前次值新時提高 priority，未變時降低 priority；仍不會因 sitemap 跳過檢查或掃描 sitemap-only URL。
 
+P8d-3 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `maxDepth`、`maxPages` 與 `--sitemap-max-urls` 控制。Seeded URL 仍會實際抓 HTML body，並用本次 HTML discovery 建立 inventory / sources。
+
 ### 輸出與診斷
 
 | 參數 | 說明 |

@@ -100,12 +100,12 @@
 
 ### P8：增量掃描
 
-**狀態：** 分支開發中（`codex/p8-incremental-scan`，不在 `main` 直接開發；P8a/P8b/P8c 已完成，P8d-1/P8d-2 已完成）  
+**狀態：** 分支開發中（`codex/p8-incremental-scan`，不在 `main` 直接開發；P8a/P8b/P8c/P8d 已完成）  
 **依賴關係：** P8 需在 P7 TTL 檢查快取完成後執行；第一階段應先導入最小 scan state 與 priority，不應提前啟用 changed-only / result reuse。  
 **實作前分析：** [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
 **目標：** 依據 report diff、scan state 與 TTL cache 優先檢查新頁面、變更頁面、新 URL 與上次錯誤 URL。  
 **主要交付：** `--incremental`、`--baseline-report <file>`、`--state-file <file>`、`--changed-only`、`--sitemap <url-or-file>`。
-**建議切分：** P8a baseline/state loader + 最小 scan state（已完成）、P8b incremental priority（已完成）、P8c changed-only/reuse（已完成）、P8d-1 sitemap 讀取與摘要（已完成）、P8d-2 priority signal（已完成）、P8d-3 保守 seed、P8e 文件與呈現。
+**建議切分：** P8a baseline/state loader + 最小 scan state（已完成）、P8b incremental priority（已完成）、P8c changed-only/reuse（已完成）、P8d sitemap 讀取、priority signal 與保守 seed（已完成）、P8e 文件與呈現。
 **驗收重點：** changed-only 模式仍保留完整 summary，不只輸出 delta。  
 **排除範圍：** 不因 sitemap 或 state 跳過 HTML inventory 發現的新 URL。
 
