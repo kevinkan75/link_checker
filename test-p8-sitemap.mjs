@@ -127,6 +127,54 @@ async function assertSitemapIndexFileSummary() {
   }
 }
 
+async function assertRemoteSitemapIndexDoesNotReadLocalChild() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-remote-local-child-"));
+  try {
+    await withServer((request, response) => {
+      if (request.url === "/sitemap.xml") {
+        const childFile = path.join(tempDir, "local-child.xml");
+        response.writeHead(200, { "content-type": "application/xml" });
+        response.end(`<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${pathToFileURL(childFile).href}</loc>
+  </sitemap>
+</sitemapindex>
+`);
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end("<p>ok</p>");
+    }, async (origin) => {
+      const childFile = path.join(tempDir, "local-child.xml");
+      const stateFile = path.join(tempDir, "state.json");
+      await writeFile(childFile, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${origin}/local-child-should-not-load</loc></url>
+</urlset>
+`, "utf8");
+
+      const report = await makeChecker(origin, {
+        sitemap: `${origin}/sitemap.xml`,
+        stateFile,
+      }).run();
+      const sitemap = report.summary.incremental.sitemap;
+
+      assert(sitemap.status === "ok", "Remote sitemap index should still load.");
+      assert(sitemap.type === "sitemapindex", "Remote sitemap index should classify as sitemapindex.");
+      assert(sitemap.indexChildCount === 1, "Remote sitemap index should count the local child entry.");
+      assert(sitemap.fetchedChildCount === 0, "Remote sitemap index must not read file child sitemaps.");
+      assert(sitemap.urlCount === 0, "Remote sitemap index must not import URLs from local child sitemaps.");
+      assert(
+        sitemap.warnings.some((warning) => warning.code === "unsupported_remote_sitemap_child_ignored"),
+        "Remote sitemap index should warn when ignoring local child sitemaps.",
+      );
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function assertSitemapMaxUrlsTruncatesSummary() {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-limit-"));
   try {
@@ -346,6 +394,7 @@ async function assertSitemapLastmodSignalsAffectPriority() {
 
 await assertSitemapUrlsetFileSummary();
 await assertSitemapIndexFileSummary();
+await assertRemoteSitemapIndexDoesNotReadLocalChild();
 await assertSitemapMaxUrlsTruncatesSummary();
 await assertRemoteSitemapSeedsConservativelyInP8d3();
 await assertSitemapSeedRespectsDepthAndPageFilters();

@@ -2856,10 +2856,11 @@ async function loadSitemapTree(source, checker) {
     if (entries.length >= maxUrls) {
       break;
     }
-    if (isCrossOriginSitemapChild(child.url, checker.startOrigin)) {
+    const childIgnoreReason = getSitemapChildIgnoreReason(child.url, root.sourceType, checker.startOrigin);
+    if (childIgnoreReason) {
       warnings.push({
-        code: "cross_origin_sitemap_child_ignored",
-        message: `Ignored cross-origin sitemap child ${redactSensitiveQueryValue(child.url, options)}.`,
+        code: childIgnoreReason.code,
+        message: `${childIgnoreReason.message}: ${redactSensitiveQueryValue(child.url, options)}.`,
       });
       continue;
     }
@@ -3046,15 +3047,31 @@ function decodeXmlText(value) {
     .replace(/&amp;/g, "&");
 }
 
-function isCrossOriginSitemapChild(url, startOrigin) {
-  if (!/^https?:\/\//i.test(url)) {
-    return false;
+function getSitemapChildIgnoreReason(url, rootSourceType, startOrigin) {
+  const isHttpUrl = /^https?:\/\//i.test(url);
+  if (rootSourceType === "url" && !isHttpUrl) {
+    return {
+      code: "unsupported_remote_sitemap_child_ignored",
+      message: "Ignored unsupported remote sitemap child",
+    };
+  }
+  if (!isHttpUrl) {
+    return null;
   }
   try {
-    return new URL(url).origin !== startOrigin;
+    if (new URL(url).origin !== startOrigin) {
+      return {
+        code: "cross_origin_sitemap_child_ignored",
+        message: "Ignored cross-origin sitemap child",
+      };
+    }
   } catch {
-    return false;
+    return {
+      code: "invalid_sitemap_child_ignored",
+      message: "Ignored invalid sitemap child",
+    };
   }
+  return null;
 }
 
 function createEmptyIncrementalState(checker) {
