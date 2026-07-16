@@ -430,15 +430,31 @@ P8d-3 已完成 sitemap 保守 seed，仍維持「不以 sitemap 取代 HTML dis
 - GUI 第一版可不新增完整 state 管理介面，但需能顯示 report 中的 incremental summary。
 - Analyzer 讀到 reused result 時應顯示標記；舊 report 沒有 incremental 欄位時保持相容。
 
+#### 2026-07-16 P8e scoping record
+
+P8e 決定分成兩個必要小階段，GUI 啟用入口延後：
+
+1. P8e-1：GUI / Report Analyzer 最小呈現
+   - 主 GUI 顯示 `summary.incremental`。
+   - 問題連結與 Report Analyzer 明確標示 reused result。
+   - reused result 顯示 `baselineCheckedAt`、`reuseSource` 與 `reason`，避免被誤認為本輪實測。
+   - 舊 report 沒有 `summary.incremental` 或 result-level `incremental` 時保持相容。
+2. P8e-2：文件與 CLI 文案收尾
+   - 修正 CLI help 與文件中 P8d-1 舊描述，對齊 P8d-3 sitemap 保守 seed 行為。
+   - README / CLI_REFERENCE / TECHNICAL_SPEC / ROADMAP 對齊 P8a-P8d 完成狀態與 P8e 驗收。
+   - 補 P8e implementation record，明確寫 incremental / sitemap 不跳過 HTML discovery。
+
+P8e 不納入 GUI 啟用入口、state 管理頁、手填 state path、policy fingerprint 顯示或 GUI changed-only 主操作。這些入口型功能延後到 P9 / P10 評估。P8e 第一版驗收只要求使用者看得懂既有 P8 report：能看到 incremental summary，並能分辨 current check 與 reused result。
+
 ## GUI 呈現建議
 
 GUI 的增量掃描應整合到既有「檢查網站」流程，不另開獨立頁面。使用者心智應維持為「同樣開始檢查，但這次參考上次結果」，而不是進入一個需要理解 state file、policy fingerprint 或 cache schema 的技術流程。
 
 ### 設定入口
 
-建議放在既有「進階設定」中新增一個 `增量掃描` 區塊。
+設定入口延後到 P9 / P10 評估；以下內容保留為後續 GUI 啟用入口設計參考，不列入 P8e 第一版驗收。若後續要加入，建議放在既有「進階設定」中新增一個 `增量掃描` 區塊。
 
-P8e 第一版最小設定：
+後續 GUI 啟用入口可考慮：
 
 ```text
 增量掃描
@@ -522,7 +538,7 @@ P8e 第一版最小設定：
 模式：優先重查
 ```
 
-P8e 第一版不需要 state 管理頁。若使用者需要清除 state，可先放在後續 P9 或 P10 評估。
+P8e 第一版不需要 state 管理頁，也不需要 GUI 啟用入口。若使用者需要清除 state 或從 GUI 啟用增量掃描，可先放在後續 P9 或 P10 評估。
 
 ### 不建議第一版納入
 
@@ -532,11 +548,11 @@ P8e 第一版不需要 state 管理頁。若使用者需要清除 state，可先
 - 不把增量掃描描述成「只掃變更頁面」。
 - 不在 GUI 裡暴露 cache schema、state schema、hash key 等內部細節。
 
-最小可行 GUI 是：
+P8e 最小可行 GUI 呈現是：
 
-1. 進階設定加 `啟用增量掃描`。
-2. 掃描完成後顯示 `summary.incremental`。
-3. 問題連結上標示 `新增 / 已重查 / 復用`。
+1. 掃描完成後顯示 `summary.incremental`。
+2. 問題連結上標示 `新增 / 已重查 / 復用`。
+3. reused result 顯示 baseline checked time、reuse source 與 reason。
 
 ## 驗收建議
 

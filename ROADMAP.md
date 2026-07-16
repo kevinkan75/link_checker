@@ -105,9 +105,9 @@
 **實作前分析：** [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
 **目標：** 依據 report diff、scan state 與 TTL cache 優先檢查新頁面、變更頁面、新 URL 與上次錯誤 URL。  
 **主要交付：** `--incremental`、`--baseline-report <file>`、`--state-file <file>`、`--changed-only`、`--sitemap <url-or-file>`。
-**建議切分：** P8a baseline/state loader + 最小 scan state（已完成）、P8b incremental priority（已完成）、P8c changed-only/reuse（已完成）、P8d sitemap 讀取、priority signal 與保守 seed（已完成）、P8e 文件與呈現。
+**建議切分：** P8a baseline/state loader + 最小 scan state（已完成）、P8b incremental priority（已完成）、P8c changed-only/reuse（已完成）、P8d sitemap 讀取、priority signal 與保守 seed（已完成）、P8e-1 GUI / Report Analyzer 最小呈現、P8e-2 文件與 CLI 文案收尾。GUI 啟用入口 / state 管理延後到 P9 / P10 評估。
 **驗收重點：** changed-only 模式仍保留完整 summary，不只輸出 delta。  
-**排除範圍：** 不因 sitemap 或 state 跳過 HTML inventory 發現的新 URL。
+**排除範圍：** 不因 sitemap 或 state 跳過 HTML inventory 發現的新 URL；P8e 不新增 GUI state 管理頁、手填 state path、policy fingerprint 顯示或 GUI changed-only 主操作。
 
 ### P9a：GUI 易用性與 Analyzer 改善
 
