@@ -639,6 +639,7 @@ class LinkChecker {
     };
     this.sitemap = buildInitialSitemapSummary(this.options);
     this.sitemapEntries = [];
+    this.sitemapByHash = new Map();
     this.results = new Map();
     this.sources = new Map();
     this.externalLinks = new Map();
@@ -787,6 +788,7 @@ class LinkChecker {
     try {
       const loaded = await loadSitemapTree(this.options.sitemap, this);
       this.sitemapEntries = loaded.entries;
+      this.sitemapByHash = buildSitemapEntryHashMap(loaded.entries, this);
       this.sitemap = buildLoadedSitemapSummary(loaded, this.options);
       for (const warning of loaded.warnings) {
         this.incremental.warnings.push({
@@ -797,6 +799,7 @@ class LinkChecker {
       }
     } catch (error) {
       this.sitemapEntries = [];
+      this.sitemapByHash = new Map();
       this.sitemap = buildSitemapErrorSummary(this.options.sitemap, error, this.options);
       this.incremental.warnings.push({
         code: "sitemap_read_failed",
@@ -846,6 +849,7 @@ class LinkChecker {
           lastIssueType: entry?.lastIssueType || null,
           lastClassification: entry?.lastClassification || null,
           lastFinalUrlHash: entry?.lastFinalUrlHash || null,
+          lastSitemapLastmod: entry?.lastSitemapLastmod || null,
           ttlExpiresAt: entry?.ttlExpiresAt || null,
           previousError: entry?.previousError === true,
           resultSummary: entry?.resultSummary || null,
@@ -910,6 +914,7 @@ class LinkChecker {
     existing.lastIssueType = existing.lastIssueType || record.lastIssueType || null;
     existing.lastClassification = existing.lastClassification || record.lastClassification || null;
     existing.lastFinalUrlHash = existing.lastFinalUrlHash || record.lastFinalUrlHash || null;
+    existing.lastSitemapLastmod = existing.lastSitemapLastmod || record.lastSitemapLastmod || null;
     existing.ttlExpiresAt = existing.ttlExpiresAt || record.ttlExpiresAt || null;
     existing.reusableResult = existing.reusableResult || record.reusableResult || null;
   }
@@ -950,6 +955,8 @@ class LinkChecker {
         priorityBoost = -5;
       }
     }
+    const sitemap = this.getSitemapPrioritySignal(canonicalUrl, previous);
+    priorityBoost += sitemap?.priorityBoost || 0;
 
     return {
       classification,
@@ -960,11 +967,51 @@ class LinkChecker {
       previousSources: previous?.sources || [],
       previousCheckedAt: previous?.lastCheckedAt || previous?.resultSummary?.checkedAt || null,
       ttlExpiresAt: previous?.ttlExpiresAt || null,
+      sitemap,
     };
   }
 
   getIncrementalPriorityBoost(item) {
     return this.options.incremental ? (item.incremental?.priorityBoost || 0) : 0;
+  }
+
+  getSitemapPrioritySignal(canonicalUrl, previous = null) {
+    if (!this.options.sitemap || this.sitemapByHash.size === 0) {
+      return null;
+    }
+
+    const hashCandidates = getIncrementalCanonicalHashCandidates(canonicalUrl, this.options);
+    const entry = findSitemapEntry(this.sitemapByHash, hashCandidates);
+    if (!entry) {
+      return null;
+    }
+
+    const previousLastmod = previous?.lastSitemapLastmod || null;
+    const currentLastmod = entry.lastmod || null;
+    let classification = "sitemap_listed";
+    let reason = "listed_in_sitemap";
+    let priorityBoost = currentLastmod ? 5 : 0;
+
+    if (currentLastmod && previousLastmod) {
+      const comparison = compareSitemapLastmod(currentLastmod, previousLastmod);
+      if (comparison > 0) {
+        classification = "sitemap_changed";
+        reason = "sitemap_lastmod_newer";
+        priorityBoost = 20;
+      } else {
+        classification = "sitemap_known";
+        reason = comparison === 0 ? "sitemap_lastmod_unchanged" : "sitemap_lastmod_not_newer";
+        priorityBoost = -10;
+      }
+    }
+
+    return {
+      classification,
+      reason,
+      priorityBoost,
+      lastmod: currentLastmod,
+      previousLastmod,
+    };
   }
 
   readIncrementalReusableResult(url) {
@@ -1015,6 +1062,17 @@ class LinkChecker {
       totalBoost: 0,
       byClassification: {},
     };
+    const sitemapPriority = {
+      matchedCurrentUrls: 0,
+      changed: 0,
+      known: 0,
+      listed: 0,
+      boosted: 0,
+      deferred: 0,
+      neutral: 0,
+      totalBoost: 0,
+      byClassification: {},
+    };
     const currentHashes = new Set();
     for (const key of getIncrementalCanonicalHashCandidates(this.startUrl, this.options)) {
       currentHashes.add(key);
@@ -1041,6 +1099,27 @@ class LinkChecker {
       priority.totalBoost += boost;
       if (incremental?.classification) {
         priority.byClassification[incremental.classification] = boost;
+      }
+      const sitemapSignal = incremental?.sitemap;
+      if (sitemapSignal?.classification) {
+        sitemapPriority.matchedCurrentUrls += 1;
+        if (sitemapSignal.classification === "sitemap_changed") {
+          sitemapPriority.changed += 1;
+        } else if (sitemapSignal.classification === "sitemap_known") {
+          sitemapPriority.known += 1;
+        } else if (sitemapSignal.classification === "sitemap_listed") {
+          sitemapPriority.listed += 1;
+        }
+        const sitemapBoost = sitemapSignal.priorityBoost || 0;
+        if (sitemapBoost > 0) {
+          sitemapPriority.boosted += 1;
+        } else if (sitemapBoost < 0) {
+          sitemapPriority.deferred += 1;
+        } else {
+          sitemapPriority.neutral += 1;
+        }
+        sitemapPriority.totalBoost += sitemapBoost;
+        sitemapPriority.byClassification[sitemapSignal.classification] = sitemapBoost;
       }
     }
 
@@ -1077,7 +1156,10 @@ class LinkChecker {
         bypassed: this.incremental.reuse.bypassed,
         bySource: this.incremental.reuse.bySource,
       },
-      sitemap: this.sitemap || buildInitialSitemapSummary(this.options),
+      sitemap: {
+        ...(this.sitemap || buildInitialSitemapSummary(this.options)),
+        priority: sitemapPriority,
+      },
       priority,
       policyFingerprint: this.incremental.policyFingerprint,
       warnings: this.incremental.warnings,
@@ -2609,6 +2691,49 @@ function getSitemapSourceType(source) {
   return "file";
 }
 
+function buildSitemapEntryHashMap(entries = [], checker) {
+  const map = new Map();
+  for (const entry of entries) {
+    if (!entry?.url) {
+      continue;
+    }
+    let canonicalUrl;
+    try {
+      canonicalUrl = checker.getCanonicalKey(entry.url);
+    } catch {
+      continue;
+    }
+    for (const key of getIncrementalCanonicalHashCandidates(canonicalUrl, checker.options)) {
+      if (!map.has(key)) {
+        map.set(key, {
+          ...entry,
+          canonicalUrlHash: key,
+        });
+      }
+    }
+  }
+  return map;
+}
+
+function findSitemapEntry(map, hashCandidates = []) {
+  for (const key of hashCandidates) {
+    const entry = map.get(key);
+    if (entry) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+function compareSitemapLastmod(current, previous) {
+  const currentMs = Date.parse(current || "");
+  const previousMs = Date.parse(previous || "");
+  if (Number.isFinite(currentMs) && Number.isFinite(previousMs)) {
+    return Math.sign(currentMs - previousMs);
+  }
+  return String(current || "").localeCompare(String(previous || ""));
+}
+
 async function loadSitemapTree(source, checker) {
   const options = checker.options;
   const maxUrls = normalizeSitemapMaxUrls(options.sitemapMaxUrls);
@@ -3131,6 +3256,7 @@ function buildIncrementalStateFromReport(checker) {
       lastIssueType: result?.issueType || previous.lastIssueType || null,
       lastClassification: result?.classification || previous.lastClassification || item.incremental?.classification || null,
       lastFinalUrlHash: result?.finalUrl ? hashLabel(result.finalUrl) : previous.lastFinalUrlHash || null,
+      lastSitemapLastmod: item.incremental?.sitemap?.lastmod || previous.lastSitemapLastmod || null,
       lastSourceCount: item.sources.length,
       previousError: isPreviousIncrementalError(resultSummary),
       policyFingerprint: checker.incremental.policyFingerprint,

@@ -392,6 +392,20 @@ P8d-1 已完成 sitemap 讀取與摘要，範圍刻意維持保守：
 
 驗收測試：`test-p8-sitemap.mjs` 覆蓋 urlset file、sitemap index file、URL 上限截斷、遠端 sitemap URL，以及 P8d-1 不 seed sitemap-only URL 的邊界。
 
+#### 2026-07-16 P8d-2 implementation record
+
+P8d-2 已完成 sitemap priority signal，仍不改 discovery 或 validation coverage：
+
+- 只有 URL 同時存在於 current inventory 與 sitemap 時才影響 priority。
+- sitemap `lastmod` 比 scan state 中前次 `lastSitemapLastmod` 新時，加入 `sitemap_changed` signal 並提高 priority。
+- sitemap `lastmod` 與前次相同或不更新時，加入 `sitemap_known` signal 並降低 priority。
+- sitemap entry 沒有可比較前次 `lastmod` 時，只作 `sitemap_listed` 輕量 signal。
+- `summary.incremental.sitemap.priority` 會記錄 matchedCurrentUrls、changed、known、listed、boosted、deferred、neutral、totalBoost 與 byClassification。
+- scan state 會為 current inventory URL 保存 `lastSitemapLastmod`，供下一輪 priority 比對。
+- sitemap-only URL 仍不 seed、不進 `checked[]`；保守 seed 留給 P8d-3。
+
+驗收測試：`test-p8-sitemap.mjs` 覆蓋第二輪 state read 後，`sitemap_changed` URL 排在 `sitemap_known` URL 前面，且 summary priority 統計正確。
+
 ### P8e：文件、GUI 與 Analyzer 最小呈現
 
 目標：讓使用者能分辨 current check 與 reused result。

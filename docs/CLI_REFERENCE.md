@@ -151,6 +151,8 @@ P8c 的 `--changed-only` 只復用 `known` 且符合 policy match、TTL valid、
 
 P8d-1 的 `--sitemap` 會自動啟用 incremental summary，支援本地檔案、`file://` 與 HTTP(S) sitemap。HTTP(S) sitemap 讀取會走既有 URL security policy；讀到的 sitemap-only URL 不會在 P8d-1 直接進入 validation queue 或 `checked[]`。
 
+P8d-2 會對同時存在於 current inventory 與 sitemap 的 URL 加入 priority signal：`lastmod` 較 state 中前次值新時提高 priority，未變時降低 priority；仍不會因 sitemap 跳過檢查或掃描 sitemap-only URL。
+
 ### 輸出與診斷
 
 | 參數 | 說明 |

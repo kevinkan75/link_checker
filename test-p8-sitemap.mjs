@@ -206,9 +206,77 @@ async function assertRemoteSitemapDoesNotSeedValidationInP8d1() {
   }
 }
 
+async function assertSitemapLastmodSignalsAffectPriority() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-priority-"));
+  try {
+    const requestOrder = [];
+    await withServer((request, response) => {
+      if (request.url !== "/" && request.method !== "GET") {
+        requestOrder.push(request.url);
+      }
+      if (request.url === "/") {
+        response.writeHead(200, { "content-type": "text/html" });
+        response.end(`
+          <a href="/known">known</a>
+          <a href="/changed">changed</a>
+        `);
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("ok");
+    }, async (origin) => {
+      const sitemapFile = path.join(tempDir, "sitemap.xml");
+      const stateFile = path.join(tempDir, "state.json");
+      await writeFile(sitemapFile, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${origin}/known</loc><lastmod>2026-07-15</lastmod></url>
+  <url><loc>${origin}/changed</loc><lastmod>2026-07-15</lastmod></url>
+</urlset>
+`, "utf8");
+
+      await makeChecker(origin, {
+        sitemap: sitemapFile,
+        stateFile,
+        concurrency: 1,
+        perHostConcurrency: 1,
+      }).run();
+
+      requestOrder.length = 0;
+      await writeFile(sitemapFile, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${origin}/known</loc><lastmod>2026-07-15</lastmod></url>
+  <url><loc>${origin}/changed</loc><lastmod>2026-07-16</lastmod></url>
+</urlset>
+`, "utf8");
+
+      const report = await makeChecker(origin, {
+        sitemap: sitemapFile,
+        stateFile,
+        concurrency: 1,
+        perHostConcurrency: 1,
+      }).run();
+      const sitemapPriority = report.summary.incremental.sitemap.priority;
+
+      assert(report.summary.incremental.stateRead === true, "Second sitemap priority run should read state.");
+      assert(sitemapPriority.matchedCurrentUrls === 2, "Sitemap priority should only count current inventory matches.");
+      assert(sitemapPriority.changed === 1, "Sitemap priority should count newer lastmod URL.");
+      assert(sitemapPriority.known === 1, "Sitemap priority should count unchanged lastmod URL.");
+      assert(sitemapPriority.boosted === 1, "Newer sitemap lastmod should boost priority.");
+      assert(sitemapPriority.deferred === 1, "Unchanged sitemap lastmod should defer priority.");
+      assert(sitemapPriority.byClassification.sitemap_changed === 20, "Summary should expose sitemap_changed boost.");
+      assert(sitemapPriority.byClassification.sitemap_known === -10, "Summary should expose sitemap_known deferral.");
+      assert(requestOrder[0] === "/changed", "Newer sitemap lastmod URL should be checked before unchanged sitemap URL.");
+      assert(requestOrder[1] === "/known", "Unchanged sitemap lastmod URL should be checked after changed sitemap URL.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 await assertSitemapUrlsetFileSummary();
 await assertSitemapIndexFileSummary();
 await assertSitemapMaxUrlsTruncatesSummary();
 await assertRemoteSitemapDoesNotSeedValidationInP8d1();
+await assertSitemapLastmodSignalsAffectPriority();
 
 console.log("ok p8 sitemap");

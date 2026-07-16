@@ -495,6 +495,16 @@ P8d-1 新增 sitemap 讀取與摘要，但不改變 discovery、page queue 或 v
 - `sampleUrls` 與 report options 會套用 sensitive query redaction。
 - P8d-1 不會把 sitemap-only URL 直接排入 validation queue 或寫入 `checked[]`；後續 seed 行為留給 P8d-3。
 
+P8d-2 新增 sitemap priority signal，但仍只影響 current inventory 內的 URL：
+
+- URL 必須同時存在於 current inventory 與 sitemap，才會有 sitemap priority signal。
+- sitemap `lastmod` 比 scan state 前次 `lastSitemapLastmod` 新時，分類為 `sitemap_changed`，提高 priority。
+- sitemap `lastmod` 與前次相同或不更新時，分類為 `sitemap_known`，降低 priority。
+- 沒有可比較前次 `lastmod` 時，分類為 `sitemap_listed`，只作輕量 signal。
+- `summary.incremental.sitemap.priority` 記錄 matchedCurrentUrls、changed、known、listed、boosted、deferred、neutral、totalBoost 與 byClassification。
+- scan state 會保存 current inventory URL 的 `lastSitemapLastmod`，供下一輪比對。
+- sitemap-only URL 仍不會因 priority signal 直接進入 validation queue 或 `checked[]`。
+
 Report 會記錄：
 
 - `options.incremental`
