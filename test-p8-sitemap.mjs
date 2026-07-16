@@ -1,0 +1,214 @@
+#!/usr/bin/env node
+
+import { createServer } from "node:http";
+import { once } from "node:events";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { LinkChecker } from "./link-checker.mjs";
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+async function withServer(handler, task) {
+  const server = createServer(handler);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  try {
+    return await task(`http://127.0.0.1:${address.port}`);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+}
+
+function makeChecker(startUrl, options = {}) {
+  return new LinkChecker(startUrl, {
+    allowLocalhost: true,
+    robotsTxt: false,
+    retryCount: 0,
+    requestDelayMs: 0,
+    confirm404: false,
+    maxDepth: 0,
+    ...options,
+  });
+}
+
+async function assertSitemapUrlsetFileSummary() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-urlset-"));
+  try {
+    await withServer((request, response) => {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end("<p>ok</p>");
+    }, async (origin) => {
+      const sitemapFile = path.join(tempDir, "sitemap.xml");
+      const stateFile = path.join(tempDir, "state.json");
+      await writeFile(sitemapFile, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${origin}/alpha?token=secret-value</loc>
+    <lastmod>2026-07-15</lastmod>
+  </url>
+  <url>
+    <loc>${origin}/beta</loc>
+  </url>
+</urlset>
+`, "utf8");
+
+      const report = await makeChecker(origin, {
+        sitemap: sitemapFile,
+        stateFile,
+      }).run();
+      const sitemap = report.summary.incremental.sitemap;
+
+      assert(report.options.incremental === true, "--sitemap should enable incremental summary.");
+      assert(report.options.sitemap === sitemapFile, "Report options should record the sitemap source.");
+      assert(sitemap.enabled === true, "Sitemap summary should be enabled.");
+      assert(sitemap.status === "ok", "Sitemap file should load successfully.");
+      assert(sitemap.sourceType === "file", "Sitemap file should be marked as file source.");
+      assert(sitemap.type === "urlset", "Sitemap summary should classify urlset.");
+      assert(sitemap.urlCount === 2, "Sitemap summary should count urlset URLs.");
+      assert(sitemap.lastmodCount === 1, "Sitemap summary should count lastmod values.");
+      assert(sitemap.sampleUrls[0].url.includes("token=REDACTED"), "Sitemap sample URLs should redact sensitive query values.");
+      assert(!JSON.stringify(sitemap).includes("secret-value"), "Sitemap summary must not expose sensitive query values.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function assertSitemapIndexFileSummary() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-index-"));
+  try {
+    await withServer((request, response) => {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end("<p>ok</p>");
+    }, async (origin) => {
+      const childFile = path.join(tempDir, "child.xml");
+      const indexFile = path.join(tempDir, "index.xml");
+      const stateFile = path.join(tempDir, "state.json");
+      await writeFile(childFile, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${origin}/from-index</loc>
+    <lastmod>2026-07-16</lastmod>
+  </url>
+</urlset>
+`, "utf8");
+      await writeFile(indexFile, `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${pathToFileURL(childFile).href}</loc>
+    <lastmod>2026-07-16</lastmod>
+  </sitemap>
+</sitemapindex>
+`, "utf8");
+
+      const report = await makeChecker(origin, {
+        sitemap: indexFile,
+        stateFile,
+      }).run();
+      const sitemap = report.summary.incremental.sitemap;
+
+      assert(sitemap.status === "ok", "Sitemap index should load successfully.");
+      assert(sitemap.type === "sitemapindex", "Sitemap summary should classify sitemap index.");
+      assert(sitemap.indexChildCount === 1, "Sitemap index should count child sitemap entries.");
+      assert(sitemap.fetchedChildCount === 1, "Sitemap index should read same-file child sitemap.");
+      assert(sitemap.urlCount === 1, "Sitemap index should collect child urlset URLs.");
+      assert(sitemap.lastmodCount === 1, "Sitemap index should preserve child lastmod counts.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function assertSitemapMaxUrlsTruncatesSummary() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-limit-"));
+  try {
+    await withServer((request, response) => {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end("<p>ok</p>");
+    }, async (origin) => {
+      const sitemapFile = path.join(tempDir, "sitemap.xml");
+      const stateFile = path.join(tempDir, "state.json");
+      await writeFile(sitemapFile, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${origin}/one</loc></url>
+  <url><loc>${origin}/two</loc></url>
+</urlset>
+`, "utf8");
+
+      const report = await makeChecker(origin, {
+        sitemap: sitemapFile,
+        sitemapMaxUrls: 1,
+        stateFile,
+      }).run();
+      const sitemap = report.summary.incremental.sitemap;
+
+      assert(sitemap.status === "ok", "Limited sitemap should load successfully.");
+      assert(sitemap.urlCount === 1, "Sitemap summary should respect sitemapMaxUrls.");
+      assert(sitemap.maxUrls === 1, "Sitemap summary should expose maxUrls.");
+      assert(sitemap.truncated === true, "Sitemap summary should mark truncation.");
+      assert(sitemap.warnings.some((warning) => warning.code === "sitemap_urls_truncated"), "Sitemap summary should include truncation warning.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function assertRemoteSitemapDoesNotSeedValidationInP8d1() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-checker-p8-sitemap-remote-"));
+  try {
+    const requestCounts = new Map();
+    await withServer((request, response) => {
+      requestCounts.set(request.url, (requestCounts.get(request.url) || 0) + 1);
+      if (request.url.startsWith("/sitemap.xml")) {
+        const origin = `http://${request.headers.host}`;
+        response.writeHead(200, { "content-type": "application/xml" });
+        response.end(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${origin}/sitemap-only</loc>
+    <lastmod>2026-07-16</lastmod>
+  </url>
+</urlset>
+`);
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end("<p>ok</p>");
+    }, async (origin) => {
+      const stateFile = path.join(tempDir, "state.json");
+      const sitemapSource = `${origin}/sitemap.xml?token=secret-value`;
+      const report = await makeChecker(origin, {
+        sitemap: sitemapSource,
+        stateFile,
+      }).run();
+      const sitemap = report.summary.incremental.sitemap;
+
+      assert(sitemap.status === "ok", "Remote sitemap should load successfully.");
+      assert(sitemap.sourceType === "url", "Remote sitemap should be marked as URL source.");
+      assert(report.options.sitemap.includes("token=REDACTED"), "Report options should redact sensitive sitemap source query values.");
+      assert(!JSON.stringify(report).includes("secret-value"), "Report output must not expose sensitive sitemap source query values.");
+      assert(sitemap.type === "urlset", "Remote sitemap should classify urlset.");
+      assert(sitemap.urlCount === 1, "Remote sitemap should count sitemap-only URL.");
+      assert(requestCounts.get("/sitemap.xml?token=secret-value") === 1, "Remote sitemap should be fetched once.");
+      assert(requestCounts.get("/sitemap-only") === undefined, "P8d-1 must not seed sitemap-only URLs into validation.");
+      assert(!report.checked.some((item) => item.url.endsWith("/sitemap-only")), "P8d-1 must not write sitemap-only URLs into checked results.");
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+await assertSitemapUrlsetFileSummary();
+await assertSitemapIndexFileSummary();
+await assertSitemapMaxUrlsTruncatesSummary();
+await assertRemoteSitemapDoesNotSeedValidationInP8d1();
+
+console.log("ok p8 sitemap");

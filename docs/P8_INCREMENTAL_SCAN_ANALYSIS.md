@@ -378,6 +378,20 @@ P8d 驗收：
 - 超過 sitemap URL 上限會截斷並在 summary 記錄。
 - state / report 不保存敏感 query 明文。
 
+#### 2026-07-16 P8d-1 implementation record
+
+P8d-1 已完成 sitemap 讀取與摘要，範圍刻意維持保守：
+
+- 新增 `--sitemap <url-or-file>` 與 `--sitemap-max-urls <n>`。
+- `--sitemap` 會自動啟用 incremental summary，並輸出 `summary.incremental.sitemap`。
+- 支援本地檔案、`file://`、HTTP(S) sitemap，HTTP(S) 讀取走既有 URL security policy / SSRF 防護。
+- 支援 `urlset`、`sitemapindex`、`loc`、`lastmod`；sitemap index 第一版只讀第一層 child sitemap，不遞迴 nested index。
+- sitemap summary 會記錄 status、type、urlCount、lastmodCount、indexChildCount、fetchedChildCount、maxUrls、truncated、sampleUrls、warnings 與 error。
+- `sampleUrls` 與 report options 維持 sensitive query redaction。
+- P8d-1 不改 `pageQueue`、不改 validation priority、不 seed sitemap-only URL；讀到的 sitemap-only URL 不會直接進 `checked[]`。
+
+驗收測試：`test-p8-sitemap.mjs` 覆蓋 urlset file、sitemap index file、URL 上限截斷、遠端 sitemap URL，以及 P8d-1 不 seed sitemap-only URL 的邊界。
+
 ### P8e：文件、GUI 與 Analyzer 最小呈現
 
 目標：讓使用者能分辨 current check 與 reused result。

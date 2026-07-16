@@ -460,6 +460,8 @@ CLI：
 - `--state-file <file>`，預設 `.cache/link-check-state.json`
 - `--no-incremental-state-write`
 - `--changed-only`
+- `--sitemap <url-or-file>`
+- `--sitemap-max-urls <n>`
 
 P8a/P8b 會從 baseline report 或 scan state 建立 previous canonical set，並把本次 inventory 分成：
 
@@ -484,6 +486,15 @@ P8c 的 `--changed-only` 是顯式 opt-in，只復用 `requireBody: false` 的�
 
 Reused result 會在 checked item 內加入 `incremental.reused=true`、`reuseSource`、`baselineCheckedAt` 與 reason。`requireBody: true` 的 page crawl 仍必須實際抓取 HTML body，確保 current inventory、sources、SPA payload extraction 與 site link rules 不被舊資料取代。
 
+P8d-1 新增 sitemap 讀取與摘要，但不改變 discovery、page queue 或 validation 行為：
+
+- `--sitemap` 支援本地檔案、`file://` 與 HTTP(S) sitemap。
+- HTTP(S) sitemap 讀取必須走既有 URL security policy / SSRF 防護。
+- 支援 `urlset`、`sitemapindex`、`loc` 與 `lastmod`。
+- `summary.incremental.sitemap` 記錄 status、type、urlCount、lastmodCount、indexChildCount、fetchedChildCount、maxUrls、truncated、sampleUrls、warnings 與 error。
+- `sampleUrls` 與 report options 會套用 sensitive query redaction。
+- P8d-1 不會把 sitemap-only URL 直接排入 validation queue 或寫入 `checked[]`；後續 seed 行為留給 P8d-3。
+
 Report 會記錄：
 
 - `options.incremental`
@@ -503,6 +514,7 @@ Report 會記錄：
 - `summary.incremental.disappeared`
 - `summary.incremental.reused`
 - `summary.incremental.reuse`
+- `summary.incremental.sitemap`
 - `summary.incremental.priority`
 - `summary.incremental.warnings`
 

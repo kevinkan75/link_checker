@@ -11,7 +11,7 @@ import { gunzipSync, inflateSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { basename, dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const TOOL_VERSION = "0.1.0";
 const REPORT_SCHEMA_VERSION = "1.2.0";
@@ -28,6 +28,9 @@ const CACHE_POLICY_VERSION = "p7-cache-policy-v1";
 const DEFAULT_INCREMENTAL_STATE_FILE = ".cache/link-check-state.json";
 const INCREMENTAL_STATE_SCHEMA_VERSION = "1.0.0";
 const INCREMENTAL_POLICY_VERSION = "p8-incremental-policy-v1";
+const DEFAULT_SITEMAP_MAX_URLS = 50000;
+const DEFAULT_SITEMAP_INDEX_MAX_CHILDREN = 20;
+const DEFAULT_SITEMAP_SAMPLE_URLS = 5;
 const REDACTED_QUERY_VALUE = "REDACTED";
 const DEFAULT_REDACT_QUERY_KEYS = [
   "access_token",
@@ -147,6 +150,9 @@ const DEFAULTS = {
   stateFile: DEFAULT_INCREMENTAL_STATE_FILE,
   incrementalStateWrite: true,
   changedOnly: false,
+  sitemap: null,
+  sitemapMaxUrls: DEFAULT_SITEMAP_MAX_URLS,
+  sitemapIndexMaxChildren: DEFAULT_SITEMAP_INDEX_MAX_CHILDREN,
   confirm404: true,
   confirmationMaxUrls: 100,
   confirmationMaxPerHost: 20,
@@ -549,7 +555,10 @@ class LinkChecker {
     this.options.refreshCache = this.options.refreshCache === true;
     this.options.baselineReport = normalizeOptionalPath(this.options.baselineReport);
     this.options.stateFile = normalizeOptionalPath(this.options.stateFile) || DEFAULT_INCREMENTAL_STATE_FILE;
-    this.options.incremental = this.options.incremental === true || Boolean(this.options.baselineReport);
+    this.options.sitemap = normalizeOptionalPath(this.options.sitemap);
+    this.options.sitemapMaxUrls = normalizeSitemapMaxUrls(this.options.sitemapMaxUrls);
+    this.options.sitemapIndexMaxChildren = normalizeSitemapIndexMaxChildren(this.options.sitemapIndexMaxChildren);
+    this.options.incremental = this.options.incremental === true || Boolean(this.options.baselineReport) || Boolean(this.options.sitemap);
     this.options.incrementalStateWrite = this.options.incrementalStateWrite !== false;
     this.options.changedOnly = this.options.changedOnly === true;
     if (this.options.changedOnly) {
@@ -628,6 +637,8 @@ class LinkChecker {
       statePolicyFingerprint: null,
       baselinePolicyFingerprint: null,
     };
+    this.sitemap = buildInitialSitemapSummary(this.options);
+    this.sitemapEntries = [];
     this.results = new Map();
     this.sources = new Map();
     this.externalLinks = new Map();
@@ -664,6 +675,7 @@ class LinkChecker {
     try {
       await this.inspectRobotsTxt();
       await this.loadIncrementalInputs();
+      await this.loadSitemapInput();
       const workers = Array.from(
         { length: this.options.concurrency },
         () => this.pageWorker(),
@@ -765,6 +777,32 @@ class LinkChecker {
   updatePolicyRecords() {
     this.scanPolicy = buildScanPolicy(this.robotsTxt, this.options);
     this.compliance = buildComplianceRecord(this.scanPolicy, this.options);
+  }
+
+  async loadSitemapInput() {
+    if (!this.options.sitemap) {
+      return;
+    }
+
+    try {
+      const loaded = await loadSitemapTree(this.options.sitemap, this);
+      this.sitemapEntries = loaded.entries;
+      this.sitemap = buildLoadedSitemapSummary(loaded, this.options);
+      for (const warning of loaded.warnings) {
+        this.incremental.warnings.push({
+          code: "sitemap_warning",
+          message: warning.message,
+          detail: warning.code,
+        });
+      }
+    } catch (error) {
+      this.sitemapEntries = [];
+      this.sitemap = buildSitemapErrorSummary(this.options.sitemap, error, this.options);
+      this.incremental.warnings.push({
+        code: "sitemap_read_failed",
+        message: error.message || String(error),
+      });
+    }
   }
 
   async loadIncrementalInputs() {
@@ -1039,6 +1077,7 @@ class LinkChecker {
         bypassed: this.incremental.reuse.bypassed,
         bySource: this.incremental.reuse.bySource,
       },
+      sitemap: this.sitemap || buildInitialSitemapSummary(this.options),
       priority,
       policyFingerprint: this.incremental.policyFingerprint,
       warnings: this.incremental.warnings,
@@ -2052,6 +2091,8 @@ class LinkChecker {
         stateFile: this.options.stateFile,
         incrementalStateWrite: this.options.incrementalStateWrite,
         changedOnly: this.options.changedOnly,
+        sitemap: this.options.sitemap,
+        sitemapMaxUrls: this.options.sitemapMaxUrls,
         robotsTxt: this.options.robotsTxt,
         authorizedScan: this.options.authorizedScan,
         authorizationNote: this.options.authorizationNote,
@@ -2488,6 +2529,318 @@ function normalizeRetryAfterMaxMs(value) {
     return DEFAULTS.retryAfterMaxMs;
   }
   return Math.min(number, 300000);
+}
+
+function normalizeSitemapMaxUrls(value) {
+  const number = Number.parseInt(value ?? DEFAULT_SITEMAP_MAX_URLS, 10);
+  if (!Number.isFinite(number) || number < 1) {
+    return DEFAULT_SITEMAP_MAX_URLS;
+  }
+  return Math.min(number, DEFAULT_SITEMAP_MAX_URLS);
+}
+
+function normalizeSitemapIndexMaxChildren(value) {
+  const number = Number.parseInt(value ?? DEFAULT_SITEMAP_INDEX_MAX_CHILDREN, 10);
+  if (!Number.isFinite(number) || number < 1) {
+    return DEFAULT_SITEMAP_INDEX_MAX_CHILDREN;
+  }
+  return Math.min(number, DEFAULT_SITEMAP_INDEX_MAX_CHILDREN);
+}
+
+function buildInitialSitemapSummary(options = DEFAULTS) {
+  return {
+    enabled: Boolean(options.sitemap),
+    source: options.sitemap ? redactSensitiveQueryValue(options.sitemap, options) : null,
+    sourceType: options.sitemap ? getSitemapSourceType(options.sitemap) : null,
+    status: options.sitemap ? "not_loaded" : "not_configured",
+    type: null,
+    urlCount: 0,
+    lastmodCount: 0,
+    indexChildCount: 0,
+    fetchedChildCount: 0,
+    maxUrls: normalizeSitemapMaxUrls(options.sitemapMaxUrls),
+    truncated: false,
+    bodyTruncated: false,
+    sampleUrls: [],
+    warnings: [],
+    error: null,
+  };
+}
+
+function buildLoadedSitemapSummary(loaded, options = DEFAULTS) {
+  const redactionOptions = { ...options, redactSensitiveQuery: true };
+  return {
+    enabled: true,
+    source: redactSensitiveQueryValue(loaded.source, redactionOptions),
+    sourceType: loaded.sourceType,
+    status: "ok",
+    type: loaded.type,
+    urlCount: loaded.entries.length,
+    lastmodCount: loaded.entries.filter((entry) => entry.lastmod).length,
+    indexChildCount: loaded.indexChildCount,
+    fetchedChildCount: loaded.fetchedChildCount,
+    maxUrls: normalizeSitemapMaxUrls(options.sitemapMaxUrls),
+    truncated: loaded.truncated,
+    bodyTruncated: loaded.bodyTruncated,
+    sampleUrls: loaded.entries.slice(0, DEFAULT_SITEMAP_SAMPLE_URLS).map((entry) => ({
+      url: redactSensitiveQueryValue(entry.url, redactionOptions),
+      lastmod: entry.lastmod || null,
+    })),
+    warnings: loaded.warnings,
+    error: null,
+  };
+}
+
+function buildSitemapErrorSummary(source, error, options = DEFAULTS) {
+  return {
+    ...buildInitialSitemapSummary({ ...options, sitemap: source }),
+    status: "error",
+    error: error.message || String(error),
+  };
+}
+
+function getSitemapSourceType(source) {
+  if (/^https?:\/\//i.test(source)) {
+    return "url";
+  }
+  if (/^file:\/\//i.test(source)) {
+    return "file_url";
+  }
+  return "file";
+}
+
+async function loadSitemapTree(source, checker) {
+  const options = checker.options;
+  const maxUrls = normalizeSitemapMaxUrls(options.sitemapMaxUrls);
+  const maxIndexChildren = normalizeSitemapIndexMaxChildren(options.sitemapIndexMaxChildren);
+  const root = await readSitemapSource(source, checker);
+  const parsed = parseSitemapXml(root.text, {
+    maxUrls,
+    maxIndexChildren,
+  });
+  const warnings = [...root.warnings, ...parsed.warnings];
+  const entries = [];
+  let fetchedChildCount = 0;
+  let bodyTruncated = root.bodyTruncated;
+
+  if (parsed.type !== "sitemapindex") {
+    entries.push(...parsed.entries.slice(0, maxUrls));
+    return {
+      source,
+      sourceType: root.sourceType,
+      type: parsed.type,
+      entries,
+      indexChildCount: 0,
+      fetchedChildCount,
+      truncated: parsed.truncated,
+      bodyTruncated,
+      warnings,
+    };
+  }
+
+  for (const child of parsed.indexEntries.slice(0, maxIndexChildren)) {
+    if (entries.length >= maxUrls) {
+      break;
+    }
+    if (isCrossOriginSitemapChild(child.url, checker.startOrigin)) {
+      warnings.push({
+        code: "cross_origin_sitemap_child_ignored",
+        message: `Ignored cross-origin sitemap child ${redactSensitiveQueryValue(child.url, options)}.`,
+      });
+      continue;
+    }
+    try {
+      const childSource = await readSitemapSource(child.url, checker);
+      bodyTruncated = bodyTruncated || childSource.bodyTruncated;
+      const childParsed = parseSitemapXml(childSource.text, {
+        maxUrls: maxUrls - entries.length,
+        maxIndexChildren,
+      });
+      warnings.push(...childSource.warnings, ...childParsed.warnings.map((warning) => ({
+        ...warning,
+        message: `Child sitemap ${redactSensitiveQueryValue(child.url, options)}: ${warning.message}`,
+      })));
+      if (childParsed.type === "urlset") {
+        entries.push(...childParsed.entries);
+        fetchedChildCount += 1;
+      } else {
+        warnings.push({
+          code: "nested_sitemap_index_ignored",
+          message: `Nested sitemap index ignored: ${redactSensitiveQueryValue(child.url, options)}.`,
+        });
+      }
+    } catch (error) {
+      warnings.push({
+        code: "sitemap_child_read_failed",
+        message: `Unable to read sitemap child ${redactSensitiveQueryValue(child.url, options)}: ${error.message || String(error)}`,
+      });
+    }
+  }
+
+  return {
+    source,
+    sourceType: root.sourceType,
+    type: parsed.type,
+    entries,
+    indexChildCount: parsed.indexEntries.length,
+    fetchedChildCount,
+    truncated: parsed.truncated || entries.length >= maxUrls,
+    bodyTruncated,
+    warnings,
+  };
+}
+
+async function readSitemapSource(source, checker) {
+  const sourceType = getSitemapSourceType(source);
+  const warnings = [];
+  const maxBytes = checker.options.maxHtmlBytes;
+  if (sourceType === "url") {
+    const result = await fetchUrl(source, {
+      requireBody: true,
+      forceGet: true,
+      timeoutMs: checker.options.timeoutMs,
+      retryCount: 0,
+      maxRedirects: checker.options.maxRedirects,
+      longRedirectThreshold: checker.options.longRedirectThreshold,
+      userAgent: checker.options.userAgent,
+      acceptLanguage: checker.options.acceptLanguage,
+      referer: checker.startUrl,
+      preferGet: true,
+      canonicalStrategy: checker.options.canonicalStrategy,
+      legacyTls: checker.options.legacyTls,
+      maxHtmlBytes: maxBytes,
+      maxBodyPreviewBytes: checker.options.maxBodyPreviewBytes,
+      maxDownloadProbeBytes: checker.options.maxDownloadProbeBytes,
+      connectionOptions: checker.connectionOptions,
+      agents: checker.agents,
+      securityPolicy: checker.securityPolicy,
+      retryAfterMaxMs: checker.options.retryAfterMaxMs,
+      protectionBodyHash: checker.options.protectionBodyHash,
+      scheduleRequest: (requestUrl, task) => checker.hostScheduler.run(requestUrl, task),
+      onRetryAfter: (requestUrl, cooldownMs, result) => checker.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
+    });
+    if (!result.ok) {
+      throw new Error(`Sitemap URL returned ${result.status || result.issueType || "error"}`);
+    }
+    return {
+      source,
+      sourceType,
+      text: result.body || "",
+      bodyTruncated: result.bodyTruncated === true,
+      warnings,
+    };
+  }
+
+  const filePath = sourceType === "file_url" ? fileURLToPath(source) : source;
+  const buffer = await readFile(filePath);
+  const bodyTruncated = buffer.length > maxBytes;
+  if (bodyTruncated) {
+    warnings.push({
+      code: "sitemap_body_truncated",
+      message: `Sitemap file exceeded ${maxBytes} bytes and was truncated.`,
+    });
+  }
+  return {
+    source,
+    sourceType,
+    text: buffer.subarray(0, maxBytes).toString("utf8"),
+    bodyTruncated,
+    warnings,
+  };
+}
+
+function parseSitemapXml(text, { maxUrls, maxIndexChildren }) {
+  const xml = String(text || "").replace(/^\uFEFF/, "");
+  const warnings = [];
+  if (/<(?:[A-Za-z0-9_-]+:)?sitemapindex\b/i.test(xml)) {
+    const indexEntries = extractSitemapBlocks(xml, "sitemap")
+      .map((block) => ({
+        url: extractXmlTag(block, "loc"),
+        lastmod: extractXmlTag(block, "lastmod"),
+      }))
+      .filter((entry) => entry.url);
+    const truncated = indexEntries.length > maxIndexChildren;
+    if (truncated) {
+      warnings.push({
+        code: "sitemap_index_children_truncated",
+        message: `Sitemap index has ${indexEntries.length} children; only ${maxIndexChildren} will be read.`,
+      });
+    }
+    return {
+      type: "sitemapindex",
+      entries: [],
+      indexEntries,
+      truncated,
+      warnings,
+    };
+  }
+
+  if (/<(?:[A-Za-z0-9_-]+:)?urlset\b/i.test(xml)) {
+    const allEntries = extractSitemapBlocks(xml, "url")
+      .map((block) => ({
+        url: extractXmlTag(block, "loc"),
+        lastmod: extractXmlTag(block, "lastmod"),
+      }))
+      .filter((entry) => entry.url);
+    const truncated = allEntries.length > maxUrls;
+    if (truncated) {
+      warnings.push({
+        code: "sitemap_urls_truncated",
+        message: `Sitemap has ${allEntries.length} URLs; only ${maxUrls} will be recorded.`,
+      });
+    }
+    return {
+      type: "urlset",
+      entries: allEntries.slice(0, maxUrls),
+      indexEntries: [],
+      truncated,
+      warnings,
+    };
+  }
+
+  warnings.push({
+    code: "sitemap_type_unknown",
+    message: "Sitemap XML did not contain a urlset or sitemapindex root.",
+  });
+  return {
+    type: "unknown",
+    entries: [],
+    indexEntries: [],
+    truncated: false,
+    warnings,
+  };
+}
+
+function extractSitemapBlocks(xml, tagName) {
+  const pattern = new RegExp(`<(?:[A-Za-z0-9_-]+:)?${tagName}\\b[\\s\\S]*?<\\/(?:[A-Za-z0-9_-]+:)?${tagName}>`, "gi");
+  return xml.match(pattern) || [];
+}
+
+function extractXmlTag(xml, tagName) {
+  const pattern = new RegExp(`<(?:[A-Za-z0-9_-]+:)?${tagName}\\b[^>]*>([\\s\\S]*?)<\\/(?:[A-Za-z0-9_-]+:)?${tagName}>`, "i");
+  const match = pattern.exec(xml);
+  return match ? decodeXmlText(match[1].trim()) : null;
+}
+
+function decodeXmlText(value) {
+  return String(value || "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function isCrossOriginSitemapChild(url, startOrigin) {
+  if (!/^https?:\/\//i.test(url)) {
+    return false;
+  }
+  try {
+    return new URL(url).origin !== startOrigin;
+  } catch {
+    return false;
+  }
 }
 
 function createEmptyIncrementalState(checker) {
@@ -7014,6 +7367,21 @@ function parseArgs(argv) {
       explicitOptions.add("incremental");
       continue;
     }
+    if (arg === "--sitemap") {
+      options.sitemap = args.shift();
+      if (!options.sitemap || options.sitemap.startsWith("-")) {
+        throw new Error("--sitemap requires a URL or file path");
+      }
+      options.incremental = true;
+      explicitOptions.add("sitemap");
+      explicitOptions.add("incremental");
+      continue;
+    }
+    if (arg === "--sitemap-max-urls") {
+      options.sitemapMaxUrls = readPositiveInteger(args.shift(), "--sitemap-max-urls");
+      explicitOptions.add("sitemapMaxUrls");
+      continue;
+    }
     if (arg === "--json") {
       json = true;
       continue;
@@ -7246,7 +7614,10 @@ function parseArgs(argv) {
   options.cacheTtlHours = normalizeCacheTtlHours(options.cacheTtlHours);
   options.baselineReport = normalizeOptionalPath(options.baselineReport);
   options.stateFile = normalizeOptionalPath(options.stateFile) || DEFAULT_INCREMENTAL_STATE_FILE;
-  options.incremental = options.incremental === true || Boolean(options.baselineReport);
+  options.sitemap = normalizeOptionalPath(options.sitemap);
+  options.sitemapMaxUrls = normalizeSitemapMaxUrls(options.sitemapMaxUrls);
+  options.sitemapIndexMaxChildren = normalizeSitemapIndexMaxChildren(options.sitemapIndexMaxChildren);
+  options.incremental = options.incremental === true || Boolean(options.baselineReport) || Boolean(options.sitemap);
   options.incrementalStateWrite = options.incrementalStateWrite !== false;
   options.changedOnly = options.changedOnly === true;
   if (options.changedOnly) {
@@ -7478,6 +7849,11 @@ Options:
                       Read baseline/state but do not write updated incremental state.
   --changed-only      Reuse stable known status results when policy and TTL are valid.
                       Still crawls pages and builds the current inventory.
+  --sitemap <url-or-file>
+                      Load a sitemap urlset or sitemap index into summary.incremental.sitemap.
+                      Does not change page discovery or validation behavior in P8d-1.
+  --sitemap-max-urls <n>
+                      Maximum sitemap URLs recorded in the P8d summary. Default: ${DEFAULTS.sitemapMaxUrls}
   --progress          Show a live progress line while checking.
   --verbose           Show detailed page, request, skip, and result events.
   --output, -o <file> Write the full JSON report to a file.
@@ -7527,6 +7903,9 @@ function printSummary(report) {
     console.log(`Incremental: ${summary.incremental.new || 0} new, ${summary.incremental.known || 0} known, ${summary.incremental.previousError || 0} previous error, ${summary.incremental.policyMismatch || 0} policy mismatch, ${summary.incremental.ttlExpired || 0} TTL expired, ${summary.incremental.unstableRedirect || 0} unstable redirect, ${summary.incremental.disappeared || 0} disappeared`);
     if (summary.incremental.reuse?.enabled) {
       console.log(`  reused status results: ${summary.incremental.reused || 0}`);
+    }
+    if (summary.incremental.sitemap?.enabled) {
+      console.log(`  sitemap: ${summary.incremental.sitemap.status}, ${summary.incremental.sitemap.urlCount || 0} URL(s), type ${summary.incremental.sitemap.type || "unknown"}`);
     }
   }
   if (summary.brokenLinks > 0) {
