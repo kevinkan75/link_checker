@@ -37,7 +37,13 @@
 
         <div class="actions">
           <button id="pick-links-button" type="button">讀取外連清單</button>
-          <button id="analyze-button" type="button">分析</button>
+          <button id="analyze-button" type="button" disabled>分析</button>
+        </div>
+
+        <div class="import-flow" aria-label="外連分析流程">
+          <span id="flow-select" class="active">1 選檔</span>
+          <span id="flow-analyze">2 分析</span>
+          <span id="flow-export">3 匯出</span>
         </div>
 
         <div id="import-empty-state" class="empty-state import-empty-state">

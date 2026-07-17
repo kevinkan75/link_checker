@@ -6,6 +6,9 @@ const exportCsvButton = document.querySelector("#export-csv-button");
 const clearButton = document.querySelector("#clear-button");
 const loadState = document.querySelector("#load-state");
 const reportEmptyState = document.querySelector("#report-empty-state");
+const flowSelect = document.querySelector("#flow-select");
+const flowLoad = document.querySelector("#flow-load");
+const flowExport = document.querySelector("#flow-export");
 const metricPages = document.querySelector("#metric-pages");
 const metricChecked = document.querySelector("#metric-checked");
 const metricBroken = document.querySelector("#metric-broken");
@@ -86,30 +89,31 @@ clearButton.addEventListener("click", () => {
   resetSelect(statusFilterInput, "全部");
   exportCsvButton.disabled = true;
   clearButton.disabled = true;
-  loadState.textContent = "尚未載入 report.json";
+  setReportFlow("select", "尚未載入 report.json");
   renderEmpty();
 });
 
 async function loadReportFile() {
   const file = reportFileInput.files?.[0];
   if (!file) {
+    setReportFlow("select", "尚未載入 report.json");
     return;
   }
 
   try {
-    loadState.textContent = "讀取 report.json 中";
+    setReportFlow("load", `正在載入 ${file.name}`);
     const report = JSON.parse(await file.text());
     currentAnalysis = analyzeReport(report);
     populateFilters(currentAnalysis);
     renderAnalysis(applyFilters(currentAnalysis));
     exportCsvButton.disabled = false;
     clearButton.disabled = false;
-    loadState.textContent = `${file.name} 已載入，${currentAnalysis.broken.length} 筆壞連結${currentAnalysis.runStatus.status === "complete" ? "" : "，報告未完整完成"}`;
+    setReportFlow("export", `${file.name} 已載入，${currentAnalysis.broken.length} 筆壞連結${currentAnalysis.runStatus.status === "complete" ? "" : "，報告未完整完成"}；可篩選或匯出`);
   } catch (error) {
     currentAnalysis = null;
     exportCsvButton.disabled = true;
     clearButton.disabled = false;
-    loadState.textContent = `讀取失敗：${error.message}`;
+    setReportFlow("load", `讀取失敗：${error.message}`);
     renderEmpty("無法解析 report.json。");
   }
 }
@@ -492,6 +496,24 @@ function setReportEmptyStateVisible(isVisible) {
     return;
   }
   reportEmptyState.hidden = !isVisible;
+}
+
+function setReportFlow(stage, message) {
+  loadState.textContent = message;
+  const states = {
+    select: ["active", "", ""],
+    load: ["done", "active", ""],
+    export: ["done", "done", "active"],
+  }[stage] || ["active", "", ""];
+  [flowSelect, flowLoad, flowExport].forEach((item, index) => {
+    if (!item) {
+      return;
+    }
+    item.classList.remove("active", "done");
+    if (states[index]) {
+      item.classList.add(states[index]);
+    }
+  });
 }
 
 function renderRunStatus(runStatus) {

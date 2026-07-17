@@ -106,6 +106,16 @@ External Link Analyzer / Report Analyzer 應改成更明確的流程：
 
 選檔後要有清楚狀態與下一步提示，避免使用者不確定是否已載入、是否需要再按分析、或目前是否可匯出。
 
+#### 2026-07-17 implementation record
+
+P9a-4 已完成第一版：
+
+- External Link Analyzer 增加 `選檔 -> 分析 -> 匯出` 流程列。
+- External Link Analyzer 在未選檔前停用「分析」，選檔後明確提示下一步，分析完成後提示可匯出。
+- Report Analyzer 增加 `選檔 -> 載入 -> 篩選 / 匯出` 流程列。
+- Report Analyzer 載入中、載入成功與讀取失敗都會更新流程狀態。
+- 不改 Analyzer 計算語意、不改 `report.json` 主契約。
+
 ## P8 延後項目
 
 P8 的 GUI 啟用入口與 state 管理不建議放進 P9a 第一批。這些功能不是純呈現層，會牽涉掃描參數、state 檔路徑、policy fingerprint 與 `changed-only` 語意。

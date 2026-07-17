@@ -12,6 +12,9 @@ const exportJsonButton = document.querySelector("#export-json-button");
 const exportCsvButton = document.querySelector("#export-csv-button");
 const loadState = document.querySelector("#load-state");
 const importEmptyState = document.querySelector("#import-empty-state");
+const flowSelect = document.querySelector("#flow-select");
+const flowAnalyze = document.querySelector("#flow-analyze");
+const flowExport = document.querySelector("#flow-export");
 const metricLinks = document.querySelector("#metric-links");
 const metricDomains = document.querySelector("#metric-domains");
 const metricHigh = document.querySelector("#metric-high");
@@ -97,10 +100,20 @@ pickLinksButton.addEventListener("click", () => {
 linksFileInput.addEventListener("change", () => {
   const file = linksFileInput.files?.[0];
   if (!file) {
-    loadState.textContent = "尚未載入外連清單";
+    currentAnalysis = null;
+    exportJsonButton.disabled = true;
+    exportCsvButton.disabled = true;
+    analyzeButton.disabled = true;
+    setImportFlow("select", "尚未載入外連清單");
+    setImportEmptyStateVisible(true);
     return;
   }
-  loadState.textContent = `已選擇 ${file.name}，按「分析」開始處理`;
+  currentAnalysis = null;
+  exportJsonButton.disabled = true;
+  exportCsvButton.disabled = true;
+  analyzeButton.disabled = false;
+  setImportEmptyStateVisible(true);
+  setImportFlow("analyze", `已選擇 ${file.name}，下一步按「分析」`);
 });
 
 for (const input of [searchInput, riskFilterInput, governanceFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
@@ -197,19 +210,23 @@ ut1DownloadButton.addEventListener("click", () => {
 
 analyzeButton.addEventListener("click", async () => {
   try {
-    loadState.textContent = "讀取中";
+    analyzeButton.disabled = true;
+    setImportFlow("analyze", "讀取與分析中");
     const links = await loadLinksFile();
     const ruleIndex = await loadRulesFile();
     currentAnalysis = analyze(links, ruleIndex);
     renderAnalysis(currentAnalysis);
     exportJsonButton.disabled = false;
     exportCsvButton.disabled = false;
-    loadState.textContent = getAnalysisStatusText(currentAnalysis);
+    analyzeButton.disabled = false;
+    setImportFlow("export", `${getAnalysisStatusText(currentAnalysis)}；可匯出目前篩選結果`);
   } catch (error) {
-    loadState.textContent = error.message;
     currentAnalysis = null;
+    analyzeButton.disabled = !linksFileInput.files?.[0];
     exportJsonButton.disabled = true;
     exportCsvButton.disabled = true;
+    setImportEmptyStateVisible(true);
+    setImportFlow("analyze", `分析失敗：${error.message}`);
   }
 });
 
@@ -821,6 +838,24 @@ function setImportEmptyStateVisible(isVisible) {
     return;
   }
   importEmptyState.hidden = !isVisible;
+}
+
+function setImportFlow(stage, message) {
+  loadState.textContent = message;
+  const states = {
+    select: ["active", "", ""],
+    analyze: ["done", "active", ""],
+    export: ["done", "done", "active"],
+  }[stage] || ["active", "", ""];
+  [flowSelect, flowAnalyze, flowExport].forEach((item, index) => {
+    if (!item) {
+      return;
+    }
+    item.classList.remove("active", "done");
+    if (states[index]) {
+      item.classList.add(states[index]);
+    }
+  });
 }
 
 function getAnalysisStatusText(analysis) {

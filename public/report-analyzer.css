@@ -222,6 +222,38 @@ select:focus {
   margin-bottom: 14px;
 }
 
+.import-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.import-flow span {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.import-flow span.active {
+  border-color: var(--primary);
+  background: #e7f3f4;
+  color: var(--primary);
+}
+
+.import-flow span.done {
+  border-color: #b9ddc5;
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
 #export-csv-button {
   border-color: var(--primary);
   background: var(--primary);
@@ -327,6 +359,12 @@ body.is-empty .links-panel {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   min-width: 0;
+}
+
+.summary-layout > .panel,
+.links-panel {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel-note {
@@ -580,6 +618,10 @@ tr:last-child td {
   .actions button,
   .result-actions button {
     flex: 1 1 100%;
+  }
+
+  .import-flow {
+    grid-template-columns: 1fr;
   }
 
   .setup-grid,
