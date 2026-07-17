@@ -138,7 +138,7 @@ Cache file 是本機效能最佳化資料，不是正式 report。cache key 使�
 | `--state-file <file>` | 指定 scan state 檔案路徑，預設 `.cache/link-check-state.json` |
 | `--no-incremental-state-write` | 讀取 baseline/state 並輸出 summary，但不回寫新的 scan state |
 | `--changed-only` | 啟用保守 result reuse；仍會完整爬頁建立本次 inventory，只復用穩定已知 URL 的 status result |
-| `--sitemap <url-or-file>` | 讀取 sitemap `urlset` 或 `sitemapindex`，輸出 `summary.incremental.sitemap`；P8d-1 不改變頁面 discovery 或 validation 行為 |
+| `--sitemap <url-or-file>` | 讀取 sitemap `urlset` 或 `sitemapindex`，輸出 `summary.incremental.sitemap`；會保守 seed same-origin、page-like URL，且仍保留 HTML discovery |
 | `--sitemap-max-urls <n>` | sitemap 摘要最多記錄的 URL 數，預設 `50000`；超過會截斷並在 summary warnings 記錄 |
 
 P8a 只影響 URL status validation 的分類與優先順序。頁面 crawl 仍會實際抓取 HTML body 並建立本次 inventory，因此不會因 baseline report 或 state 而跳過 HTML link extraction、SPA payload extraction 或 site link rules。
@@ -149,11 +149,11 @@ P8b 會把 `new`、`previousError`、`policyMismatch`、`ttlExpired` 與 `unstab
 
 P8c 的 `--changed-only` 只復用 `known` 且符合 policy match、TTL valid、非 previous error、非 unstable redirect 的 status result。`requireBody: true` 的頁面 crawl 不會復用舊結果。
 
-P8d-1 的 `--sitemap` 會自動啟用 incremental summary，支援本地檔案、`file://` 與 HTTP(S) sitemap。HTTP(S) sitemap 讀取會走既有 URL security policy；讀到的 sitemap-only URL 不會在 P8d-1 直接進入 validation queue 或 `checked[]`。
+P8d 的 `--sitemap` 會自動啟用 incremental summary，支援本地檔案、`file://` 與 HTTP(S) sitemap。HTTP(S) sitemap 讀取會走既有 URL security policy；遠端 sitemap index 只會讀 same-origin HTTP(S) child sitemap，不會讀取 `file://` child。
 
-P8d-2 會對同時存在於 current inventory 與 sitemap 的 URL 加入 priority signal：`lastmod` 較 state 中前次值新時提高 priority，未變時降低 priority；仍不會因 sitemap 跳過檢查或掃描 sitemap-only URL。
+P8d 會對同時存在於 current inventory 與 sitemap 的 URL 加入 priority signal：`lastmod` 較 state 中前次值新時提高 priority，未變時降低 priority；仍不會因 sitemap 跳過檢查。
 
-P8d-3 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `maxDepth`、`maxPages` 與 `--sitemap-max-urls` 控制。Seeded URL 仍會實際抓 HTML body，並用本次 HTML discovery 建立 inventory / sources。
+P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `maxDepth`、`maxPages` 與 `--sitemap-max-urls` 控制。Seeded URL 仍會實際抓 HTML body，並用本次 HTML discovery 建立 inventory / sources；sitemap 不會取代本輪 HTML discovery。
 
 ### 輸出與診斷
 

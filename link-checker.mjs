@@ -8083,7 +8083,7 @@ Options:
                       Still crawls pages and builds the current inventory.
   --sitemap <url-or-file>
                       Load a sitemap urlset or sitemap index into summary.incremental.sitemap.
-                      Does not change page discovery or validation behavior in P8d-1.
+                      Conservatively seeds same-origin page-like URLs while preserving HTML discovery.
   --sitemap-max-urls <n>
                       Maximum sitemap URLs recorded in the P8d summary. Default: ${DEFAULTS.sitemapMaxUrls}
   --progress          Show a live progress line while checking.

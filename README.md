@@ -241,6 +241,13 @@ cache 預設關閉，檔案預設寫到 `.cache/link-check-cache.json`。若需�
 | 外部連結治理規則 | 尚未提供規則檔欄位 | `--external-risk-rules` |
 | SPA / CMS 站台規則 | 尚未提供規則檔欄位 | `--site-link-rules` |
 | TTL URL result cache | 不提供表單控制，report 可保存摘要 | `--cache`、`--refresh-cache` |
+| 增量掃描 | 可顯示 report 內的增量摘要與復用標記；啟用入口暫以 CLI 為主 | `--incremental`、`--changed-only`、`--sitemap` |
+
+## 增量掃描摘要
+
+P8 增量掃描可透過 CLI 讀取既有 report / scan state / sitemap，優先重查新 URL、上次問題與 sitemap lastmod 較新的 URL。`--changed-only` 只會復用穩定已知且 TTL 有效的 status result；頁面 crawl 仍會實際抓取 HTML body，建立本次 inventory / sources / SPA payload discovery。
+
+GUI 與 Report Analyzer 會顯示 `summary.incremental`，並在 reused result 上標示「復用」與基準檢查時間 / 來源，避免誤認為本輪實測。GUI 啟用入口與 state 管理頁延後到後續 P9 / P10 評估。
 
 ## 安全邊界與授權
 
@@ -270,11 +277,11 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b 與 P7 TTL URL result cache 已完成第一版，後續規劃 P8 incremental scan。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b、P7 TTL URL result cache 與 P8 incremental scan 第一版已完成主要功能，後續規劃 P9。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：完整 CLI 參數、規則檔格式與進階使用。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
 - [docs/P7_RELEASE_CLOSURE.md](docs/P7_RELEASE_CLOSURE.md)：P7 TTL URL result cache 發布收尾與驗收紀錄。
-- [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)：P8 incremental scan 的範圍邊界、舊 report/state 比對、入口與 GUI 呈現建議。
+- [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)：P8 incremental scan 的範圍邊界、舊 report/state 比對、sitemap、reused result 與 GUI / Analyzer 呈現紀錄。
 - [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
 - [docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md)：README / ROADMAP 易讀性與一致性建議採納紀錄。

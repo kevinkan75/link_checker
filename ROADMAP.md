@@ -5,11 +5,12 @@
 ## 目前狀態摘要
 
 - P0-P7 已完成第一版。
-- 目前下一個主線為 P8：增量掃描。
+- 目前下一個主線為 P9：GUI 易用性與 Analyzer 改善。
 - P6 已完成 report-to-report diff 第一版。
 - P6.5a 已完成輸出契約、manifest、redaction、body/source limit、Header / Accept-Encoding 與 Keep-Alive。
 - P6.5b 已完成 SSRF、`runStatus`、robots / compliance、Retry-After / host diagnostics 與 WAF signature schema。
 - P7 已完成 persistent TTL URL result cache、CLI 參數、report `summary.cache`、回歸測試與發布收尾。
+- P8 已完成增量掃描第一版、sitemap 保守 seed、reused result 呈現與文件收尾；GUI 啟用入口 / state 管理延後。
 - 後續 Stage 0 僅允許文件或 GUI/CLI 落差小修，不得改變掃描語意或既有 report 主契約。
 
 ## 階段命名說明
@@ -32,7 +33,7 @@
 | 3 | P6.5a | 已完成 | schema/generator、manifest、redaction、response limit、sources 上限、Header / Accept-Encoding / Keep-Alive | 無 | robots / compliance 語意 |
 | 4 | P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | 無 | WAF/Bot 繞過 |
 | 5 | P7 | 已完成第一版 | TTL URL result cache | 後續僅保留 P8/P9 整合呈現 | page HTML cache 優先化 |
-| 6 | P8 | 分支開發中 | report diff / cache / scan state 上的增量掃描；P8a/P8b/P8c 已完成；P8d 已完成分析 | P8d sitemap 保守實作 | 跳過 HTML inventory 發現的新 URL |
+| 6 | P8 | 分支收尾完成 | report diff / cache / scan state 上的增量掃描；P8a-P8e 已完成第一版 | 合併前驗收與 PR 收斂 | 跳過 HTML inventory 發現的新 URL；GUI state 管理 |
 | 7 | P9 | 待規劃 | GUI 易用性、Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 先拆 GUI / 大型報告 / profile-rules 三組 | 空 UI 或未落地的展示層 |
 | 8 | P10 | 待規劃 | 治理與分級排程、WAF 協調建議、`--respect-robots` | P9 後設計 | 常駐 scheduler 優先化 |
 | 9 | P11 | 待規劃 | 輔助格式、release / packaging governance | P10 後評估 | 早於核心契約與誤判降低 |
@@ -100,12 +101,12 @@
 
 ### P8：增量掃描
 
-**狀態：** 分支開發中（`codex/p8-incremental-scan`，不在 `main` 直接開發；P8a/P8b/P8c/P8d 已完成）  
+**狀態：** 分支收尾完成（`codex/p8-incremental-scan`；P8a/P8b/P8c/P8d/P8e 已完成第一版）  
 **依賴關係：** P8 需在 P7 TTL 檢查快取完成後執行；第一階段應先導入最小 scan state 與 priority，不應提前啟用 changed-only / result reuse。  
 **實作前分析：** [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
 **目標：** 依據 report diff、scan state 與 TTL cache 優先檢查新頁面、變更頁面、新 URL 與上次錯誤 URL。  
 **主要交付：** `--incremental`、`--baseline-report <file>`、`--state-file <file>`、`--changed-only`、`--sitemap <url-or-file>`。
-**建議切分：** P8a baseline/state loader + 最小 scan state（已完成）、P8b incremental priority（已完成）、P8c changed-only/reuse（已完成）、P8d sitemap 讀取、priority signal 與保守 seed（已完成）、P8e-1 GUI / Report Analyzer 最小呈現、P8e-2 文件與 CLI 文案收尾。GUI 啟用入口 / state 管理延後到 P9 / P10 評估。
+**建議切分：** P8a baseline/state loader + 最小 scan state（已完成）、P8b incremental priority（已完成）、P8c changed-only/reuse（已完成）、P8d sitemap 讀取、priority signal 與保守 seed（已完成）、P8e-1 GUI / Report Analyzer 最小呈現（已完成）、P8e-2 文件與 CLI 文案收尾（已完成）。GUI 啟用入口 / state 管理延後到 P9 / P10 評估。
 **驗收重點：** changed-only 模式仍保留完整 summary，不只輸出 delta。  
 **排除範圍：** 不因 sitemap 或 state 跳過 HTML inventory 發現的新 URL；P8e 不新增 GUI state 管理頁、手填 state path、policy fingerprint 顯示或 GUI changed-only 主操作。
 

@@ -446,6 +446,19 @@ P8e 決定分成兩個必要小階段，GUI 啟用入口延後：
 
 P8e 不納入 GUI 啟用入口、state 管理頁、手填 state path、policy fingerprint 顯示或 GUI changed-only 主操作。這些入口型功能延後到 P9 / P10 評估。P8e 第一版驗收只要求使用者看得懂既有 P8 report：能看到 incremental summary，並能分辨 current check 與 reused result。
 
+#### 2026-07-17 P8e implementation record
+
+P8e-1 / P8e-2 已完成第一版，範圍維持呈現與文件收尾，不新增 GUI 啟用入口：
+
+- 主 GUI 掃描完成後顯示 `summary.incremental`，包含模式、新增 URL、已知 URL、復用結果、disappeared 與 priority 摘要。
+- 主 GUI 問題連結卡片會標示 `復用` / `新增` / `已重查`；reused result 顯示 `baselineCheckedAt`、`reuseSource` 與 `reason`。
+- Report Analyzer 會讀取 `summary.incremental` 與 `broken[].incremental`，顯示 reused 標記與 provenance；CSV 匯出新增 incremental provenance 欄位。
+- 舊 report 沒有 `summary.incremental` 或 result-level `incremental` 時保持相容，增量摘要會隱藏。
+- CLI help 與 `docs/CLI_REFERENCE.md` 已移除 P8d-1 舊描述，對齊 P8d-3 sitemap 保守 seed 行為。
+- README、TECHNICAL_SPEC、ROADMAP 與 docs index 已同步 P8 第一版完成狀態。
+
+驗收測試：`node --check public/app.js`、`node --check public/report-analyzer.js`、`test-p8-incremental-state.mjs`、`test-p8-sitemap.mjs`、`test-p65a-output-contract.mjs` 與 `test-p7-cache.mjs` 已在 P8e-1 實作後通過；P8e-2 另重跑 CLI / P8 / output contract smoke。
+
 ## GUI 呈現建議
 
 GUI 的增量掃描應整合到既有「檢查網站」流程，不另開獨立頁面。使用者心智應維持為「同樣開始檢查，但這次參考上次結果」，而不是進入一個需要理解 state file、policy fingerprint 或 cache schema 的技術流程。

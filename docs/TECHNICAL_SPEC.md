@@ -514,6 +514,7 @@ P8d-3 新增 sitemap 保守 seed：
 - seed URL 先建立 current inventory 與 `sourceType: "sitemap"` source，再進入 `pageQueue`。
 - seed URL 仍必須實際抓取 HTML body；頁面內新 link 仍由本次 HTML discovery 建立 sources / inventory / checked results。
 - `summary.incremental.sitemap.seed` 記錄 enabled、depth、attempted、seeded、ignored 與 ignoredByReason。
+- 遠端 sitemap index child 只接受 same-origin HTTP(S) URL；`file://` 或本機路徑 child 會被忽略並記錄 warning。
 
 Report 會記錄：
 
@@ -539,6 +540,14 @@ Report 會記錄：
 - `summary.incremental.warnings`
 
 Scan state 是本機效能最佳化與追蹤資料，不取代 `report.json` 主契約。State key 使用 canonical URL hash，`displayUrl` 強制套用 sensitive query redaction；state 不保存 response body，也不保存未遮罩 sensitive query value。最小 state entry 保存 first/last seen、last checked summary、policy fingerprint、source count 與 previous error signal。
+
+P8e 新增呈現層支援，不改變 report 主契約：
+
+- 主 GUI 掃描完成後會顯示 `summary.incremental`，包含模式、新增 URL、已知 URL、復用結果、disappeared 與 priority 摘要。
+- 主 GUI 問題連結會標示 reused result，並顯示 `baselineCheckedAt`、`reuseSource` 與 `reason`，避免使用者誤認為本輪實測。
+- Report Analyzer 會讀取 `summary.incremental` 與 `broken[].incremental`，顯示 reused 標記並在 CSV 匯出 incremental provenance 欄位。
+- 舊 report 沒有 `summary.incremental` 或 result-level `incremental` 時，GUI / Analyzer 會保持相容並隱藏增量摘要。
+- GUI 啟用入口、state 管理頁、手填 state path、policy fingerprint 顯示與 GUI changed-only 主操作延後到 P9 / P10 評估。
 
 ## 8. GUI Server API
 
