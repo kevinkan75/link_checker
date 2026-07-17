@@ -690,6 +690,12 @@ input:focus {
   font-weight: 700;
 }
 
+.page-discovery-note {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 #progress-bar {
   width: 0%;
   height: 100%;

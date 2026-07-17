@@ -251,17 +251,18 @@
         </div>
         <p id="watching-site" class="watching-site" hidden></p>
         <div class="progress-summary">
-          <span id="progress-label">檢查進度</span>
+          <span id="progress-label">URL 檢測進度</span>
           <strong id="progress-percent">0%</strong>
         </div>
         <div class="progress-track" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div id="progress-bar"></div>
         </div>
-        <p id="pending-url-note" class="pending-url-note">尚有 0 個待檢測 URL</p>
+        <p id="pending-url-note" class="pending-url-note">目前已知 URL：已檢測 0 個，尚有 0 個待檢測，0 個請求中</p>
+        <p id="page-discovery-note" class="page-discovery-note">頁面探索：0 / 100，待爬 0</p>
         <p id="current-url" class="current-url">目前沒有處理中的 URL</p>
         <div class="metric-grid">
-          <div><span>已爬頁面</span><strong id="pages">0 / 100</strong></div>
-          <div><span>已檢查 URL</span><strong id="checked">0</strong></div>
+          <div><span>頁面探索</span><strong id="pages">0 / 100</strong></div>
+          <div><span>已檢測 URL</span><strong id="checked">0</strong></div>
           <div><span>待檢測 URL</span><strong id="pending-urls">0</strong></div>
           <div><span>目前請求</span><strong id="active">0</strong></div>
           <div><span>待爬佇列</span><strong id="queue">0</strong></div>

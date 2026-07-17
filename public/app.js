@@ -46,6 +46,7 @@ const progressTrack = document.querySelector(".progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const progressPercent = document.querySelector("#progress-percent");
 const pendingUrlNote = document.querySelector("#pending-url-note");
+const pageDiscoveryNote = document.querySelector("#page-discovery-note");
 const pages = document.querySelector("#pages");
 const checked = document.querySelector("#checked");
 const pendingUrls = document.querySelector("#pending-urls");
@@ -521,7 +522,8 @@ async function startCheck() {
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
   updateIncrementalSummary(null);
   pendingUrls.textContent = "0";
-  updatePendingUrlDisplay(0);
+  updatePendingUrlDisplay(0, 0, 0);
+  updatePageDiscoveryDisplay(0, maxPagesInput.value, 0);
   updateActiveFilter();
   setProgressValue(0);
   showLogLocation(null);
@@ -906,11 +908,18 @@ function updateStatus(status) {
   scanInProgress = ["running", "stopping"].includes(status.state || "running");
   setState(status.state || "running");
   elapsed.textContent = `${status.elapsedSeconds || 0}s`;
-  pages.textContent = `${status.pagesCrawled || 0} / ${status.maxPages || maxPagesInput.value}`;
-  checked.textContent = status.urlsChecked || 0;
-  updatePendingUrlDisplay(getPendingUrlCount(status));
-  active.textContent = status.activeRequests || 0;
-  queue.textContent = status.queuedPages || 0;
+  const pagesCrawled = Number(status.pagesCrawled || 0);
+  const maxPages = Number(status.maxPages || maxPagesInput.value || 0);
+  const queuedPages = Number(status.queuedPages || 0);
+  const urlsChecked = Number(status.urlsChecked || 0);
+  const pendingUrlCount = getPendingUrlCount(status);
+  const activeRequests = Number(status.activeRequests || 0);
+  pages.textContent = `${pagesCrawled} / ${maxPages || maxPagesInput.value}`;
+  checked.textContent = urlsChecked;
+  updatePendingUrlDisplay(pendingUrlCount, urlsChecked, activeRequests);
+  updatePageDiscoveryDisplay(pagesCrawled, maxPages || maxPagesInput.value, queuedPages);
+  active.textContent = activeRequests;
+  queue.textContent = queuedPages;
   brokenCount.textContent = status.brokenLinks || 0;
   skipped.textContent = status.skippedExternal || 0;
   currentUrl.textContent = status.currentUrl || "目前沒有處理中的 URL";
@@ -920,10 +929,7 @@ function updateStatus(status) {
   updateConfirmationBreakdown(emptyConfirmationBreakdown());
   updateIncrementalSummary(null);
 
-  const maxPages = Number(status.maxPages || maxPagesInput.value || 1);
-  const crawled = Number(status.pagesCrawled || 0);
-  const width = Math.max(0, Math.min(100, (crawled / maxPages) * 100));
-  setProgressValue(isStatusComplete(status) ? 100 : capIncompleteProgress(width));
+  setProgressValue(getUrlValidationProgress(status));
 }
 
 function setProgressValue(value) {
@@ -947,6 +953,19 @@ function isStatusComplete(status) {
     && Number(status?.activeRequests || 0) === 0;
 }
 
+function getUrlValidationProgress(status) {
+  if (isStatusComplete(status)) {
+    return 100;
+  }
+  const urlsChecked = Number(status?.urlsChecked || 0);
+  const pending = getPendingUrlCount(status);
+  const totalKnownUrls = urlsChecked + pending;
+  if (totalKnownUrls <= 0) {
+    return 0;
+  }
+  return capIncompleteProgress((urlsChecked / totalKnownUrls) * 100);
+}
+
 function getPendingUrlCount(status) {
   const pending = Number(status?.pendingUrls);
   if (Number.isFinite(pending)) {
@@ -955,10 +974,22 @@ function getPendingUrlCount(status) {
   return Number(status?.pendingValidations || 0) + Number(status?.activeValidationTasks || 0);
 }
 
-function updatePendingUrlDisplay(count) {
+function updatePendingUrlDisplay(count, checkedCount = 0, activeCount = 0) {
   const normalized = Math.max(0, Number(count) || 0);
+  const checkedTotal = Math.max(0, Number(checkedCount) || 0);
+  const activeTotal = Math.max(0, Number(activeCount) || 0);
   pendingUrls.textContent = normalized;
-  pendingUrlNote.textContent = `尚有 ${normalized} 個待檢測 URL`;
+  pendingUrlNote.textContent = `目前已知 URL：已檢測 ${checkedTotal} 個，尚有 ${normalized} 個待檢測，${activeTotal} 個請求中`;
+}
+
+function updatePageDiscoveryDisplay(crawledCount, maxPagesCount, queuedCount) {
+  if (!pageDiscoveryNote) {
+    return;
+  }
+  const crawledTotal = Math.max(0, Number(crawledCount) || 0);
+  const maxTotal = Number(maxPagesCount) || maxPagesInput.value || 0;
+  const queuedTotal = Math.max(0, Number(queuedCount) || 0);
+  pageDiscoveryNote.textContent = `頁面探索：${crawledTotal} / ${maxTotal}，待爬 ${queuedTotal}`;
 }
 
 function setState(state) {
@@ -1020,14 +1051,16 @@ function renderReport(report) {
   const broken = report.broken || [];
   resultSummary.textContent = `${broken.length} 個問題連結`;
   brokenCount.textContent = broken.length;
-  pages.textContent = `${report.summary.pagesCrawled} / ${report.options.maxPages}`;
-  checked.textContent = report.summary.urlsChecked;
-  updatePendingUrlDisplay(getReportPendingUrlCount(report));
+  const reportPagesCrawled = Number(report.summary.pagesCrawled || 0);
+  const reportMaxPages = Number(report.options.maxPages || 0);
+  const reportUrlsChecked = Number(report.summary.urlsChecked || 0);
+  const reportPendingUrls = getReportPendingUrlCount(report);
+  pages.textContent = `${reportPagesCrawled} / ${reportMaxPages || report.options.maxPages}`;
+  checked.textContent = reportUrlsChecked;
+  updatePendingUrlDisplay(reportPendingUrls, reportUrlsChecked, 0);
+  updatePageDiscoveryDisplay(reportPagesCrawled, reportMaxPages || report.options.maxPages, report.runStatus?.pendingPages || 0);
   skipped.textContent = report.summary.skippedExternal;
-  const maxPages = Number(report.options.maxPages || 1);
-  const crawled = Number(report.summary.pagesCrawled || 0);
-  const width = Math.max(0, Math.min(100, (crawled / maxPages) * 100));
-  setProgressValue(report.runStatus?.status === "complete" ? 100 : capIncompleteProgress(width));
+  setProgressValue(getReportUrlValidationProgress(report));
   updateIssueBreakdown(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateFilterCounts(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateRedirectBreakdown(report.summary.redirectByType || emptyRedirectBreakdown(), report.summary.redirects || 0);
@@ -1041,6 +1074,19 @@ function renderReport(report) {
 function getReportPendingUrlCount(report) {
   const runStatus = report?.runStatus || {};
   return Number(runStatus.pendingValidations || 0) + Number(runStatus.activeValidationTasks || 0);
+}
+
+function getReportUrlValidationProgress(report) {
+  if (report?.runStatus?.status === "complete") {
+    return 100;
+  }
+  const checkedTotal = Number(report?.summary?.urlsChecked || 0);
+  const pendingTotal = getReportPendingUrlCount(report);
+  const totalKnownUrls = checkedTotal + pendingTotal;
+  if (totalKnownUrls <= 0) {
+    return 0;
+  }
+  return capIncompleteProgress((checkedTotal / totalKnownUrls) * 100);
 }
 
 function renderBrokenTable(broken) {
