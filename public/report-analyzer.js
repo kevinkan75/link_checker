@@ -5,6 +5,7 @@ const statusFilterInput = document.querySelector("#status-filter");
 const exportCsvButton = document.querySelector("#export-csv-button");
 const clearButton = document.querySelector("#clear-button");
 const loadState = document.querySelector("#load-state");
+const reportEmptyState = document.querySelector("#report-empty-state");
 const metricPages = document.querySelector("#metric-pages");
 const metricChecked = document.querySelector("#metric-checked");
 const metricBroken = document.querySelector("#metric-broken");
@@ -380,6 +381,7 @@ function resetSelect(select, label) {
 }
 
 function renderAnalysis(analysis) {
+  setReportEmptyStateVisible(false);
   renderRunStatus(analysis.runStatus);
   renderIncrementalSummary(analysis.incremental);
   metricPages.textContent = formatNumber(analysis.metrics.pagesCrawled);
@@ -464,6 +466,7 @@ function renderBrokenTable(items) {
 }
 
 function renderEmpty(message = "請先上傳 report.json。") {
+  setReportEmptyStateVisible(true);
   renderRunStatus(null);
   renderIncrementalSummary(null);
   metricPages.textContent = "0";
@@ -481,6 +484,13 @@ function renderEmpty(message = "請先上傳 report.json。") {
   sourceList.innerHTML = '<p class="empty-note">載入報告後顯示來源頁。</p>';
   domainList.innerHTML = '<p class="empty-note">載入報告後顯示網域排行。</p>';
   linksTable.innerHTML = `<p class="empty-note issue-empty">${escapeHtml(message)}</p>`;
+}
+
+function setReportEmptyStateVisible(isVisible) {
+  if (!reportEmptyState) {
+    return;
+  }
+  reportEmptyState.hidden = !isVisible;
 }
 
 function renderRunStatus(runStatus) {

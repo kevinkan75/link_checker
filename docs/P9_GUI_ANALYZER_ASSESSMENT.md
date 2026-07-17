@@ -67,6 +67,15 @@ P9a-1 已完成第一版：
 - 掃描開始後再展開詳細技術指標。
 - 未載入檔案前，Report Analyzer / External Link Analyzer 隱藏清除、匯出等低價值操作。
 
+#### 2026-07-17 implementation record
+
+P9a-2 已完成第一版：
+
+- 主 GUI 增加待命空狀態，明確顯示目前等待 URL、尚未建立 report 與事件紀錄待命。
+- 問題連結與事件紀錄改為有語意的空狀態，不再只呈現空白或低價值 `0`。
+- External Link Analyzer 與 Report Analyzer 增加匯入前待命提示；資料載入後自動收起。
+- 不改掃描核心、不改 `report.json` 主契約。
+
 ### P9a-3：修正手機版可讀性
 
 P9a 第一版應至少確保 390px 寬手機 viewport 不出現整頁水平捲動。
@@ -76,6 +85,16 @@ P9a 第一版應至少確保 390px 寬手機 viewport 不出現整頁水平捲�
 - External Link Analyzer 的表格水平捲動限制在表格容器內。
 - Report Analyzer 摘要區改為更緊湊的 2 欄或列表式呈現。
 - 長 URL 與長狀態文字使用容器內換行或局部捲動，不撐開整頁。
+
+#### 2026-07-17 implementation record
+
+P9a-3 已完成第一版：
+
+- 三個 GUI shell 加入小螢幕防整頁水平溢出規則。
+- Header 導覽、操作按鈕與長文字徽章在手機寬度改為可換行、可堆疊。
+- 主 GUI、External Link Analyzer 與 Report Analyzer 的表格寬度限制在表格容器內，手機只允許局部橫向捲動。
+- 壞連結、外連明細與排行列表加強 `min-width: 0` 與長文字換行，避免長 URL 撐開整頁。
+- 不改掃描核心、不改 `report.json` 主契約。
 
 ### P9a-4：匯入型頁面流程化
 

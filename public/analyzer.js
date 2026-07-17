@@ -11,6 +11,7 @@ const analyzeButton = document.querySelector("#analyze-button");
 const exportJsonButton = document.querySelector("#export-json-button");
 const exportCsvButton = document.querySelector("#export-csv-button");
 const loadState = document.querySelector("#load-state");
+const importEmptyState = document.querySelector("#import-empty-state");
 const metricLinks = document.querySelector("#metric-links");
 const metricDomains = document.querySelector("#metric-domains");
 const metricHigh = document.querySelector("#metric-high");
@@ -797,6 +798,7 @@ function summarizeCategories(links) {
 }
 
 function renderAnalysis(analysis) {
+  setImportEmptyStateVisible(false);
   metricLinks.textContent = analysis.metrics.links;
   metricDomains.textContent = analysis.metrics.domains;
   metricHigh.textContent = analysis.metrics.high;
@@ -811,6 +813,13 @@ function renderAnalysis(analysis) {
   renderDomainTable(analysis.domains);
   renderCategoryList(analysis.categories);
   renderLinksTable(analysis.filteredLinks);
+}
+
+function setImportEmptyStateVisible(isVisible) {
+  if (!importEmptyState) {
+    return;
+  }
+  importEmptyState.hidden = !isVisible;
 }
 
 function getAnalysisStatusText(analysis) {

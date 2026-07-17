@@ -25,6 +25,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background: var(--bg);
   color: var(--text);
 }
@@ -62,15 +63,20 @@ button:disabled {
 .header-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  max-width: 100%;
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .report-shell {
   width: min(1280px, calc(100% - 32px));
   margin: 0 auto;
   padding: 24px 0 36px;
+  min-width: 0;
 }
 
 .app-header,
@@ -89,6 +95,7 @@ button:disabled {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px;
+  min-width: 0;
 }
 
 .header-nav {
@@ -96,6 +103,7 @@ button:disabled {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .header-link[aria-current="page"] {
@@ -129,6 +137,31 @@ label,
 .app-header p {
   margin-top: 5px;
   font-size: 14px;
+}
+
+.empty-state {
+  border: 1px dashed #b9c9c5;
+  border-radius: 6px;
+  padding: 14px;
+  background: #fbfcfc;
+  color: var(--muted);
+}
+
+.empty-state strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.empty-state p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.import-empty-state {
+  margin-top: 14px;
 }
 
 .setup-panel,
@@ -179,6 +212,7 @@ select:focus {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+  min-width: 0;
 }
 
 .result-actions {
@@ -285,6 +319,7 @@ select:focus {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+  min-width: 0;
 }
 
 .panel-note {
@@ -296,6 +331,7 @@ select:focus {
 .rank-list {
   display: grid;
   gap: 8px;
+  min-width: 0;
   max-height: 360px;
   overflow: auto;
 }
@@ -329,9 +365,12 @@ select:focus {
   grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.45fr) minmax(150px, 0.45fr);
   gap: 12px;
   margin-bottom: 14px;
+  min-width: 0;
 }
 
 .table-wrap {
+  min-width: 0;
+  max-width: 100%;
   max-height: 580px;
   overflow: auto;
   border: 1px solid var(--border);
@@ -423,6 +462,8 @@ tr:last-child td {
 .issue-list-wrap {
   display: grid;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   max-height: 620px;
   overflow: auto;
   border: 1px solid var(--border);
@@ -520,7 +561,18 @@ tr:last-child td {
   }
 
   .header-nav {
+    width: 100%;
     justify-content: flex-start;
+  }
+
+  .header-link {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .actions button,
+  .result-actions button {
+    flex: 1 1 100%;
   }
 
   .setup-grid,
@@ -533,5 +585,18 @@ tr:last-child td {
   .issue-detail-line {
     grid-template-columns: 1fr;
     gap: 3px;
+  }
+
+  .setup-panel,
+  .panel {
+    padding: 14px;
+  }
+
+  table {
+    min-width: 620px;
+  }
+
+  .badge {
+    min-width: 0;
   }
 }

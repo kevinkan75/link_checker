@@ -250,6 +250,15 @@
           <span id="elapsed" class="elapsed-time">0s</span>
         </div>
         <p id="watching-site" class="watching-site" hidden></p>
+        <div id="scan-empty-state" class="empty-state scan-empty-state">
+          <strong>準備開始檢查</strong>
+          <p>輸入網站 URL 後，這裡會顯示即時檢測進度、目前處理中的 URL 與問題摘要。</p>
+          <div class="empty-state-steps" aria-label="開始前狀態">
+            <span>等待 URL</span>
+            <span>尚未建立 report</span>
+            <span>事件紀錄待命</span>
+          </div>
+        </div>
         <div class="progress-summary">
           <span id="progress-label">URL 檢測進度</span>
           <strong id="progress-percent">0%</strong>
@@ -326,7 +335,10 @@
             <button type="button" data-filter="unknown_error">其他 <span>0</span></button>
           </div>
           <div id="broken-table" class="broken-list-wrap">
-            <p class="empty-note broken-empty">開始檢查後，問題連結會顯示在這裡。</p>
+            <div class="empty-state compact-empty-state">
+              <strong>尚未開始檢查</strong>
+              <p>檢查完成或發現問題時，問題連結會依類型顯示在這裡。</p>
+            </div>
           </div>
         </div>
 

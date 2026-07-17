@@ -41,6 +41,7 @@ const clearLogButton = document.querySelector("#clear-log");
 const stateBadge = document.querySelector("#state-badge");
 const statusTitle = document.querySelector("#status-title");
 const watchingSite = document.querySelector("#watching-site");
+const scanEmptyState = document.querySelector("#scan-empty-state");
 const elapsed = document.querySelector("#elapsed");
 const progressTrack = document.querySelector(".progress-track");
 const progressBar = document.querySelector("#progress-bar");
@@ -515,7 +516,8 @@ async function startCheck() {
   manualWatchSelected = false;
   currentFilter = "all";
   downloadButton.disabled = true;
-  brokenTable.innerHTML = '<p class="empty-note broken-empty">檢查中，發現問題連結後會顯示在這裡。</p>';
+  setScanEmptyStateVisible(false);
+  renderBrokenEmptyState("正在檢查", "發現問題連結後會顯示在這裡。");
   resultSummary.textContent = "檢查中";
   updateIssueBreakdown(emptyBreakdown(), 0);
   updateFilterCounts(emptyBreakdown(), 0);
@@ -529,7 +531,9 @@ async function startCheck() {
   showLogLocation(null);
   updateWatchingSite();
   eventLog.replaceChildren();
+  eventLog.removeAttribute("aria-label");
   scanInProgress = true;
+  setScanEmptyStateVisible(false);
   setState("running");
   setBusy(true);
 
@@ -780,6 +784,7 @@ function watchQueueItemObject(item, { manual }) {
   scanInProgress = true;
   downloadButton.disabled = true;
   eventLog.replaceChildren();
+  eventLog.removeAttribute("aria-label");
   renderBrokenTable([]);
   resultSummary.textContent = "檢查中";
   updateIncrementalSummary(null);
@@ -1005,7 +1010,7 @@ function setState(state) {
   stateBadge.textContent = labels[state] || state;
 
   const titles = {
-    idle: "尚未開始",
+    idle: "準備開始",
     running: "正在檢查網站連結",
     stopping: "正在停止檢查",
     stopped: "檢查已停止",
@@ -1013,6 +1018,7 @@ function setState(state) {
     failed: "檢查失敗",
   };
   statusTitle.textContent = titles[state] || "狀態更新";
+  setScanEmptyStateVisible(state === "idle");
 }
 
 function setBusy(isBusy) {
@@ -1034,6 +1040,7 @@ function updateQueueButtonState(isRunning) {
 }
 
 function appendLog(item) {
+  eventLog.removeAttribute("aria-label");
   const li = document.createElement("li");
   const type = document.createElement("span");
   type.className = "log-type";
@@ -1095,16 +1102,42 @@ function renderBrokenTable(broken) {
     : broken.filter((item) => (item.issueType || getIssueType(item)) === currentFilter);
 
   if (broken.length === 0) {
-    brokenTable.innerHTML = '<p class="empty-note broken-empty">沒有發現問題連結。</p>';
+    const hasReport = Boolean(currentReport);
+    renderBrokenEmptyState(
+      hasReport ? "沒有發現問題連結" : "正在等待結果",
+      hasReport ? "這份報告目前沒有需要列出的問題連結。" : "檢查進行中，發現問題時會立即出現在這裡。",
+    );
     return;
   }
 
   if (visible.length === 0) {
-    brokenTable.innerHTML = '<p class="empty-note broken-empty">此分類沒有問題連結。</p>';
+    renderBrokenEmptyState("此分類沒有問題連結", "切回「全部」可查看其他類型的問題。");
     return;
   }
 
   brokenTable.replaceChildren(...visible.map(renderBrokenItem));
+}
+
+function setScanEmptyStateVisible(isVisible) {
+  if (!scanEmptyState) {
+    return;
+  }
+  scanEmptyState.hidden = !isVisible;
+}
+
+function renderBrokenEmptyState(title, body) {
+  brokenTable.replaceChildren(makeEmptyState(title, body, "compact-empty-state broken-empty"));
+}
+
+function makeEmptyState(title, body, modifier = "") {
+  const wrapper = document.createElement("div");
+  wrapper.className = modifier ? `empty-state ${modifier}` : "empty-state";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  const text = document.createElement("p");
+  text.textContent = body;
+  wrapper.append(heading, text);
+  return wrapper;
 }
 
 function renderBrokenItem(item) {
