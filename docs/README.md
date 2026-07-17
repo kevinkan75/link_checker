@@ -35,3 +35,4 @@
 - P7 TTL URL result cache 已完成第一版與發布收尾，實作前評估記錄於 `archive/P7_CACHE_EVALUATION.md`，發布驗收記錄於 `archive/P7_RELEASE_CLOSURE.md`。
 - P8 incremental scan 第一版已完成主要功能、呈現收尾與 main 合併，分析與驗收紀錄於 `archive/P8_INCREMENTAL_SCAN_ANALYSIS.md`。
 - P9 已完成 GUI / Analyzer 實作前評估；`P9a-1：修正主 GUI 進度語意`、`P9a-2：改善空狀態與第一屏`、`P9a-3：修正手機版可讀性` 與 `P9a-4：匯入型頁面流程化` 已完成第一版並於 2026-07-17 驗收通過。
+- P9b 大型 report / NDJSON 輔助輸出已完成實作前評估；已採納 `report.json` 維持主契約、NDJSON 作為大型報告輔助輸出，建議先做 P9b-1 NDJSON 輔助輸出與 GUI complete payload 瘦身。

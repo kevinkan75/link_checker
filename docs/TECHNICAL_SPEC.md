@@ -580,6 +580,16 @@ GUI 完成後會保存：
 
 CLI 使用 `--output <file>` 時會寫出指定 report，並在同目錄建立 `manifest.json`。
 
+### 8.1 P9b 大型報告規劃註記
+
+目前 `report.json` 是完成後一次建立與寫出，仍是正式主契約。P9b 採納的方向是保留此契約，另以 NDJSON sidecar 支援大型報告與逐筆處理：
+
+- `checked.ndjson`：每筆 URL 檢查完成後可逐筆 append。
+- `broken.ndjson`：壞連結判定完成後可逐筆 append。
+- `external-links.ndjson`：可作為輔助輸出；若要邊跑邊寫，需先確認外連去重、來源累積與風險分類穩定點。
+
+P9b-1 應同步讓 GUI complete event 回傳輕量 summary / manifest / log path，不直接傳送完整 report，避免超大報告在使用者端一次解析或渲染時卡住。完整 `report.json` streaming parser 不列為 P9b 第一優先。
+
 ## 9. Exit Codes
 
 | Exit code | 意義 |

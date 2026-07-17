@@ -129,10 +129,12 @@
 
 ### P9b：大型報告處理與 NDJSON 輔助輸出
 
-**狀態：** 待規劃  
+**狀態：** 已完成實作前評估，建議從 P9b-1 開始  
 **目標：** 讓 Analyzer / GUI 可處理大型 report。  
-**主要交付：** stream-json 類逐筆處理、GUI 分頁、`checked.ndjson`、`broken.ndjson`、`external-links.ndjson`。  
-**排除範圍：** NDJSON 不取代 `report.json` 主格式。
+**主要交付：** NDJSON 輔助輸出、GUI complete payload 瘦身、Analyzer 大檔保護、GUI 分頁 / 載入更多、NDJSON 匯入支援。  
+**建議切分：** P9b-1 NDJSON 輔助輸出與 GUI complete payload 瘦身、P9b-2 Analyzer 大檔保護、P9b-3 前端分頁 / 載入更多、P9b-4 NDJSON 匯入支援。  
+**第一優先：** P9b-1：新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，更新 manifest / summary，並避免 GUI complete event 直接傳送完整 report。  
+**排除範圍：** NDJSON 不取代 `report.json` 主格式；不優先做完整 `report.json` streaming parser。
 
 ### P9c：Profile、Rules Schema 與 Next.js Payload
 
