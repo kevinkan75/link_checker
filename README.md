@@ -31,7 +31,7 @@ Local Link Checker 是可在本機執行的網站連結檢查工具。它會從�
 - SPA / Nuxt payload literal 抽取、站台規則推導與 `scanQuality` 診斷。
 - GUI 批次佇列、即時進度、問題連結表格與報告下載。
 
-目前版本已支援網站連結檢查、外部連結清單、GUI 批次檢查、報告比對、TTL URL result cache 與主要診斷功能。詳細開發歷程與後續規劃請參閱 [ROADMAP.md](ROADMAP.md)。
+目前版本已支援網站連結檢查、外部連結清單、GUI 批次檢查、報告比對、TTL URL result cache、P8 增量掃描與主要診斷功能。詳細開發歷程與後續規劃請參閱 [ROADMAP.md](ROADMAP.md)。
 
 ## 適用情境
 
@@ -281,7 +281,7 @@ dist\LinkChecker-portable.zip
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：完整 CLI 參數、規則檔格式與進階使用。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。
-- [docs/P7_RELEASE_CLOSURE.md](docs/P7_RELEASE_CLOSURE.md)：P7 TTL URL result cache 發布收尾與驗收紀錄。
-- [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)：P8 incremental scan 的範圍邊界、舊 report/state 比對、sitemap、reused result 與 GUI / Analyzer 呈現紀錄。
+- [docs/archive/P7_RELEASE_CLOSURE.md](docs/archive/P7_RELEASE_CLOSURE.md)：P7 TTL URL result cache 發布收尾與驗收紀錄。
+- [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md)：P8 incremental scan 的範圍邊界、舊 report/state 比對、sitemap、reused result 與 GUI / Analyzer 呈現紀錄。
 - [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)：已完成里程碑、驗收紀錄與設計理由。
 - [docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md)：README / ROADMAP 易讀性與一致性建議採納紀錄。

@@ -1,5 +1,7 @@
 # P8 Incremental Scan Analysis
 
+狀態：歷史分析與驗收紀錄。P8 已完成第一版並合併主線；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，技術規格請看 [../TECHNICAL_SPEC.md](../TECHNICAL_SPEC.md)。
+
 本文件記錄 P8：增量掃描的實作前分析。P8 的目標是降低重複 URL 驗證成本，並優先處理新 URL、變更來源、上次錯誤與高風險 URL；但不應改變 HTML discovery、inventory 建立與 `report.json` 主契約。
 
 ## 核心原則

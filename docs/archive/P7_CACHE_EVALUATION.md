@@ -1,5 +1,7 @@
 # P7 TTL URL Result Cache Evaluation
 
+狀態：歷史實作前評估。P7 已完成並合併主線；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，技術規格請看 [../TECHNICAL_SPEC.md](../TECHNICAL_SPEC.md)。
+
 本文件記錄 P7：TTL URL result cache 的實作前評估。P7 目標是降低重複 URL 狀態檢查成本，但不改變頁面發現、HTML 抽取與 report 主契約的基本語意。
 
 ## 結論

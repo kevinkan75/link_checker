@@ -1,5 +1,7 @@
 # P7 Release Closure
 
+狀態：歷史發布收尾紀錄。P7 已完成並合併主線；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，技術規格請看 [../TECHNICAL_SPEC.md](../TECHNICAL_SPEC.md)。
+
 本文件記錄 P7：persistent TTL URL result cache 的發布收尾狀態。P7 第一版已完成並可作為 P8 incremental scan 的基線。
 
 ## 發布狀態

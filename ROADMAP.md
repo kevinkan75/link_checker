@@ -1,10 +1,10 @@
 # 開發路線圖
 
-本文件說明 Local Link Checker 各階段開發狀態、近期工作重點與後續規劃。已完成階段的詳細紀錄請參閱 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)，技術規格請參閱 [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)。
+本文件說明 Local Link Checker 各階段開發狀態、已完成階段補充與後續規劃。已完成階段的詳細紀錄請參閱 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)，技術規格請參閱 [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)。
 
 ## 目前狀態摘要
 
-- P0-P7 已完成第一版。
+- P0-P8 已完成第一版。
 - 目前下一個主線為 P9：GUI 易用性與 Analyzer 改善。
 - P6 已完成 report-to-report diff 第一版。
 - P6.5a 已完成輸出契約、manifest、redaction、body/source limit、Header / Accept-Encoding 與 Keep-Alive。
@@ -32,8 +32,8 @@
 | 2 | P6 | 已完成第一版 | 兩份既有 report 產生 `diff.json` | 後續呈現放 P9 | TTL cache、incremental scan、robots enforcement、adaptive backoff |
 | 3 | P6.5a | 已完成 | schema/generator、manifest、redaction、response limit、sources 上限、Header / Accept-Encoding / Keep-Alive | 無 | robots / compliance 語意 |
 | 4 | P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | 無 | WAF/Bot 繞過 |
-| 5 | P7 | 已完成第一版 | TTL URL result cache | 後續僅保留 P8/P9 整合呈現 | page HTML cache 優先化 |
-| 6 | P8 | 分支收尾完成 | report diff / cache / scan state 上的增量掃描；P8a-P8e 已完成第一版 | 合併前驗收與 PR 收斂 | 跳過 HTML inventory 發現的新 URL；GUI state 管理 |
+| 5 | P7 | 已完成第一版 | TTL URL result cache | 後續僅保留 P9/P10 整合呈現 | page HTML cache 優先化 |
+| 6 | P8 | 已完成第一版 | report diff / cache / scan state 上的增量掃描；P8a-P8e 已完成第一版，已合併 main | GUI 啟用入口與 state 管理移交 P9 / P10 評估 | 跳過 HTML inventory 發現的新 URL；GUI state 管理 |
 | 7 | P9 | 待規劃 | GUI 易用性、Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | 先拆 GUI / 大型報告 / profile-rules 三組 | 空 UI 或未落地的展示層 |
 | 8 | P10 | 待規劃 | 治理與分級排程、WAF 協調建議、`--respect-robots` | P9 後設計 | 常駐 scheduler 優先化 |
 | 9 | P11 | 待規劃 | 輔助格式、release / packaging governance | P10 後評估 | 早於核心契約與誤判降低 |
@@ -48,16 +48,16 @@
 | 待規劃 | 尚未進入實作，需補設計與驗收條件 |
 | 後續評估 | 暫不排入近期主線 |
 
-## 近期工作
+## 已完成階段補充
 
 ### P7：TTL 檢查快取
 
 **狀態：** 已完成第一版
 
 **目標：** 對可驗證的 URL result 建立 TTL cache，降低重複檢查成本；不先處理 page HTML cache。  
-**實作前評估：** [docs/P7_CACHE_EVALUATION.md](docs/P7_CACHE_EVALUATION.md)。
+**實作前評估：** [docs/archive/P7_CACHE_EVALUATION.md](docs/archive/P7_CACHE_EVALUATION.md)。
 
-**發布收尾：** [docs/P7_RELEASE_CLOSURE.md](docs/P7_RELEASE_CLOSURE.md)。
+**發布收尾：** [docs/archive/P7_RELEASE_CLOSURE.md](docs/archive/P7_RELEASE_CLOSURE.md)。
 
 **已完成決策：**
 
@@ -66,7 +66,7 @@
 3. cache key 已包含 security policy、robots policy 與 request policy fingerprint。
 4. GUI 第一版不新增 cache 表單；report 會保留 `summary.cache`。
 5. 已建立 `test-p7-cache.mjs` 與 cache regression fixtures。
-6. 已完成 P7 發布收尾，後續 cache 呈現與 incremental scan 整合移交 P8/P9。
+6. 已完成 P7 發布收尾，後續 cache 呈現與進階 GUI 整合移交 P9/P10。
 
 **實作分段：**
 
@@ -97,18 +97,22 @@
 - sitemap lastmod 排程。
 - adaptive backoff 完整策略。
 
-## 後續階段規劃
+## P8 收尾紀錄
 
 ### P8：增量掃描
 
-**狀態：** 分支收尾完成（`codex/p8-incremental-scan`；P8a/P8b/P8c/P8d/P8e 已完成第一版）  
-**依賴關係：** P8 需在 P7 TTL 檢查快取完成後執行；第一階段應先導入最小 scan state 與 priority，不應提前啟用 changed-only / result reuse。  
-**實作前分析：** [docs/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
+**狀態：** 已完成第一版，已合併 `main`（P8a/P8b/P8c/P8d/P8e 已完成）  
+**依賴關係：** P8 建立在 P7 TTL 檢查快取之上；第一版已完成最小 scan state、priority、changed-only / result reuse、sitemap 與呈現收尾。  
+**分析與驗收紀錄：** [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md)。
+
 **目標：** 依據 report diff、scan state 與 TTL cache 優先檢查新頁面、變更頁面、新 URL 與上次錯誤 URL。  
 **主要交付：** `--incremental`、`--baseline-report <file>`、`--state-file <file>`、`--changed-only`、`--sitemap <url-or-file>`。
+
 **建議切分：** P8a baseline/state loader + 最小 scan state（已完成）、P8b incremental priority（已完成）、P8c changed-only/reuse（已完成）、P8d sitemap 讀取、priority signal 與保守 seed（已完成）、P8e-1 GUI / Report Analyzer 最小呈現（已完成）、P8e-2 文件與 CLI 文案收尾（已完成）。GUI 啟用入口 / state 管理延後到 P9 / P10 評估。
 **驗收重點：** changed-only 模式仍保留完整 summary，不只輸出 delta。  
 **排除範圍：** 不因 sitemap 或 state 跳過 HTML inventory 發現的新 URL；P8e 不新增 GUI state 管理頁、手填 state path、policy fingerprint 顯示或 GUI changed-only 主操作。
+
+## 後續階段規劃
 
 ### P9a：GUI 易用性與 Analyzer 改善
 
@@ -153,6 +157,8 @@
 | P6 | 完成 report-to-report diff 第一版，支援 URL、external risk 與 summary diagnostics 的 report diff | [docs/archive/P6_IMPLEMENTATION_ANALYSIS.md](docs/archive/P6_IMPLEMENTATION_ANALYSIS.md) |
 | P6.5a | 完成輸出契約、manifest、redaction、sources/body limit、Header / Accept-Encoding / Keep-Alive | [docs/archive/P6_5A_ASSESSMENT.md](docs/archive/P6_5A_ASSESSMENT.md) |
 | P6.5b | 完成 SSRF、partial report、robots / compliance、Retry-After / host diagnostics 與 WAF signature schema | [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md) |
+| P7 | 完成 persistent TTL URL result cache、CLI 參數、report `summary.cache`、回歸測試與發布收尾 | [docs/archive/P7_RELEASE_CLOSURE.md](docs/archive/P7_RELEASE_CLOSURE.md) |
+| P8 | 完成 incremental scan 第一版、sitemap 保守 seed、changed-only result reuse、GUI / Analyzer 呈現與文件收尾 | [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md) |
 | Release security 小修 | portable `.cmd` 嚴格使用 bundled runtime、build manifest、artifact SHA256、localhost-only 說明與 self-signed 限制 | [docs/archive/RELEASE_SECURITY_ASSESSMENT.md](docs/archive/RELEASE_SECURITY_ASSESSMENT.md) |
 
 ## 全域原則
