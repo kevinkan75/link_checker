@@ -170,6 +170,18 @@ P9a 第一版完成時至少需符合：
 - 不改 `report.json` 主契約。
 - 不改掃描語意。
 
+### 2026-07-17 P9a acceptance record
+
+P9a 第一版驗收通過：
+
+- 主 GUI 以 URL 檢測進度為主要進度，頁面探索改為輔助資訊。
+- 初始空狀態不再顯示大量低價值 `0` 指標。
+- 手機截圖驗收已覆蓋 Link Checker、External Link Analyzer 與 Report Analyzer 的空狀態與載入資料後狀態。
+- 匯入型頁面已有清楚流程狀態：External Link Analyzer 為 `選檔 -> 分析 -> 匯出`，Report Analyzer 為 `選檔 -> 載入 -> 篩選 / 匯出`。
+- 驗證通過：`node --check public/app.js`、`node --check public/analyzer.js`、`node --check public/report-analyzer.js`。
+- 本機頁面載入驗證通過：`/`、`/analyzer.html`、`/report-analyzer.html` 均回應 `200`。
+- 未修改掃描語意，未修改 `report.json` 主契約。
+
 ## 建議分支
 
 P9 建議從新分支開始：

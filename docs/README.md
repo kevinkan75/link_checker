@@ -34,4 +34,4 @@
 - P6.5b-1 到 P6.5b-5 已完成，包含 SSRF / URL security policy、partial report、robots / compliance、Retry-After / host diagnostics 與 WAF schema 收斂。
 - P7 TTL URL result cache 已完成第一版與發布收尾，實作前評估記錄於 `archive/P7_CACHE_EVALUATION.md`，發布驗收記錄於 `archive/P7_RELEASE_CLOSURE.md`。
 - P8 incremental scan 第一版已完成主要功能、呈現收尾與 main 合併，分析與驗收紀錄於 `archive/P8_INCREMENTAL_SCAN_ANALYSIS.md`。
-- P9 已完成 GUI / Analyzer 實作前評估；`P9a-1：修正主 GUI 進度語意`、`P9a-2：改善空狀態與第一屏`、`P9a-3：修正手機版可讀性` 與 `P9a-4：匯入型頁面流程化` 已完成第一版。
+- P9 已完成 GUI / Analyzer 實作前評估；`P9a-1：修正主 GUI 進度語意`、`P9a-2：改善空狀態與第一屏`、`P9a-3：修正手機版可讀性` 與 `P9a-4：匯入型頁面流程化` 已完成第一版並於 2026-07-17 驗收通過。

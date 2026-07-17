@@ -116,7 +116,7 @@
 
 ### P9a：GUI 易用性與 Analyzer 改善
 
-**狀態：** P9a-1 / P9a-2 / P9a-3 / P9a-4 已完成第一版  
+**狀態：** 已驗收通過（P9a-1 / P9a-2 / P9a-3 / P9a-4 第一版完成）  
 **目標：** 修正手機版水平溢出，簡化 Link Checker 初始狀態，讓匯入型頁面形成清楚的選檔、分析、匯出流程。  
 **實作前評估：** [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md)。  
 **主要交付：** 一般使用者視角的 GUI 易讀性基線與 Analyzer 呈現改善。  
@@ -124,6 +124,7 @@
 **已完成補充：** P9a-2 已改善主 GUI、External Link Analyzer 與 Report Analyzer 的待命空狀態與第一屏提示。  
 **已完成補充：** P9a-3 已修正三個 GUI 在手機寬度下的整頁水平溢出風險，並將表格捲動限制在容器內。  
 **已完成補充：** P9a-4 已讓 External Link Analyzer 與 Report Analyzer 形成清楚的選檔、分析/載入、匯出流程。  
+**驗收紀錄：** 2026-07-17 P9a 第一版已依 [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md) 驗收通過。  
 **驗收重點：** 不新增空 UI；每個畫面改善都需有可用流程；不改掃描語意或 `report.json` 主契約。
 
 ### P9b：大型報告處理與 NDJSON 輔助輸出
