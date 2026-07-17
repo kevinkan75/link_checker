@@ -722,6 +722,22 @@ input:focus {
   font-size: 13px;
 }
 
+body.scan-idle .status-panel .progress-summary,
+body.scan-idle .status-panel .progress-track,
+body.scan-idle .status-panel .pending-url-note,
+body.scan-idle .status-panel .page-discovery-note,
+body.scan-idle .status-panel .current-url,
+body.scan-idle .status-panel .metric-grid,
+body.scan-idle .status-panel .status-subheading,
+body.scan-idle .status-panel .issue-grid,
+body.scan-idle .status-panel .redirect-grid,
+body.scan-idle .status-panel .confirmation-grid,
+body.scan-idle .status-panel .incremental-panel,
+body.scan-idle .status-panel .log-location,
+body.scan-idle .results-layout {
+  display: none;
+}
+
 .progress-summary strong {
   color: var(--primary);
   font-size: 14px;

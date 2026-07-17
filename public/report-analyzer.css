@@ -239,6 +239,13 @@ select:focus {
   margin-top: 16px;
 }
 
+body.is-empty .metric-grid,
+body.is-empty .incremental-summary-panel,
+body.is-empty .summary-layout,
+body.is-empty .links-panel {
+  display: none;
+}
+
 .metric-grid div {
   min-width: 0;
   padding: 12px;

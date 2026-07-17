@@ -487,6 +487,7 @@ function renderEmpty(message = "請先上傳 report.json。") {
 }
 
 function setReportEmptyStateVisible(isVisible) {
+  document.body.classList.toggle("is-empty", isVisible);
   if (!reportEmptyState) {
     return;
   }

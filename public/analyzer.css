@@ -315,6 +315,13 @@ textarea:focus {
   margin-top: 16px;
 }
 
+body.is-empty .metric-grid,
+body.is-empty .result-filter-panel,
+body.is-empty .analysis-layout,
+body.is-empty .links-panel {
+  display: none;
+}
+
 .metric-grid div {
   min-width: 0;
   padding: 12px;

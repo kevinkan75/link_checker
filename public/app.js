@@ -998,6 +998,7 @@ function updatePageDiscoveryDisplay(crawledCount, maxPagesCount, queuedCount) {
 }
 
 function setState(state) {
+  document.body.classList.toggle("scan-idle", state === "idle");
   stateBadge.className = `badge ${state}`;
   const labels = {
     idle: "待命",

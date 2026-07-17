@@ -816,6 +816,7 @@ function renderAnalysis(analysis) {
 }
 
 function setImportEmptyStateVisible(isVisible) {
+  document.body.classList.toggle("is-empty", isVisible);
   if (!importEmptyState) {
     return;
   }
