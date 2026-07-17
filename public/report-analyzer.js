@@ -13,6 +13,14 @@ const brokenRateCard = document.querySelector("#broken-rate-card");
 const metricRedirects = document.querySelector("#metric-redirects");
 const metricSkipped = document.querySelector("#metric-skipped");
 const runStatusBanner = document.querySelector("#run-status-banner");
+const incrementalSummaryPanel = document.querySelector("#incremental-summary-panel");
+const incrementalSummaryState = document.querySelector("#incremental-summary-state");
+const incrementalMode = document.querySelector("#incremental-mode");
+const incrementalNew = document.querySelector("#incremental-new");
+const incrementalKnown = document.querySelector("#incremental-known");
+const incrementalReused = document.querySelector("#incremental-reused");
+const incrementalDisappeared = document.querySelector("#incremental-disappeared");
+const incrementalPriority = document.querySelector("#incremental-priority");
 const issueSummaryCount = document.querySelector("#issue-summary-count");
 const sourceSummaryCount = document.querySelector("#source-summary-count");
 const domainSummaryCount = document.querySelector("#domain-summary-count");
@@ -135,6 +143,7 @@ function analyzeReport(report) {
   return {
     report,
     runStatus,
+    incremental: normalizeIncrementalSummary(summary.incremental),
     metrics,
     broken: enrichedBroken,
     issueCounts: countBy(enrichedBroken, "issueType"),
@@ -170,6 +179,7 @@ function normalizeBrokenItems(items) {
       suspectedWaf: Boolean(item.suspectedWaf),
       suspectedBot: Boolean(item.suspectedBot),
       confirmation: normalizeConfirmation(item.confirmation),
+      incremental: normalizeIncrementalResult(item.incremental),
       needsReview: Boolean(item.needsReview),
       transientFailure: Boolean(item.transientFailure),
       elapsedMs: item.elapsedMs ?? "",
@@ -222,6 +232,46 @@ function normalizeConfirmation(value) {
     finalUrl: value.finalUrl || "",
     checkedAt: value.checkedAt || "",
     referer: value.referer || "",
+    reason: value.reason || "",
+  };
+}
+
+function normalizeIncrementalSummary(value) {
+  if (!value || typeof value !== "object" || value.enabled !== true) {
+    return {
+      enabled: false,
+    };
+  }
+  const priority = value.priority && typeof value.priority === "object" ? value.priority : {};
+  return {
+    enabled: true,
+    mode: value.mode || "",
+    new: toNumber(value.new, 0),
+    known: toNumber(value.known, 0),
+    reused: toNumber(value.reused, 0),
+    disappeared: toNumber(value.disappeared, 0),
+    priority: {
+      boosted: toNumber(priority.boosted, 0),
+      deferred: toNumber(priority.deferred, 0),
+    },
+  };
+}
+
+function normalizeIncrementalResult(value) {
+  if (!value || typeof value !== "object") {
+    return {
+      reused: false,
+      classification: "",
+      reuseSource: "",
+      baselineCheckedAt: "",
+      reason: "",
+    };
+  }
+  return {
+    reused: value.reused === true,
+    classification: value.classification || "",
+    reuseSource: value.reuseSource || "",
+    baselineCheckedAt: value.baselineCheckedAt || "",
     reason: value.reason || "",
   };
 }
@@ -285,6 +335,9 @@ function applyFilters(analysis) {
       item.error,
       item.diagnosis,
       item.blockedReason,
+      item.incremental.reused ? "reused" : "",
+      item.incremental.reuseSource,
+      item.incremental.reason,
       item.bodySignature?.title,
       item.bodySignature?.matchedPatterns?.join(" "),
       ...item.sources.flatMap((source) => [source.page, source.tag, source.attribute, source.text]),
@@ -328,6 +381,7 @@ function resetSelect(select, label) {
 
 function renderAnalysis(analysis) {
   renderRunStatus(analysis.runStatus);
+  renderIncrementalSummary(analysis.incremental);
   metricPages.textContent = formatNumber(analysis.metrics.pagesCrawled);
   metricChecked.textContent = formatNumber(analysis.metrics.urlsChecked);
   metricBroken.textContent = formatNumber(analysis.metrics.brokenLinks);
@@ -411,6 +465,7 @@ function renderBrokenTable(items) {
 
 function renderEmpty(message = "請先上傳 report.json。") {
   renderRunStatus(null);
+  renderIncrementalSummary(null);
   metricPages.textContent = "0";
   metricChecked.textContent = "0";
   metricBroken.textContent = "0";
@@ -455,6 +510,32 @@ function renderRunStatus(runStatus) {
   runStatusBanner.hidden = false;
 }
 
+function renderIncrementalSummary(incremental) {
+  if (!incrementalSummaryPanel) {
+    return;
+  }
+  if (!incremental?.enabled) {
+    incrementalSummaryPanel.hidden = true;
+    incrementalSummaryState.textContent = "未啟用";
+    incrementalMode.textContent = "-";
+    incrementalNew.textContent = "0";
+    incrementalKnown.textContent = "0";
+    incrementalReused.textContent = "0";
+    incrementalDisappeared.textContent = "0";
+    incrementalPriority.textContent = "0 / 0";
+    return;
+  }
+
+  incrementalSummaryPanel.hidden = false;
+  incrementalSummaryState.textContent = "已啟用";
+  incrementalMode.textContent = incremental.mode === "changed_only" ? "復用穩定結果" : "優先重查";
+  incrementalNew.textContent = formatNumber(incremental.new);
+  incrementalKnown.textContent = formatNumber(incremental.known);
+  incrementalReused.textContent = formatNumber(incremental.reused);
+  incrementalDisappeared.textContent = formatNumber(incremental.disappeared);
+  incrementalPriority.textContent = `${formatNumber(incremental.priority.boosted)} / ${formatNumber(incremental.priority.deferred)}`;
+}
+
 function renderIssueItem(item) {
   const source = item.sources[0] || {};
   const sourceCount = item.sources.length;
@@ -472,6 +553,10 @@ function renderIssueItem(item) {
   }
   if (item.confirmation.enabled && item.confirmation.candidate) {
     header.append(metaBadge(getConfirmationLabel(item.confirmation), "impact"));
+  }
+  const incrementalBadge = getIncrementalResultBadge(item);
+  if (incrementalBadge) {
+    header.append(metaBadge(incrementalBadge.text, incrementalBadge.modifier));
   }
   if (sourceCount > 1) {
     header.append(metaBadge(`${formatNumber(sourceCount)} 個來源`, "impact"));
@@ -497,6 +582,9 @@ function renderIssueItem(item) {
   }
   if (item.confirmation.enabled) {
     row.append(detailLine("二次確認", formatConfirmationStatus(item.confirmation)));
+  }
+  if (item.incremental.reused) {
+    row.append(detailLine("增量來源", formatIncrementalProvenance(item.incremental)));
   }
   return row;
 }
@@ -588,6 +676,52 @@ function formatConfirmationReason(reason) {
     unknown: "結果不明",
   };
   return labels[reason] || reason;
+}
+
+function formatIncrementalProvenance(incremental) {
+  const parts = [];
+  if (incremental.baselineCheckedAt) {
+    parts.push(`基準檢查時間 ${incremental.baselineCheckedAt}`);
+  }
+  if (incremental.reuseSource) {
+    parts.push(`來源 ${formatIncrementalReuseSource(incremental.reuseSource)}`);
+  }
+  if (incremental.reason) {
+    parts.push(formatIncrementalReason(incremental.reason));
+  }
+  return parts.length ? parts.join("；") : "復用上次穩定結果";
+}
+
+function formatIncrementalReuseSource(source) {
+  const labels = {
+    state: "scan state",
+    baseline_report: "baseline report",
+  };
+  return labels[source] || source;
+}
+
+function formatIncrementalReason(reason) {
+  const labels = {
+    stable_known_policy_match_ttl_valid: "設定相同且 TTL 未過期",
+    listed_in_sitemap: "列於 sitemap",
+    sitemap_lastmod_newer: "sitemap lastmod 較新",
+    sitemap_lastmod_unchanged: "sitemap lastmod 未變",
+    sitemap_lastmod_not_newer: "sitemap lastmod 未更新",
+  };
+  return labels[reason] || reason;
+}
+
+function getIncrementalResultBadge(item) {
+  if (item.incremental.reused) {
+    return { text: "復用", modifier: "impact" };
+  }
+  if (currentAnalysis?.incremental?.enabled) {
+    return {
+      text: item.incremental.classification === "new" ? "新增" : "已重查",
+      modifier: "",
+    };
+  }
+  return null;
 }
 
 function detailLine(label, value) {
@@ -768,6 +902,10 @@ function makeBrokenCsv(items) {
     "confirmationCheckedAt",
     "confirmationReferer",
     "confirmationReason",
+    "incrementalReused",
+    "incrementalReuseSource",
+    "incrementalBaselineCheckedAt",
+    "incrementalReason",
     "needsReview",
     "transientFailure",
     "sourcePage",
@@ -804,6 +942,10 @@ function makeBrokenCsv(items) {
         item.confirmation.checkedAt,
         item.confirmation.referer,
         item.confirmation.reason,
+        item.incremental.reused ? "yes" : "no",
+        item.incremental.reuseSource,
+        item.incremental.baselineCheckedAt,
+        item.incremental.reason,
         item.needsReview ? "yes" : "no",
         item.transientFailure ? "yes" : "no",
         source.page || "",

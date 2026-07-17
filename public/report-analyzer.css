@@ -241,6 +241,35 @@ select:focus {
   color: var(--warn);
 }
 
+.incremental-summary-panel {
+  margin-top: 16px;
+}
+
+.incremental-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+}
+
+.incremental-grid div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--surface-muted);
+}
+
+.incremental-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.incremental-grid strong {
+  font-size: 18px;
+}
+
 .run-status-banner {
   margin-top: 16px;
   padding: 12px 14px;

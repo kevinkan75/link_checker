@@ -75,6 +75,13 @@ const confirmationCandidates = document.querySelector("#confirmation-candidates"
 const confirmationRecovered = document.querySelector("#confirmation-recovered");
 const confirmationNeedsReview = document.querySelector("#confirmation-needs-review");
 const confirmationMissing = document.querySelector("#confirmation-missing");
+const incrementalPanel = document.querySelector("#incremental-panel");
+const incrementalMode = document.querySelector("#incremental-mode");
+const incrementalNew = document.querySelector("#incremental-new");
+const incrementalKnown = document.querySelector("#incremental-known");
+const incrementalReused = document.querySelector("#incremental-reused");
+const incrementalDisappeared = document.querySelector("#incremental-disappeared");
+const incrementalPriority = document.querySelector("#incremental-priority");
 const filterBar = document.querySelector("#filter-bar");
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const defaultUserAgent = `${browserUserAgent} LocalLinkChecker/1.0`;
@@ -512,6 +519,7 @@ async function startCheck() {
   updateIssueBreakdown(emptyBreakdown(), 0);
   updateFilterCounts(emptyBreakdown(), 0);
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
+  updateIncrementalSummary(null);
   pendingUrls.textContent = "0";
   updatePendingUrlDisplay(0);
   updateActiveFilter();
@@ -772,6 +780,7 @@ function watchQueueItemObject(item, { manual }) {
   eventLog.replaceChildren();
   renderBrokenTable([]);
   resultSummary.textContent = "檢查中";
+  updateIncrementalSummary(null);
   showLogLocation(null);
   updateWatchingSite();
   closeEvents();
@@ -909,6 +918,7 @@ function updateStatus(status) {
   updateFilterCounts(status.brokenByType || emptyBreakdown(), status.brokenLinks || 0);
   updateRedirectBreakdown(status.redirectByType || emptyRedirectBreakdown(), status.redirects || 0);
   updateConfirmationBreakdown(emptyConfirmationBreakdown());
+  updateIncrementalSummary(null);
 
   const maxPages = Number(status.maxPages || maxPagesInput.value || 1);
   const crawled = Number(status.pagesCrawled || 0);
@@ -1022,6 +1032,7 @@ function renderReport(report) {
   updateFilterCounts(report.summary.brokenByType || buildBreakdown(broken), broken.length);
   updateRedirectBreakdown(report.summary.redirectByType || emptyRedirectBreakdown(), report.summary.redirects || 0);
   updateConfirmationBreakdown(report.summary.confirmation || buildConfirmationBreakdown(report.checked || broken));
+  updateIncrementalSummary(report.summary.incremental || null);
   updateActiveFilter();
 
   renderBrokenTable(broken);
@@ -1066,6 +1077,10 @@ function renderBrokenItem(item) {
   statusCode.className = `status-code ${statusClass}`;
   statusCode.textContent = formatIssueLabel(item);
   header.append(statusCode, metaBadge(item.method || "HTTP"), metaBadge(item.status ? `Status ${item.status}` : "No status"));
+  const incrementalBadge = getIncrementalResultBadge(item);
+  if (incrementalBadge) {
+    header.append(metaBadge(incrementalBadge.text, incrementalBadge.modifier));
+  }
 
   row.append(header, detailLine("URL", item.url));
   if (item.checkedAt) {
@@ -1086,6 +1101,9 @@ function renderBrokenItem(item) {
   }
   if (item.confirmation?.enabled) {
     row.append(detailLine("二次確認", formatConfirmationStatus(item.confirmation)));
+  }
+  if (item.incremental?.reused) {
+    row.append(detailLine("增量來源", formatIncrementalProvenance(item.incremental)));
   }
 
   const sources = (item.sources || []).slice(0, 4);
@@ -1117,9 +1135,55 @@ function detailLine(label, value) {
   return row;
 }
 
-function metaBadge(value) {
+function getIncrementalResultBadge(item) {
+  if (item.incremental?.reused) {
+    return { text: "復用", modifier: "impact" };
+  }
+  if (currentReport?.summary?.incremental?.enabled) {
+    return {
+      text: item.incremental?.classification === "new" ? "新增" : "已重查",
+      modifier: "",
+    };
+  }
+  return null;
+}
+
+function formatIncrementalProvenance(incremental) {
+  const parts = [];
+  if (incremental.baselineCheckedAt) {
+    parts.push(`基準檢查時間 ${incremental.baselineCheckedAt}`);
+  }
+  if (incremental.reuseSource) {
+    parts.push(`來源 ${formatIncrementalReuseSource(incremental.reuseSource)}`);
+  }
+  if (incremental.reason) {
+    parts.push(formatIncrementalReason(incremental.reason));
+  }
+  return parts.length ? parts.join("；") : "復用上次穩定結果";
+}
+
+function formatIncrementalReuseSource(source) {
+  const labels = {
+    state: "scan state",
+    baseline_report: "baseline report",
+  };
+  return labels[source] || source;
+}
+
+function formatIncrementalReason(reason) {
+  const labels = {
+    stable_known_policy_match_ttl_valid: "設定相同且 TTL 未過期",
+    listed_in_sitemap: "列於 sitemap",
+    sitemap_lastmod_newer: "sitemap lastmod 較新",
+    sitemap_lastmod_unchanged: "sitemap lastmod 未變",
+    sitemap_lastmod_not_newer: "sitemap lastmod 未更新",
+  };
+  return labels[reason] || reason;
+}
+
+function metaBadge(value, modifier = "") {
   const span = document.createElement("span");
-  span.className = "meta-badge";
+  span.className = modifier ? `meta-badge ${modifier}` : "meta-badge";
   span.textContent = value;
   return span;
 }
@@ -1241,6 +1305,31 @@ function updateConfirmationBreakdown(counts) {
   confirmationRecovered.textContent = counts.enabled ? counts.recovered || 0 : 0;
   confirmationNeedsReview.textContent = counts.enabled ? counts.needs_review || 0 : 0;
   confirmationMissing.textContent = counts.enabled ? counts.confirmed_missing || 0 : 0;
+}
+
+function updateIncrementalSummary(incremental) {
+  if (!incrementalPanel) {
+    return;
+  }
+  if (!incremental?.enabled) {
+    incrementalPanel.hidden = true;
+    incrementalMode.textContent = "-";
+    incrementalNew.textContent = "0";
+    incrementalKnown.textContent = "0";
+    incrementalReused.textContent = "0";
+    incrementalDisappeared.textContent = "0";
+    incrementalPriority.textContent = "0 / 0";
+    return;
+  }
+
+  const priority = incremental.priority || {};
+  incrementalPanel.hidden = false;
+  incrementalMode.textContent = incremental.mode === "changed_only" ? "復用穩定結果" : "優先重查";
+  incrementalNew.textContent = incremental.new || 0;
+  incrementalKnown.textContent = incremental.known || 0;
+  incrementalReused.textContent = incremental.reused || 0;
+  incrementalDisappeared.textContent = incremental.disappeared || 0;
+  incrementalPriority.textContent = `${priority.boosted || 0} / ${priority.deferred || 0}`;
 }
 
 function updateActiveFilter() {

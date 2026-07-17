@@ -742,7 +742,8 @@ input:focus {
 
 .issue-grid,
 .redirect-grid,
-.confirmation-grid {
+.confirmation-grid,
+.incremental-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
   gap: 8px;
@@ -751,7 +752,8 @@ input:focus {
 
 .issue-grid div,
 .redirect-grid div,
-.confirmation-grid div {
+.confirmation-grid div,
+.incremental-grid div {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -761,7 +763,8 @@ input:focus {
 
 .issue-grid span,
 .redirect-grid span,
-.confirmation-grid span {
+.confirmation-grid span,
+.incremental-grid span {
   display: block;
   color: var(--muted);
   font-size: 12px;
@@ -770,8 +773,13 @@ input:focus {
 
 .issue-grid strong,
 .redirect-grid strong,
-.confirmation-grid strong {
+.confirmation-grid strong,
+.incremental-grid strong {
   font-size: 18px;
+}
+
+.incremental-panel {
+  margin-top: 16px;
 }
 
 .current-url {
@@ -878,6 +886,13 @@ input:focus {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.meta-badge.impact {
+  border-color: #eed2a5;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-weight: 700;
 }
 
 .broken-detail-line {
