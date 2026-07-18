@@ -131,15 +131,23 @@ P10a 實作紀錄：
 - 已新增 `test-p10a-interpretation.mjs` 覆蓋站內 404、站內 403、429、成功轉址、轉址到錯誤頁與外站 403。
 - CSV / Excel 交辦友善欄位仍歸 P10b 收尾，屆時應直接使用同一個 `interpretation` 契約，避免另做一套分類。
 
+P10b 評估與實作紀錄：
+
+- 結論：P10b 應採用，且應列為 P10a 後的優先項。它不新增掃描能力，而是把 P10a 的判讀結果變成承辦人可直接用 Excel 篩選、交辦與存查的欄位。
+- 實作範圍應收斂為 `broken.csv` 的交辦友善輸出，不擴大成派工平台、審核流程或 dashboard。
+- `broken.csv` 已在前段新增交辦欄位：`判讀分類`、`建議處理`、`是否需人工確認`、`優先度`、`問題網址`、`來源頁`、`連結文字`、`HTTP 狀態`、`技術原因`、`最終網址`、`確認結果`、`檢查時間`。
+- 原本技術欄位仍保留在後段，維持向後追查能力；新增欄位直接使用 `interpretation`，缺少舊報告欄位時才 fallback。
+- 已新增 `test-p10b-broken-csv.mjs`，驗收 BOM、CRLF、交辦欄位順序、P10a 判讀文字、final URL、來源頁與敏感 query 遮罩。
+
 2026-07-18 重新檢視 P10：
 
 - P10 方向正確，且已部分啟動；主 GUI 已先採用承辦人判讀分類與較保守的掃描模式，但 P10 不能算完成。
 - P10a：核心契約已完成，report / schema / GUI 可共用 `interpretation` 與 `interpretationByCategory`；CSV / Excel 欄位串接留給 P10b。
-- P10b：尚未完成。下一個最重要工作是把判讀分類、建議處理、是否需人工確認、來源頁、問題網址、技術原因與 final URL 補進 CSV / Excel 友善輸出。
+- P10b：已完成 `broken.csv` 交辦友善欄位，直接使用 P10a `interpretation` 契約；後續只需視需要讓 Analyzer 匯出也同步同欄位。
 - P10c：已部分完成。主畫面已改為「待判讀結果」與判讀分類，進階設定也已改成「標準保守 / 快速掃描 / 更保守」且預設較保守；仍需讓 Analyzer 與 README 同步使用同一套判讀語言。
 - P10d：維持 optional。Fragment / anchor 與 duplicate anchor 有價值，但不應阻擋 P10a-c 完成後進入 release gate。
 - GUI 一鍵模式目前已足夠，不應擴大成完整 profile presets 或把所有 CLI 參數搬進 GUI。
-- P10 接下來應收斂為三個收尾項：固定 report `interpretation` 契約、補 CSV / Excel 交辦欄位、同步 Analyzer / README。
+- P10 接下來應收斂為兩個收尾項：同步 Analyzer / README 的判讀語言，並評估 P10d 頁內品質提醒是否納入 release gate。
 
 與舊規劃比對：
 

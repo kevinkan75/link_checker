@@ -357,6 +357,7 @@ P5.5 diagnostics：
 - protection：`protection.provider`、`protection.headerEvidence`、`protection.bodySignatureRuleIds`、`wafHeaders`、`blockedReason`、`blockedRuleId`、`suspectedWaf`、`suspectedBot`
 - body signature：`bodySignature.signatureType`、`bodySignature.matchedPatterns`、`bodySignature.title`、`bodySignature.snippet`，`bodySignature.bodyHash` 僅在 `--protection-body-hash` opt-in 時輸出
 - diagnosis：`classification`、`issueType`、`diagnosis`
+- interpretation：`interpretation.category`、`interpretation.label`、`interpretation.severity`、`interpretation.action`、`interpretation.needsManualReview`
 - retry：`attempts`
 - confirmation：`confirmation`、`transientFailure`、`needsReview`
 
@@ -593,6 +594,23 @@ GUI 完成後會保存：
 - `external-links.ndjson`
 
 CLI 使用 `--output <file>` 時會寫出指定 report，並在同目錄建立 `manifest.json`。
+
+`broken.csv` 是給承辦人交辦與存查使用的 Excel 友善輸出，會以 UTF-8 BOM 與 CRLF 寫出。P10b 起，前段欄位固定為：
+
+- `判讀分類`
+- `建議處理`
+- `是否需人工確認`
+- `優先度`
+- `問題網址`
+- `來源頁`
+- `連結文字`
+- `HTTP 狀態`
+- `技術原因`
+- `最終網址`
+- `確認結果`
+- `檢查時間`
+
+這些欄位直接使用 report item 的 `interpretation` 契約；原本的技術欄位仍保留在後段，供進一步追查與相容既有流程。
 
 ### 8.1 P9b 大型報告規劃註記
 

@@ -567,6 +567,18 @@ function makeNdjson(items) {
 
 function makeBrokenCsv(items, options = DEFAULTS) {
   const rows = [[
+    "判讀分類",
+    "建議處理",
+    "是否需人工確認",
+    "優先度",
+    "問題網址",
+    "來源頁",
+    "連結文字",
+    "HTTP 狀態",
+    "技術原因",
+    "最終網址",
+    "確認結果",
+    "檢查時間",
     "url",
     "status",
     "issueType",
@@ -600,16 +612,34 @@ function makeBrokenCsv(items, options = DEFAULTS) {
 
   for (const item of items) {
     const sources = item.sources?.length ? item.sources : [{}];
+    const interpretation = getCsvInterpretation(item);
     for (const source of sources) {
+      const displayUrl = redactSensitiveQueryValue(item.url, options);
+      const sourcePage = redactSensitiveQueryValue(source.page || "", options);
+      const sourceText = redactSensitiveQueryValue(source.text || "", options);
+      const finalUrl = redactSensitiveQueryValue(item.finalUrl || "", options);
+      const technicalReason = redactSensitiveQueryValue(formatCsvTechnicalReason(item), options);
       rows.push([
-        redactSensitiveQueryValue(item.url, options),
+        interpretation.label,
+        redactSensitiveQueryValue(interpretation.action, options),
+        interpretation.needsManualReview ? "是" : "否",
+        formatCsvPriority(interpretation.severity),
+        displayUrl,
+        sourcePage,
+        sourceText,
+        item.status ?? "",
+        technicalReason,
+        finalUrl,
+        formatCsvConfirmationOutcome(item.confirmation?.outcome),
+        item.checkedAt || "",
+        displayUrl,
         item.status ?? "",
         item.issueType || "",
         item.classification || "",
         item.checkedAt || "",
         redactSensitiveQueryValue(item.canonicalUrl || "", options),
         item.method || "",
-        redactSensitiveQueryValue(item.finalUrl || "", options),
+        finalUrl,
         item.contentLength ?? "",
         item.cacheHeaders?.cacheControl || "",
         item.suspectedWaf ? "yes" : "no",
@@ -626,16 +656,76 @@ function makeBrokenCsv(items, options = DEFAULTS) {
         item.confirmation?.reason || "",
         item.needsReview ? "yes" : "no",
         item.transientFailure ? "yes" : "no",
-        redactSensitiveQueryValue(source.page || "", options),
+        sourcePage,
         source.tag || "",
         source.attribute || "",
-        redactSensitiveQueryValue(source.text || "", options),
+        sourceText,
         redactSensitiveQueryValue(item.diagnosis || item.error || "", options),
       ]);
     }
   }
 
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+function getCsvInterpretation(item) {
+  if (item?.interpretation?.category) {
+    return {
+      category: item.interpretation.category,
+      label: item.interpretation.label || item.interpretation.category,
+      severity: item.interpretation.severity || "review",
+      action: item.interpretation.action || "請用瀏覽器人工確認是否可正常開啟，再決定是否交辦修正。",
+      needsManualReview: Boolean(item.interpretation.needsManualReview),
+    };
+  }
+
+  if (item?.needsReview || item?.classification === "protected" || item?.status === 403 || item?.status === 429) {
+    return {
+      category: "needs_review",
+      label: "需人工確認",
+      severity: "review",
+      action: "請用瀏覽器人工確認是否可正常開啟，再決定是否交辦修正。",
+      needsManualReview: true,
+    };
+  }
+
+  return {
+    category: "likely_problem",
+    label: "可能失效",
+    severity: "medium",
+    action: "請確認網址、伺服器狀態或頁面是否仍存在。",
+    needsManualReview: true,
+  };
+}
+
+function formatCsvPriority(severity) {
+  const labels = {
+    high: "高",
+    medium: "中",
+    review: "需確認",
+    info: "資訊",
+    ok: "低",
+    notice: "提醒",
+  };
+  return labels[severity] || "需確認";
+}
+
+function formatCsvConfirmationOutcome(outcome) {
+  const labels = {
+    skipped: "未確認",
+    recovered: "二次確認後正常",
+    confirmed_missing: "二次確認仍不存在",
+    needs_review: "需人工確認",
+  };
+  return labels[outcome] || outcome || "";
+}
+
+function formatCsvTechnicalReason(item) {
+  return [
+    item.issueType,
+    item.classification,
+    item.diagnosis || item.error,
+  ].filter(Boolean).join(" / ");
 }
 
 function makeExternalLinksCsv(items, options = DEFAULTS) {
@@ -879,7 +969,7 @@ function makeLogReadme(job, summary) {
     "Files:",
     "- summary.json: 檢查摘要與執行參數",
     "- report.json: 完整 JSON 報告",
-    "- broken.csv: 問題連結清單，可用 Excel 開啟",
+    "- broken.csv: 交辦友善的待判讀清單，可用 Excel 開啟",
     "- external-links.csv: External link inventory, usable in Excel",
     "- checked.ndjson: Checked URL records, one JSON object per line",
     "- broken.ndjson: Broken link records, one JSON object per line",
