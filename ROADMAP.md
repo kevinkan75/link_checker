@@ -16,6 +16,7 @@
 - P9b-1 到 P9b-4 已驗收，包含 GUI log artifacts、NDJSON sidecar、GUI complete payload 瘦身、大檔提示、列表「載入更多」與 NDJSON 匯入。
 - P9c-1 / P9c-2 已驗收，包含 rules schema、root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
 - 目前下一個主線改為 P10：報告判讀與交辦友善強化。
+- P10 完成並驗收後，可進入正式版 release gate；P11 應定位為發布前 hardening / packaging 檢查，不再新增大型產品功能。
 - P9c 的定位是補齊 rules 信任基線：讓報告可追溯、讓 URL rules 載入安全；不是建立複雜規則平台，也不是重構 crawler。
 - 產品定位已校準為本地端、低門檻、輔助型工具，主要提供政府機關承辦人員使用，不取代 CMS、維運流程、稽核系統或正式監控平台。
 
@@ -72,6 +73,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 
 **狀態：** 下一個主線  
 **目標：** 讓承辦人更容易判斷哪些要修、哪些要人工確認、哪些只是外站限制或已知轉址。
+**階段定位：** P10 是正式版前的最後一個產品功能主線；P10 完成並驗收後，專案可進入正式版 release gate。
 
 重新評估結論：
 
@@ -79,6 +81,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 - 舊規劃中的整站檢測策略應只保留對承辦人有直接幫助的小步分類、呈現與匯出改善。
 - P10 不應擴大為取代 CMS、維運流程、稽核系統、W3C Link Checker 或監控平台。
 - P10 的驗收重點應是「承辦人是否更容易看懂、交辦、複核」，而不是「工具是否能自動治理整個網站」。
+- P10 完成後不再新增大型功能；正式版前只做 release hardening、package smoke test、manifest / checksum、文件與版本檢查。
 
 建議交付：
 
@@ -123,6 +126,15 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 - headless render 預設化。
 - Web Worker / IndexedDB 大改。
 - 取代 W3C Link Checker 或機關既有工具。
+
+P10 完成後的正式版 release gate：
+
+- 全部 `.mjs` 語法檢查與全部 `test-*.mjs` 通過。
+- 以本機 smoke test 驗證 GUI 啟動、掃描、報告下載與 Analyzer 匯入流程。
+- 重建 portable package，確認 bundled runtime、launcher、localhost-only、manual / idle shutdown 行為。
+- 產生並檢查 build manifest、SHA256、runtime version、來源 commit 與產物清單。
+- 更新 README、Roadmap、CLI reference、technical spec 與 release notes。
+- 明確標示 self-signed / SmartScreen 限制；若要對外公開發佈，再評估公開信任 code signing。
 
 ### 3. 頁內連結品質檢查
 
@@ -169,8 +181,8 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | P9b | 已驗收 | 大型報告處理、NDJSON sidecar、Analyzer 載入更多 | 不取代 `report.json` 主契約 |
 | P9c-1 | 已驗收 | Rules Schema | 已接續完成 P9c-2 |
 | P9c-2 | 已驗收 | Rules 追溯與 rules URL 載入安全 | 後續只保留小修 |
-| P10 | 下一個主線 | 報告判讀、人工複核分類、交辦友善欄位與頁內品質提醒 | 優先評估 |
-| P11 | 後續評估 | 輔助格式、release / packaging governance | P10 後評估 |
+| P10 | 下一個主線 | 報告判讀、人工複核分類、交辦友善欄位與頁內品質提醒 | 完成後進入正式版 release gate |
+| P11 | Release gate | 發布前 hardening、portable package、manifest、checksum、smoke test、文件與版本檢查 | P10 驗收後執行 |
 
 ## 已完成里程碑索引
 
@@ -251,7 +263,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | rules governance | `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json` | P9c | P9c-1 已完成 |
 | rules tracing | root `rulesTrace`、fingerprint、source metadata、load warnings、rules URL 安全載入 | P9c-2 | 已完成第一版 |
 | report interpretation | 人工複核分類、頁內跳轉失效、交辦友善欄位 | P10 | 下一步 |
-| release | package manifest、Node runtime version、smoke test、dependency audit、license summary、SBOM、checksum / signing | P11 | 後續評估 |
+| release | package manifest、Node runtime version、smoke test、dependency audit、license summary、SBOM、checksum / signing | P11 / release gate | P10 後執行 |
 
 ## 參考文件
 

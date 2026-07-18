@@ -581,3 +581,5 @@ P10 不納入：
 - 取代 W3C Link Checker、CMS、機關既有維運流程或正式監控系統。
 
 P10 的驗收標準應聚焦「承辦人是否更容易看懂、交辦、複核」，而不是工具是否能自動治理整個網站。
+
+P10 完成並驗收後，可進入正式版 release gate。此時不再新增大型產品功能，後續只做發布前 hardening / packaging 檢查，例如完整測試、GUI smoke test、portable package 重建、build manifest、SHA256、runtime version、來源 commit、文件與 release notes 檢查。若要對外公開發佈，再另行評估公開信任 code signing；self-signed 只作內部信任流程說明。
