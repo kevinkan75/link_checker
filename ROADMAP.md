@@ -12,9 +12,9 @@
 
 - P0-P8 已完成第一版。
 - P9a 已於 2026-07-17 驗收通過；不要再把 P9a-1 當成下一個起點。
-- P9b-1 到 P9b-4 已完成第一版，包含 GUI log artifacts、NDJSON sidecar、GUI complete payload 瘦身、大檔提示、列表「載入更多」與 NDJSON 匯入。
-- P9c-1 Rules Schema 已完成第一版，包含 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json` 與 `test-p9c1-rules-schema.mjs`。
-- P9c-2 Rules 追溯欄位與 rules URL 載入安全化已完成第一版，包含 root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
+- P9 已於 2026-07-18 整體驗收；P9a、P9b 與 P9c 都已完成第一版並通過現有測試。
+- P9b-1 到 P9b-4 已驗收，包含 GUI log artifacts、NDJSON sidecar、GUI complete payload 瘦身、大檔提示、列表「載入更多」與 NDJSON 匯入。
+- P9c-1 / P9c-2 已驗收，包含 rules schema、root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
 - 目前下一個主線改為 P10：報告判讀、人工複核分類、交辦友善欄位與整站檢測策略的小步強化。
 - P9c 的定位是補齊 rules 信任基線：讓報告可追溯、讓 URL rules 載入安全；不是建立複雜規則平台，也不是重構 crawler。
 - 產品定位已校準為本地端、低門檻、輔助型工具，主要提供政府機關承辦人員使用，不取代 CMS、維運流程、稽核系統或正式監控平台。
@@ -121,9 +121,9 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | P7 | 已完成第一版 | TTL URL result cache | 僅保留 P9/P10 呈現整合 |
 | P8 | 已完成第一版 | incremental scan、sitemap seed、changed-only result reuse | GUI state 管理延後 |
 | P9a | 已驗收 | GUI 易用性、手機可讀性、匯入流程 | 不再是下一個起點 |
-| P9b | 已完成第一版 | 大型報告處理、NDJSON sidecar、Analyzer 載入更多 | 不取代 `report.json` 主契約 |
-| P9c-1 | 已完成第一版 | Rules Schema | 已接續完成 P9c-2 |
-| P9c-2 | 已完成第一版 | Rules 追溯與 rules URL 載入安全 | 後續只保留小修 |
+| P9b | 已驗收 | 大型報告處理、NDJSON sidecar、Analyzer 載入更多 | 不取代 `report.json` 主契約 |
+| P9c-1 | 已驗收 | Rules Schema | 已接續完成 P9c-2 |
+| P9c-2 | 已驗收 | Rules 追溯與 rules URL 載入安全 | 後續只保留小修 |
 | P10 | 下一個主線 | 輔助型分級、人工複核、整站檢測策略小步強化 | 優先評估 |
 | P11 | 後續評估 | 輔助格式、release / packaging governance | P10 後評估 |
 
@@ -137,7 +137,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | P6.5b | SSRF、partial report、robots / compliance、Retry-After / host diagnostics、WAF signature schema | [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md) |
 | P7 | TTL URL result cache、CLI 參數、report `summary.cache`、回歸測試與發布收尾 | [docs/archive/P7_RELEASE_CLOSURE.md](docs/archive/P7_RELEASE_CLOSURE.md) |
 | P8 | incremental scan、sitemap 保守 seed、changed-only result reuse、GUI / Analyzer 呈現 | [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md) |
-| P9a / P9b | GUI 易用性、大型報告處理、NDJSON 輔助輸出、Analyzer 匯入與分批載入 | [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md) |
+| P9 | GUI 易用性、大型報告處理、NDJSON 輔助輸出、Analyzer 匯入與分批載入、rules schema、rules trace 與 rules URL 安全載入；已於 2026-07-18 整體驗收 | [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md) |
 | 2026-07-18 評估 | 專案健康度、產品定位、P9c-2 建議、延後項目重新排序 | [docs/archive/PROJECT_ASSESSMENT_2026-07-18.md](docs/archive/PROJECT_ASSESSMENT_2026-07-18.md) |
 | Release security 小修 | portable `.cmd` 使用 bundled runtime、build manifest、SHA256、localhost-only、自簽說明 | [docs/archive/RELEASE_SECURITY_ASSESSMENT.md](docs/archive/RELEASE_SECURITY_ASSESSMENT.md) |
 

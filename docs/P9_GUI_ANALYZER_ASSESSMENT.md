@@ -2,7 +2,7 @@
 
 評估日期：2026-07-17
 
-本文件記錄 P9 的實作前評估。P9 的主軸是改善 GUI / Analyzer 的易用性、可讀性與大型報告處理能力；第一階段應優先處理使用者會直接誤解的呈現問題，不改掃描語意，也不改 `report.json` 主契約。
+本文件記錄 P9 的實作前評估、分階段實作紀錄與最終驗收。P9 的主軸是改善 GUI / Analyzer 的易用性、可讀性與大型報告處理能力；第一階段應優先處理使用者會直接誤解的呈現問題，不改掃描語意，也不改 `report.json` 主契約。
 
 ## 結論
 
@@ -12,7 +12,7 @@ P9 可以開始，但應分階段實作：
 2. P9b：大型 report / NDJSON 輔助輸出。
 3. P9c：Profile、Rules Schema 與 Next.js Payload。
 
-目前狀態：P9a 已於 2026-07-17 驗收通過，P9b-1、P9b-2、P9b-3、P9b-4 與 P9c-1 已完成第一版；下一個實作起點是 P9c-2 Rules 追溯欄位。下方 P9a 分析保留作為歷史決策與驗收脈絡，不代表 P9a-1 仍是下一步。
+目前狀態：P9 已於 2026-07-18 整體驗收。P9a 已於 2026-07-17 驗收通過；P9b-1、P9b-2、P9b-3、P9b-4、P9c-1 與 P9c-2 都已完成第一版。下一個主線是 P10 報告判讀、人工複核分類、交辦友善欄位與整站檢測策略的小步強化。下方分析保留作為歷史決策與驗收脈絡，不代表 P9a、P9b 或 P9c 仍是下一步。
 
 P9b-1 的已落地方向是：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，並讓 GUI SSE complete event 不再傳完整 report。第一版採完成後從 `report.json` 派生 sidecar，不先重寫掃描核心、不先做完整 streaming parser、不先設計 CLI sidecar。
 
@@ -23,6 +23,8 @@ P9b-3 的已落地方向是：Report Analyzer 壞連結清單與 External Link A
 P9b-4 的已落地方向是：Report Analyzer 可直接載入 `broken.ndjson`，External Link Analyzer 可直接載入 `external-links.ndjson`。第一版不支援 `checked.ndjson` 匯入、不做跨 sidecar 合併、不加入 streaming parser / Web Worker / IndexedDB。
 
 P9c-1 的已落地方向是：新增 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`，並以 `test-p9c1-rules-schema.mjs` 驗證公開 rules 格式、負例與現有 CEC site-link-rules 範例。此步不改 CLI 行為、不新增 profile，也不加入 report 追溯欄位。
+
+P9c-2 的已落地方向是：report root 新增 `rulesTrace`，記錄三類 rules 是否啟用、來源、版本、fingerprint、byte size、rule count、載入時間與 warnings；rules URL 載入改用安全 loader，套用 URL security policy、redirect 目標檢查、timeout、content length / body size limit 與清楚錯誤訊息。
 
 P9a 當時應先做，因為風險最低、使用者最有感，而且可以只動呈現層。P9b 會牽涉 Analyzer 載入策略與輔助輸出格式；P9c 會牽涉 CLI 參數、規則治理、payload extraction 與 report 欄位追溯，風險最高，應放在後段。
 
@@ -380,13 +382,13 @@ P9b-4 已完成第一版：
 - `node --check test-p9b4-ndjson-import.mjs`
 - `node test-p9b4-ndjson-import.mjs`
 
-下一步：P9c-2 Rules 追溯欄位；P9c-1 Rules Schema 與驗證測試已完成第一版。
+後續已由 P9c-2 補上 `rulesTrace` 與 rules URL 安全載入；P9c-1 Rules Schema 與驗證測試已完成第一版。
 
 ## P9c 邊界
 
-P9c 目標是建立 profile、rules schema 與 Next.js payload 支援。
+P9c 原始評估包含 profile、rules schema 與 Next.js payload 支援；最終驗收範圍收斂為 rules schema、rules trace 與 rules URL 安全載入。profile presets 與 Next.js 專用 parser 改列延後評估，不作為 P9 驗收阻擋項。
 
-可能交付：
+原始可能交付：
 
 - `normal`、`government-conservative`、`large-site`、`spa`、`external-governance` profile。
 - `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。
@@ -442,28 +444,28 @@ P9c 部分已有前置能力，且 P9c-1 已補上 rules schema 與驗證測試�
 ### 重新排序
 
 1. P9c-1：已補 rules schema 檔與驗證測試，固定 `domain-rules`、`external-risk-rules`、`site-link-rules` 契約。
-2. P9c-2：補 rules 追溯欄位，例如 `rulesVersion` 或 rules fingerprint / source metadata。
-3. P9c-3：再做 profiles，避免設定面早於追溯欄位擴大。
-4. P9c-4：評估 Next.js `__NEXT_DATA__` 專用 parser；若只靠 URL/path literal 已足夠，先不要把它升成 P9c 必做。
+2. P9c-2：已補 rules 追溯欄位與 rules URL 載入安全化。
+3. profiles：延後；避免設定面早於實際使用需求擴大。
+4. Next.js `__NEXT_DATA__` 專用 parser：延後；若 site-link-rules 與 URL/path literal 已足夠，不升成 P9 必做。
 
 ### 重新結論
 
-P9 的下一個實作點不是繼續修 UI，也不是重做掃描核心，而是 P9c-2。P9b-1 已解除完成瞬間傳送完整 report 的主要卡點，P9b-2 已保護 Analyzer 載入大型檔案時的使用者體驗，P9b-3 已降低大量列表一次渲染造成的 DOM 成本，P9b-4 已讓 Analyzer 可直接載入主要 NDJSON sidecar，P9c-1 已固定 rules schema 與驗證測試；接下來應補 rules 追溯欄位。
+P9 不需要繼續修 UI，也不需要重做掃描核心。P9b-1 已解除完成瞬間傳送完整 report 的主要卡點，P9b-2 已保護 Analyzer 載入大型檔案時的使用者體驗，P9b-3 已降低大量列表一次渲染造成的 DOM 成本，P9b-4 已讓 Analyzer 可直接載入主要 NDJSON sidecar，P9c-1 已固定 rules schema 與驗證測試，P9c-2 已補 rules 追溯與 rules URL 安全載入。P9 整體可驗收，後續主線改為 P10。
 
-P9c 應排在 P9b 基礎輸出之後。現有 rules 與 SPA 能力可以支撐目前掃描，但缺少 schema、profile 與追溯欄位，若太早加 GUI profile 設定，容易造成報告契約反覆變動。
+P9c 已在 P9b 基礎輸出之後完成必要基線。現有 rules 與 SPA 能力可以支撐目前掃描；profile presets 與 Next.js 專用 parser 仍有價值，但不應回塞 P9，也不應早於 P10 的報告判讀與交辦友善主線。
 
 ### 2026-07-18 P9c validation record
 
-P9c 評估已重新驗證；此段保留為 P9c-1 實作前依據。P9c-1 已完成第一版，下一步應做 **P9c-2 Rules 追溯欄位**。
+P9c 評估已重新驗證；此段保留為 P9c-1 / P9c-2 實作前依據。P9c-1 與 P9c-2 都已完成第一版。
 
 已確認的現況：
 
 - CLI 已有 `--domain-rules`、`--external-risk-rules`、`--site-link-rules` 三個 rules 入口。
 - 程式已有 `loadDomainCategoryRules`、`loadExternalRiskRules`、`loadSiteLinkRules`、`normalizeExternalRiskRules`、`normalizeSiteLinkRules` 等載入與 normalization 流程。
-- report 已記錄 rules source：`domainCategoryRulesSource`、`externalRiskRulesSource`、`siteLinkRulesSource`。
+- report 已記錄 rules source：`domainCategoryRulesSource`、`externalRiskRulesSource`、`siteLinkRulesSource`，並由 P9c-2 補上 root `rulesTrace`。
 - `schemas/` 已包含 `report.schema.json`、`diff.schema.json`、`domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。
 - P9c-1 已建立三份 rules schema 與 `test-p9c1-rules-schema.mjs`，用來驗證公開 rules 格式、負例與現有 CEC 範例。
-- 尚未看到 profile 正式模型、CLI 入口或 `profileExpandedOptions` / `rulesVersion` 追溯欄位落地。
+- profile 正式模型、CLI 入口或 `profileExpandedOptions` 尚未落地；這些已延後，不阻擋 P9 驗收。
 - `__NEXT_DATA__` 目前有 signal 偵測與 framework / site-rule extraction 輔助，但還不是完整 Next.js payload parser。
 
 驗證方式：
@@ -475,9 +477,9 @@ P9c 評估已重新驗證；此段保留為 P9c-1 實作前依據。P9c-1 已完
 決策：
 
 1. P9c-1：已補三份 rules schema 與驗證測試，固定既有 rules 契約，不改 CLI 行為。
-2. P9c-2：再補 rules 追溯欄位，例如 `rulesVersion` 或 rules fingerprint / source metadata。
-3. P9c-3：等 rules schema 與追溯欄位穩定後再做 profiles，避免設定面反覆變動。
-4. P9c-4：Next.js `__NEXT_DATA__` parser 先保持評估項；若 site-link-rules 已足夠，不急著升成核心必做。
+2. P9c-2：已補 root `rulesTrace`、rules fingerprint / source metadata 與 rules URL 安全載入。
+3. profiles：延後，避免設定面反覆變動。
+4. Next.js `__NEXT_DATA__` parser：保持評估項；若 site-link-rules 已足夠，不升成核心必做。
 
 ### 2026-07-18 P9c-1 implementation record
 
@@ -494,18 +496,68 @@ P9c-1 已完成第一版：
 - `node test-p9c1-rules-schema.mjs`
 - `node --check link-checker.mjs`
 
-下一步：P9c-2 Rules 追溯欄位，評估 `rulesVersion` 或 rules fingerprint / source metadata。
+後續已由 P9c-2 補上 root `rulesTrace`、rules fingerprint / source metadata 與 rules URL 安全載入。
+
+### 2026-07-18 P9c-2 implementation record
+
+P9c-2 已完成第一版：
+
+- report root 新增 `rulesTrace`，記錄 `domainCategoryRules`、`externalRiskRules`、`siteLinkRules` 是否啟用、source type、source path / URL、final URL、loadedAt、rulesVersion、fingerprint、byteSize、ruleCount、redirectCount 與 warnings。
+- rules URL 載入改用安全 loader，不再直接 `fetch()`；載入前與每次 redirect 後都會套用 URL security policy。
+- rules URL 載入會檢查 timeout、content length、body size limit、redirect loop 與 max redirects。
+- 預設阻擋 localhost、private IP、metadata IP 與不安全 redirect；GUI 仍不提供 rules URL 表單。
+- 新增 `test-p9c2-rules-trace.mjs`，驗證 disabled trace、本機 rules metadata、fingerprint 與 localhost rules URL security block。
+
+驗證通過：
+
+- `node --check link-checker.mjs`
+- `node --check test-p9c2-rules-trace.mjs`
+- `node test-p9c2-rules-trace.mjs`
+- 全部 `test-*.mjs`
+
+### 2026-07-18 P9 acceptance record
+
+P9 整體驗收通過。
+
+驗收範圍：
+
+- P9a：GUI 易用性與 Analyzer 基礎可讀性，包含進度語意、空狀態、手機可讀性與匯入流程。
+- P9b：大型 report / NDJSON 輔助輸出，包含 GUI log artifacts、complete payload 瘦身、大檔提示、列表「載入更多」與 `broken.ndjson` / `external-links.ndjson` 匯入。
+- P9c：Rules Schema、rules trace 與 rules URL 安全載入，包含三份 rules schema、`rulesTrace`、fingerprint / source metadata 與 P9c-2 safe loader。
+
+驗收結論：
+
+- P9 已達成「改善 GUI / Analyzer 易用性、降低大型報告卡頓、固定 rules 契約並補足規則追溯」的第一版目標。
+- `report.json` 仍是正式主契約；NDJSON sidecar 是大型報告輔助格式，不取代主格式。
+- 掃描語意未因 P9a / P9b 改動而改變；P9c-2 只補 rules 載入與追溯基線，不重構 crawler。
+- 目前主線可正式移往 P10：報告判讀、人工複核分類、交辦友善欄位與整站檢測策略的小步強化。
+
+驗收時通過：
+
+- 全部 `.mjs` 語法檢查。
+- 全部 `test-*.mjs`。
+- P9 重點測試：`test-p9b-gui-artifacts.mjs`、`test-p9b3-list-pagination.mjs`、`test-p9b4-ndjson-import.mjs`、`test-p9c1-rules-schema.mjs`、`test-p9c2-rules-trace.mjs`。
+
+不納入 P9、後續另行評估：
+
+- GUI rules URL 表單。
+- profile presets。
+- Next.js `__NEXT_DATA__` 專用 parser。
+- `report.json` streaming parser。
+- CLI sidecar 邊跑邊 append。
+- Web Worker / IndexedDB Analyzer 資料層重做。
+- 常駐 scheduler、平台化監控或複雜 rules governance。
 
 ## 建議分支
 
-P9 建議從新分支開始：
+P9 歷史實作分支：
 
 ```text
 codex/p9-gui-analyzer-improvements
 ```
 
-下一個實作項目建議為：
+下一個主線：
 
 ```text
-P9c-2：Rules 追溯欄位
+P10：報告判讀、人工複核分類、交辦友善欄位與整站檢測策略小步強化
 ```
