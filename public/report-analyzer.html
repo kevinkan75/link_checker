@@ -11,7 +11,7 @@
       <header class="app-header">
         <div>
           <h1>Report Analyzer</h1>
-          <p>上傳單一 report.json，快速整理壞連結、問題類型、來源頁與網域問題排行。</p>
+          <p>上傳單一 report.json，快速整理待判讀結果、判讀分類、來源頁與網域排行。</p>
         </div>
         <nav class="header-nav" aria-label="主要導覽">
           <a class="header-link" href="/">Link Checker</a>
@@ -48,7 +48,7 @@
 
         <div id="report-empty-state" class="empty-state import-empty-state">
           <strong>等待 report.json</strong>
-          <p>載入報告後，問題分類、來源頁排行、問題網域與壞連結清單會更新。</p>
+          <p>載入報告後，判讀分類、來源頁排行、問題網域與待判讀清單會更新。</p>
         </div>
       </section>
 
@@ -57,8 +57,8 @@
       <section class="metric-grid" aria-label="報告總覽">
         <div><span>檢查頁數</span><strong id="metric-pages">0</strong></div>
         <div><span>檢查 URL</span><strong id="metric-checked">0</strong></div>
-        <div class="metric-card-danger"><span>壞連結</span><strong id="metric-broken">0</strong></div>
-        <div id="broken-rate-card"><span>壞連結比例</span><strong id="metric-broken-rate">0%</strong></div>
+        <div class="metric-card-danger"><span>需判讀結果</span><strong id="metric-broken">0</strong></div>
+        <div id="broken-rate-card"><span>需判讀比例</span><strong id="metric-broken-rate">0%</strong></div>
         <div><span>Redirect</span><strong id="metric-redirects">0</strong></div>
         <div><span>略過外連</span><strong id="metric-skipped">0</strong></div>
       </section>
@@ -81,12 +81,12 @@
       <section class="summary-layout">
         <section class="panel">
           <div class="section-heading">
-            <h2>問題分類</h2>
+            <h2>判讀分類</h2>
             <span id="issue-summary-count">0 種</span>
           </div>
-          <p class="panel-note">用來判斷修復優先順序。</p>
+          <p class="panel-note">用來判斷哪些要處理、哪些要人工確認。</p>
           <div id="issue-list" class="rank-list">
-            <p class="empty-note">載入報告後顯示問題分類。</p>
+            <p class="empty-note">載入報告後顯示判讀分類。</p>
           </div>
         </section>
 
@@ -115,17 +115,17 @@
 
       <section class="panel links-panel">
         <div class="section-heading">
-          <h2>壞連結清單</h2>
+            <h2>待判讀結果</h2>
           <span id="links-summary">0 筆</span>
         </div>
-        <div class="result-toolbar" aria-label="壞連結篩選">
+        <div class="result-toolbar" aria-label="待判讀結果篩選">
           <label>
             <span>搜尋</span>
             <input id="search" type="search" placeholder="URL、來源頁、診斷、網域">
           </label>
 
           <label>
-            <span>問題類型</span>
+            <span>判讀分類</span>
             <select id="issue-filter">
               <option value="all">全部</option>
             </select>

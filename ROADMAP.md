@@ -15,7 +15,7 @@
 - P9 已於 2026-07-18 整體驗收；P9a、P9b 與 P9c 都已完成第一版並通過現有測試。
 - P9b-1 到 P9b-4 已驗收，包含 GUI log artifacts、NDJSON sidecar、GUI complete payload 瘦身、大檔提示、列表「載入更多」與 NDJSON 匯入。
 - P9c-1 / P9c-2 已驗收，包含 rules schema、root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
-- 目前主線為 P10：報告判讀與交辦友善強化；P10a / P10b 已完成，P10c 收尾中。
+- 目前主線為 P10：報告判讀與交辦友善強化；P10a / P10b / P10c 已完成。
 - P10 完成並驗收後，可進入正式版 release gate；P11 應定位為發布前 hardening / packaging 檢查，不再新增大型產品功能。
 - P9c 的定位是補齊 rules 信任基線：讓報告可追溯、讓 URL rules 載入安全；不是建立複雜規則平台，也不是重構 crawler。
 - 產品定位已校準為本地端、低門檻、輔助型工具，主要提供政府機關承辦人員使用，不取代 CMS、維運流程、稽核系統或正式監控平台。
@@ -71,7 +71,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 
 ### 2. P10：報告判讀與交辦友善強化
 
-**狀態：** 進行中，P10a / P10b 已完成，P10c 收尾中
+**狀態：** P10a / P10b / P10c 已完成，P10d optional
 **目標：** 讓承辦人更容易判斷哪些要修、哪些要人工確認、哪些只是外站限制或已知轉址。
 **階段定位：** P10 是正式版前的最後一個產品功能主線；P10 完成並驗收後，專案可進入正式版 release gate。
 
@@ -147,6 +147,14 @@ P10c 評估紀錄：
 - 建議實作範圍只做語言與呈現同步：Analyzer 優先顯示 `interpretation.label`、`interpretation.action` 與 `interpretation.needsManualReview`；README 補判讀分類表；technical spec 補 GUI / Analyzer 應優先顯示 interpretation。
 - 不納入 P10c：新的 dashboard、派工流程、複雜技術型 profile presets、Analyzer 大型重構、report 契約變更。
 
+P10c 實作紀錄：
+
+- 狀態：已完成。Report Analyzer 已改用「待判讀結果」、「判讀分類」與 `interpretation` 優先呈現；`issueType` 保留為技術原因與追查輔助。
+- Analyzer 篩選、排行、明細 badge、建議處理與匯出 CSV 已改以 `interpretation.label`、`interpretation.action`、`interpretation.needsManualReview` 為主；舊報告缺少 `interpretation` 時仍會 fallback 推導。
+- README 已補判讀分類表，將 `404 / 403 / 429` 等 HTTP 狀態調整為輔助技術原因，而非主要使用者分類。
+- Technical spec 已明確規定 GUI 與 Report Analyzer 應優先顯示 `interpretation`。
+- 已新增 `test-p10c-report-analyzer-language.mjs`，驗收 Analyzer 判讀語言、CSV 前段交辦欄位、README 判讀分類表與 technical spec interpretation-first 規則。
+
 Profile presets 決策紀錄：
 
 - 結論：不需要再大幅簡化，也不應擴張。主 GUI 維持少量、可理解的掃描模式即可。
@@ -167,13 +175,13 @@ GUI 預設掃描數值執行紀錄：
 
 2026-07-18 重新檢視 P10：
 
-- P10 方向正確，且已進入收尾；P10a / P10b 已完成，主 GUI 已採用承辦人判讀分類與較保守的掃描模式。
+- P10 方向正確，且 P10a / P10b / P10c 已完成；主 GUI 與 Report Analyzer 已採用承辦人判讀分類與較保守的掃描模式。
 - P10a：核心契約已完成，report / schema / GUI 可共用 `interpretation` 與 `interpretationByCategory`；CSV / Excel 欄位串接留給 P10b。
 - P10b：已完成 `broken.csv` 交辦友善欄位，直接使用 P10a `interpretation` 契約；後續只需視需要讓 Analyzer 匯出也同步同欄位。
-- P10c：已部分完成。主畫面已改為「待判讀結果」與判讀分類，進階設定也已改成「標準保守 / 快速掃描 / 更保守」且預設較保守；仍需讓 Analyzer 與 README 同步使用同一套判讀語言。
+- P10c：已完成。主 GUI、Report Analyzer、README 與 technical spec 已同步使用判讀分類與交辦語言。
 - P10d：維持 optional。Fragment / anchor 與 duplicate anchor 有價值，但不應阻擋 P10a-c 完成後進入 release gate。
 - GUI 掃描模式目前已足夠，不應擴大成複雜技術型 profile presets 或把所有 CLI 參數搬進 GUI。
-- P10 接下來應收斂為 P10c：同步 Analyzer / README 的判讀語言；P10d 僅保留 optional，不列為 release gate 阻擋項，除非後續另行評估採用。
+- P10 接下來可進入 release gate；P10d 僅保留 optional，不列為 release gate 阻擋項，除非後續另行評估採用。
 
 與舊規劃比對：
 
@@ -269,7 +277,7 @@ P10 完成後的正式版 release gate：
 | P9b | 已驗收 | 大型報告處理、NDJSON sidecar、Analyzer 載入更多 | 不取代 `report.json` 主契約 |
 | P9c-1 | 已驗收 | Rules Schema | 已接續完成 P9c-2 |
 | P9c-2 | 已驗收 | Rules 追溯與 rules URL 載入安全 | 後續只保留小修 |
-| P10 | 進行中 | 報告判讀、人工複核分類、交辦友善欄位與 GUI / Analyzer 語言同步 | P10c 收尾後進入正式版 release gate；P10d optional |
+| P10 | 已完成核心收尾 | 報告判讀、人工複核分類、交辦友善欄位與 GUI / Analyzer 語言同步 | 進入正式版 release gate；P10d optional |
 | P11 | Release gate | 發布前 hardening、portable package、manifest、checksum、smoke test、文件與版本檢查 | P10 驗收後執行 |
 
 ## 已完成里程碑索引
@@ -350,7 +358,7 @@ P10 完成後的正式版 release gate：
 | body / source limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes`、`--max-sources-per-url` | P6.5a | 已完成 |
 | rules governance | `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json` | P9c | P9c-1 已完成 |
 | rules tracing | root `rulesTrace`、fingerprint、source metadata、load warnings、rules URL 安全載入 | P9c-2 | 已完成第一版 |
-| report interpretation | 人工複核分類、交辦友善欄位、GUI / Analyzer 判讀語言同步；頁內跳轉失效 optional | P10 | P10c 收尾 |
+| report interpretation | 人工複核分類、交辦友善欄位、GUI / Analyzer 判讀語言同步；頁內跳轉失效 optional | P10 | 核心收尾完成 |
 | release | package manifest、Node runtime version、smoke test、dependency audit、license summary、SBOM、checksum / signing | P11 / release gate | P10 後執行 |
 
 ## 參考文件

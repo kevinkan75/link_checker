@@ -19,9 +19,9 @@ Local Link Checker 是一個本機執行的網站連結檢查工具。核心目�
 | --- | --- | --- |
 | CLI | `link-checker.mjs` / `check-links.cmd` | 單站掃描、JSON 輸出、命令列診斷。 |
 | GUI server | `gui-server.mjs` / `gui.cmd` | 本機 HTTP GUI、工作佇列、log 自動保存。 |
-| GUI frontend | `public/index.html`、`public/app.js` | 掃描表單、即時事件、問題連結表格、隊列控制。 |
+| GUI frontend | `public/index.html`、`public/app.js` | 掃描表單、即時事件、待判讀結果表格、隊列控制。 |
 | External analyzer | `public/analyzer.js` | 分析 `report.json` 或 `external-links.csv` 的外連治理結果。 |
-| Report analyzer | `public/report-analyzer.js` | 分析單份 `report.json` 的壞連結與來源頁。 |
+| Report analyzer | `public/report-analyzer.js` | 分析單份 `report.json` 的待判讀結果、判讀分類與來源頁。 |
 | Portable build | `build-portable.ps1` | 打包 Windows portable zip，包含 Node runtime、GUI、docs 與 public assets。 |
 
 ## 3. 核心掃描流程
@@ -363,7 +363,9 @@ P5.5 diagnostics：
 
 ### 7.4 broken[]
 
-`broken[]` 是 `checked[]` 中 `ok !== true` 的子集，並補上 `sourceCount`、`sourcesTruncated` 與截斷後的 `sources`。它是 UI / CSV 的主要壞連結入口。
+`broken[]` 是 `checked[]` 中 `ok !== true` 的子集，並補上 `sourceCount`、`sourcesTruncated` 與截斷後的 `sources`。它是 UI / CSV 的主要待判讀結果入口。
+
+GUI 與 Report Analyzer 應優先顯示 `interpretation.label`、`interpretation.action` 與 `interpretation.needsManualReview`。`issueType`、`classification`、HTTP status 與 confirmation 欄位保留為技術原因與追查輔助，不應作為承辦人看到的主要分類語言。
 
 ### 7.5 externalLinks[]
 
@@ -556,7 +558,7 @@ Scan state 是本機效能最佳化與追蹤資料，不取代 `report.json` 主
 P8e 新增呈現層支援，不改變 report 主契約：
 
 - 主 GUI 掃描完成後會顯示 `summary.incremental`，包含模式、新增 URL、已知 URL、復用結果、disappeared 與 priority 摘要。
-- 主 GUI 問題連結會標示 reused result，並顯示 `baselineCheckedAt`、`reuseSource` 與 `reason`，避免使用者誤認為本輪實測。
+- 主 GUI 待判讀結果會標示 reused result，並顯示 `baselineCheckedAt`、`reuseSource` 與 `reason`，避免使用者誤認為本輪實測。
 - Report Analyzer 會讀取 `summary.incremental` 與 `broken[].incremental`，顯示 reused 標記並在 CSV 匯出 incremental provenance 欄位。
 - 舊 report 沒有 `summary.incremental` 或 result-level `incremental` 時，GUI / Analyzer 會保持相容並隱藏增量摘要。
 - GUI 啟用入口、state 管理頁、手填 state path、policy fingerprint 顯示與 GUI changed-only 主操作延後到 P9 / P10 評估。
@@ -626,9 +628,9 @@ GUI SSE complete event 會回傳輕量 summary / manifest / reportFiles / log pa
 
 P9b-2 第一版保護現有 Analyzer 匯入流程，不改 `report.json` 或 CSV 契約。Report Analyzer 與 External Link Analyzer 會在選檔 / 載入期間顯示檔案大小與狀態，暫停容易造成重複操作的控制項，並將 JSON / CSV / rules 匯入錯誤轉成可行訊息。NDJSON 匯入不列為 P9b-2 範圍，後續已由 P9b-4 補上；Web Worker 與 IndexedDB 仍留給更後段評估。
 
-P9b-3 第一版只降低前端列表 DOM 建立成本，不改排序、篩選或匯出資料範圍。Report Analyzer 壞連結清單與 External Link Analyzer 外連明細會初始顯示 200 筆，使用者可透過「載入更多」每次再展開 200 筆；CSV / JSON 匯出仍使用完整的目前篩選結果。
+P9b-3 第一版只降低前端列表 DOM 建立成本，不改排序、篩選或匯出資料範圍。Report Analyzer 待判讀清單與 External Link Analyzer 外連明細會初始顯示 200 筆，使用者可透過「載入更多」每次再展開 200 筆；CSV / JSON 匯出仍使用完整的目前篩選結果。
 
-P9b-4 第一版讓 Analyzer 可直接載入大型報告 sidecar。Report Analyzer 支援 `broken.ndjson`，載入後以 sidecar report model 呈現壞連結列表與可確定的壞連結數，並標示為 partial report，因為此檔不包含完整 checked / summary 資訊。External Link Analyzer 支援 `external-links.ndjson`，逐行解析後走既有 external link normalization / dedupe / risk analysis。`checked.ndjson` 匯入、跨 sidecar 合併、完整 streaming parser、Web Worker 與 IndexedDB 不列為 P9b-4 第一版範圍。
+P9b-4 第一版讓 Analyzer 可直接載入大型報告 sidecar。Report Analyzer 支援 `broken.ndjson`，載入後以 sidecar report model 呈現待判讀列表與可確定的待判讀數，並標示為 partial report，因為此檔不包含完整 checked / summary 資訊。External Link Analyzer 支援 `external-links.ndjson`，逐行解析後走既有 external link normalization / dedupe / risk analysis。`checked.ndjson` 匯入、跨 sidecar 合併、完整 streaming parser、Web Worker 與 IndexedDB 不列為 P9b-4 第一版範圍。
 
 ## 9. Exit Codes
 

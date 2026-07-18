@@ -501,6 +501,32 @@ tr:last-child td {
   color: var(--danger);
 }
 
+.badge.interpretation-action_required {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.badge.interpretation-likely_problem {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.badge.interpretation-needs_review,
+.badge.interpretation-external_limited {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.badge.interpretation-redirect_ok {
+  background: #e7f3f4;
+  color: var(--primary-dark);
+}
+
+.badge.interpretation-page_quality_notice {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
 .badge.access_denied,
 .badge.protected,
 .badge.timeout,

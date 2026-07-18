@@ -50,6 +50,36 @@ const ISSUE_LABELS = {
   unknown_error: "未知錯誤",
 };
 
+const INTERPRETATION_LABELS = {
+  action_required: "需處理",
+  needs_review: "需人工確認",
+  external_limited: "外站限制",
+  likely_problem: "可能失效",
+  redirect_ok: "已轉址仍可用",
+  ok: "可先忽略 / 正常",
+  page_quality_notice: "頁內品質提醒",
+};
+
+const INTERPRETATION_ACTIONS = {
+  action_required: "請優先確認來源頁，並修正或移除連結。",
+  needs_review: "請用瀏覽器人工確認是否可正常開啟，再決定是否交辦修正。",
+  external_limited: "外部網站可能拒絕或限制工具請求，建議人工確認或與對方網站窗口協調。",
+  likely_problem: "請確認網址、伺服器狀態或頁面是否仍存在。",
+  redirect_ok: "連結目前可到達；若 final URL 穩定，可視情況更新原連結。",
+  ok: "目前不需處理。",
+  page_quality_notice: "此項屬頁內品質提醒，請視內容維護需求處理。",
+};
+
+const INTERPRETATION_SEVERITY = {
+  action_required: "high",
+  likely_problem: "medium",
+  needs_review: "review",
+  external_limited: "review",
+  redirect_ok: "info",
+  ok: "ok",
+  page_quality_notice: "notice",
+};
+
 const FILE_SIZE_WARN_BYTES = 15 * 1024 * 1024;
 const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
 const BROKEN_LIST_INITIAL_COUNT = 200;
@@ -130,7 +160,7 @@ async function loadReportFile() {
     exportCsvButton.disabled = false;
     clearButton.disabled = false;
     setFileStatus(`${file.name} 已載入，大小 ${formatBytes(file.size)}。`, "ok");
-    setReportFlow("export", `${file.name} 已載入，${currentAnalysis.broken.length} 筆壞連結${currentAnalysis.runStatus.status === "complete" ? "" : "，報告未完整完成"}；可篩選或匯出`);
+    setReportFlow("export", `${file.name} 已載入，${currentAnalysis.broken.length} 筆待判讀結果${currentAnalysis.runStatus.status === "complete" ? "" : "，報告未完整完成"}；可篩選或匯出`);
   } catch (error) {
     currentAnalysis = null;
     exportCsvButton.disabled = true;
@@ -164,14 +194,14 @@ function loadReportContent(text, file) {
 
 function makeBrokenSidecarReport(items, fileName) {
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error(`${fileName} 沒有可匯入的壞連結資料列。`);
+    throw new Error(`${fileName} 沒有可匯入的待判讀資料列。`);
   }
   return {
     schemaVersion: "sidecar.ndjson",
     sourceFile: fileName,
     runStatus: {
       status: "partial",
-      failureReason: "目前載入的是 broken.ndjson sidecar，只包含壞連結明細，沒有完整 checked / summary 資訊",
+      failureReason: "目前載入的是 broken.ndjson sidecar，只包含待判讀明細，沒有完整 checked / summary 資訊",
     },
     summary: {
       pagesCrawled: 0,
@@ -290,6 +320,12 @@ function analyzeReport(report) {
     issueType: inferIssueType(item),
     statusKey: normalizeStatus(item.status),
     domain: extractHostname(item.finalUrl || item.url),
+  })).map((item) => ({
+    ...item,
+    interpretation: normalizeInterpretation(item),
+  })).map((item) => ({
+    ...item,
+    interpretationCategory: item.interpretation.category,
   }));
 
   const checkedCount = toNumber(summary.urlsChecked, checked.length || enrichedBroken.length);
@@ -309,7 +345,7 @@ function analyzeReport(report) {
     incremental: normalizeIncrementalSummary(summary.incremental),
     metrics,
     broken: enrichedBroken,
-    issueCounts: countBy(enrichedBroken, "issueType"),
+    interpretationCounts: countBy(enrichedBroken, "interpretationCategory"),
     statusCounts: countBy(enrichedBroken, "statusKey"),
     sourceCounts: countSources(enrichedBroken),
     domainCounts: countBy(enrichedBroken.filter((item) => item.domain), "domain"),
@@ -339,6 +375,7 @@ function normalizeBrokenItems(items) {
       blockedReason: item.blockedReason || "",
       blockedRuleId: item.blockedRuleId || "",
       bodySignature: item.bodySignature && typeof item.bodySignature === "object" ? item.bodySignature : null,
+      interpretation: item.interpretation && typeof item.interpretation === "object" ? item.interpretation : null,
       suspectedWaf: Boolean(item.suspectedWaf),
       suspectedBot: Boolean(item.suspectedBot),
       confirmation: normalizeConfirmation(item.confirmation),
@@ -478,7 +515,7 @@ function applyFilters(analysis) {
   const issue = issueFilterInput.value;
   const status = statusFilterInput.value;
   const filteredBroken = analysis.broken.filter((item) => {
-    if (issue !== "all" && item.issueType !== issue) {
+    if (issue !== "all" && item.interpretationCategory !== issue) {
       return false;
     }
     if (status !== "all" && item.statusKey !== status) {
@@ -492,6 +529,10 @@ function applyFilters(analysis) {
       item.finalUrl,
       item.canonicalUrl,
       item.domain,
+      item.interpretation.category,
+      item.interpretation.label,
+      item.interpretation.action,
+      item.interpretation.needsManualReview ? "需人工確認" : "",
       item.issueType,
       ISSUE_LABELS[item.issueType],
       item.status,
@@ -510,7 +551,7 @@ function applyFilters(analysis) {
   return {
     ...analysis,
     filteredBroken,
-    filteredIssueCounts: countBy(filteredBroken, "issueType"),
+    filteredInterpretationCounts: countBy(filteredBroken, "interpretationCategory"),
     filteredSourceCounts: countSources(filteredBroken),
     filteredDomainCounts: countBy(filteredBroken.filter((item) => item.domain), "domain"),
   };
@@ -519,9 +560,9 @@ function applyFilters(analysis) {
 function populateFilters(analysis) {
   populateSelect(
     issueFilterInput,
-    Object.entries(analysis.issueCounts)
-      .sort((a, b) => b[1] - a[1] || getIssueLabel(a[0]).localeCompare(getIssueLabel(b[0]))),
-    (issue, count) => `${getIssueLabel(issue)} (${count})`,
+    Object.entries(analysis.interpretationCounts)
+      .sort((a, b) => interpretationRank(a[0]) - interpretationRank(b[0]) || b[1] - a[1] || getInterpretationLabel(a[0]).localeCompare(getInterpretationLabel(b[0]))),
+    (issue, count) => `${getInterpretationLabel(issue)} (${count})`,
   );
   populateSelect(
     statusFilterInput,
@@ -554,11 +595,11 @@ function renderAnalysis(analysis) {
   metricRedirects.textContent = formatNumber(analysis.metrics.redirects);
   metricSkipped.textContent = formatNumber(analysis.metrics.skippedExternal);
 
-  renderIssueRankList(issueList, analysis.filteredIssueCounts, 20);
+  renderInterpretationRankList(issueList, analysis.filteredInterpretationCounts, 20);
   renderRankList(sourceList, analysis.filteredSourceCounts, (value) => value, 20);
   renderRankList(domainList, analysis.filteredDomainCounts, (value) => value, 20);
 
-  issueSummaryCount.textContent = `${Object.keys(analysis.filteredIssueCounts).length} 種`;
+  issueSummaryCount.textContent = `${Object.keys(analysis.filteredInterpretationCounts).length} 種`;
   sourceSummaryCount.textContent = `${Object.keys(analysis.filteredSourceCounts).length} 頁`;
   domainSummaryCount.textContent = `${Object.keys(analysis.filteredDomainCounts).length} 個`;
   linksSummary.textContent = `${formatNumber(analysis.filteredBroken.length)} / ${formatNumber(analysis.broken.length)} 筆`;
@@ -588,9 +629,9 @@ function renderRankList(container, counts, labelFactory, limit) {
   }));
 }
 
-function renderIssueRankList(container, counts, limit) {
+function renderInterpretationRankList(container, counts, limit) {
   const entries = Object.entries(counts)
-    .sort((a, b) => issueRank(a[0]) - issueRank(b[0]) || b[1] - a[1] || getIssueLabel(a[0]).localeCompare(getIssueLabel(b[0])))
+    .sort((a, b) => interpretationRank(a[0]) - interpretationRank(b[0]) || b[1] - a[1] || getInterpretationLabel(a[0]).localeCompare(getInterpretationLabel(b[0])))
     .slice(0, limit);
 
   if (entries.length === 0) {
@@ -602,17 +643,17 @@ function renderIssueRankList(container, counts, limit) {
     const row = document.createElement("div");
     row.className = "rank-item has-badge";
     const label = document.createElement("strong");
-    label.textContent = getIssueLabel(value);
+    label.textContent = getInterpretationLabel(value);
     const amount = document.createElement("span");
     amount.textContent = `${formatNumber(count)} 筆`;
-    row.append(issueBadge(value), label, amount);
+    row.append(interpretationBadge(value), label, amount);
     return row;
   }));
 }
 
 function renderBrokenTable(items) {
   if (items.length === 0) {
-    linksTable.innerHTML = '<p class="empty-note issue-empty">沒有符合篩選條件的壞連結。</p>';
+    linksTable.innerHTML = '<p class="empty-note issue-empty">沒有符合篩選條件的待判讀結果。</p>';
     return;
   }
 
@@ -688,7 +729,7 @@ function renderEmpty(message = "請先上傳 report.json。") {
   sourceSummaryCount.textContent = "0 頁";
   domainSummaryCount.textContent = "0 個";
   linksSummary.textContent = "0 筆";
-  issueList.innerHTML = '<p class="empty-note">載入報告後顯示問題分類。</p>';
+  issueList.innerHTML = '<p class="empty-note">載入報告後顯示判讀分類。</p>';
   sourceList.innerHTML = '<p class="empty-note">載入報告後顯示來源頁。</p>';
   domainList.innerHTML = '<p class="empty-note">載入報告後顯示網域排行。</p>';
   linksTable.innerHTML = `<p class="empty-note issue-empty">${escapeHtml(message)}</p>`;
@@ -782,8 +823,9 @@ function renderIssueItem(item) {
   const header = document.createElement("div");
   header.className = "issue-item-header";
   header.append(
-    issueBadge(item.issueType, formatIssueBadgeText(item)),
+    interpretationBadge(item.interpretation.category, formatInterpretationBadgeText(item)),
     metaBadge(formatSourceElement(source) || "無元素"),
+    metaBadge(formatIssueBadgeText(item)),
   );
   if (hasIssueStatusMismatch(item)) {
     header.append(metaBadge("分類與狀態需確認", "impact"));
@@ -805,7 +847,8 @@ function renderIssueItem(item) {
     detailLine("檢查時間", item.checkedAt || "未記錄"),
     detailLine("Canonical URL", item.canonicalUrl || item.url),
     detailLine("來源頁", formatSources(item.sources)),
-    detailLine("建議", getIssueSuggestion(item)),
+    detailLine("建議處理", item.interpretation.action),
+    detailLine("技術原因", `${getIssueLabel(item.issueType)}${item.status ? ` / HTTP ${item.status}` : ""}`),
     detailLine("診斷", item.diagnosis || item.error || "無診斷資訊"),
   );
   if (item.contentLength !== "") {
@@ -828,7 +871,8 @@ function renderIssueItem(item) {
 
 function sortBrokenItemsForDisplay(items) {
   return [...items].sort((a, b) => (
-    issueRank(a.issueType) - issueRank(b.issueType)
+    interpretationRank(a.interpretationCategory) - interpretationRank(b.interpretationCategory)
+    || issueRank(a.issueType) - issueRank(b.issueType)
     || (b.sources?.length || 0) - (a.sources?.length || 0)
     || String(a.statusKey || "").localeCompare(String(b.statusKey || ""))
     || String(a.domain || "").localeCompare(String(b.domain || ""))
@@ -981,9 +1025,9 @@ function metaBadge(value, modifier = "") {
   return span;
 }
 
-function issueBadge(issueType, text = getIssueLabel(issueType)) {
+function interpretationBadge(category, text = getInterpretationLabel(category)) {
   const span = document.createElement("span");
-  span.className = `badge ${issueType || "unknown_error"}`;
+  span.className = `badge interpretation-${category || "needs_review"}`;
   span.textContent = text;
   return span;
 }
@@ -1025,6 +1069,11 @@ function formatIssueBadgeText(item) {
   return `${getIssueLabel(item.issueType)} · ${status}`;
 }
 
+function formatInterpretationBadgeText(item) {
+  const status = item.status ? `HTTP ${item.status}` : "無狀態";
+  return `${item.interpretation.label} · ${status}`;
+}
+
 function hasIssueStatusMismatch(item) {
   const status = Number.parseInt(item.status, 10);
   if (!Number.isFinite(status)) {
@@ -1045,19 +1094,54 @@ function hasIssueStatusMismatch(item) {
   return false;
 }
 
-function getIssueSuggestion(item) {
-  const suggestions = {
-    not_found: "檢查網址是否打錯；若頁面已移除，請更新或移除連結。",
-    access_denied: "可能不是壞連結，建議用瀏覽器人工確認登入、權限或網站政策。",
-    protected: "可能被防護機制擋下，建議用瀏覽器或允許清單再確認。",
-    timeout: "稍後重試，或確認目標網站是否回應過慢或不穩定。",
-    network_error: "確認網域、DNS、TLS 憑證或目標網站連線狀態。",
-    redirect_to_error: "檢查原連結與最終轉址頁，更新到可正常開啟的目標。",
-    too_many_redirects: "檢查轉址設定，避免多層或互相跳轉。",
-    redirect_loop: "檢查轉址規則是否形成循環。",
-    http_error: "查看狀態碼與診斷訊息，確認伺服器或頁面是否需要修正。",
+function normalizeInterpretation(item) {
+  const existing = item.interpretation;
+  if (existing?.category) {
+    return {
+      ...buildInterpretation(existing.category),
+      ...existing,
+    };
+  }
+
+  const issueType = item.issueType || inferIssueType(item);
+  const confirmationOutcome = item.confirmation?.outcome;
+  if (issueType === "redirect_to_error" || issueType === "too_many_redirects" || issueType === "redirect_loop") {
+    return buildInterpretation("action_required");
+  }
+  if (issueType === "not_found") {
+    if (confirmationOutcome === "confirmed_missing") {
+      return buildInterpretation("action_required");
+    }
+    if (confirmationOutcome === "needs_review") {
+      return buildInterpretation("needs_review");
+    }
+    return buildInterpretation("likely_problem");
+  }
+  if (
+    issueType === "protected"
+    || issueType === "access_denied"
+    || issueType === "timeout"
+    || issueType === "network_error"
+    || item.status === 429
+    || item.suspectedWaf
+    || item.suspectedBot
+  ) {
+    return buildInterpretation("needs_review");
+  }
+  if (item.status >= 400 || issueType === "http_error" || issueType === "unknown_error") {
+    return buildInterpretation("likely_problem");
+  }
+  return buildInterpretation("needs_review");
+}
+
+function buildInterpretation(category) {
+  return {
+    category,
+    label: getInterpretationLabel(category),
+    severity: INTERPRETATION_SEVERITY[category] || "review",
+    action: INTERPRETATION_ACTIONS[category] || INTERPRETATION_ACTIONS.needs_review,
+    needsManualReview: ["needs_review", "external_limited", "likely_problem"].includes(category),
   };
-  return suggestions[item.issueType] || "查看診斷訊息並人工確認連結是否可正常開啟。";
 }
 
 function sortStatus(a, b) {
@@ -1085,6 +1169,10 @@ function getIssueLabel(issueType) {
   return ISSUE_LABELS[issueType] || issueType || "未知錯誤";
 }
 
+function getInterpretationLabel(category) {
+  return INTERPRETATION_LABELS[category] || category || "需人工確認";
+}
+
 function issueRank(issueType) {
   return {
     not_found: 0,
@@ -1098,6 +1186,18 @@ function issueRank(issueType) {
     http_error: 8,
     unknown_error: 9,
   }[issueType] ?? 10;
+}
+
+function interpretationRank(category) {
+  return {
+    action_required: 0,
+    needs_review: 1,
+    external_limited: 2,
+    likely_problem: 3,
+    redirect_ok: 4,
+    page_quality_notice: 5,
+    ok: 6,
+  }[category] ?? 7;
 }
 
 function updateBrokenRateCard(rate) {
@@ -1116,6 +1216,18 @@ function formatNumber(value) {
 
 function makeBrokenCsv(items) {
   const rows = [[
+    "判讀分類",
+    "建議處理",
+    "是否需人工確認",
+    "優先度",
+    "問題網址",
+    "來源頁",
+    "連結文字",
+    "HTTP 狀態",
+    "技術原因",
+    "最終網址",
+    "確認結果",
+    "檢查時間",
     "issueType",
     "issueLabel",
     "status",
@@ -1156,6 +1268,18 @@ function makeBrokenCsv(items) {
     const sources = item.sources.length ? item.sources : [{}];
     for (const source of sources) {
       rows.push([
+        item.interpretation.label,
+        item.interpretation.action,
+        item.interpretation.needsManualReview ? "是" : "否",
+        formatInterpretationPriority(item.interpretation.severity),
+        item.url,
+        source.page || "",
+        source.text || "",
+        item.status,
+        `${getIssueLabel(item.issueType)}${item.diagnosis || item.error ? ` / ${item.diagnosis || item.error}` : ""}`,
+        item.finalUrl,
+        formatConfirmationOutcome(item.confirmation.outcome),
+        item.checkedAt,
         item.issueType,
         getIssueLabel(item.issueType),
         item.status,
@@ -1195,6 +1319,28 @@ function makeBrokenCsv(items) {
   }
 
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+function formatInterpretationPriority(severity) {
+  const labels = {
+    high: "高",
+    medium: "中",
+    review: "需確認",
+    info: "資訊",
+    ok: "低",
+    notice: "提醒",
+  };
+  return labels[severity] || "需確認";
+}
+
+function formatConfirmationOutcome(outcome) {
+  const labels = {
+    skipped: "未確認",
+    recovered: "二次確認後正常",
+    confirmed_missing: "二次確認仍不存在",
+    needs_review: "需人工確認",
+  };
+  return labels[outcome] || outcome || "";
 }
 
 function csvCell(value) {
