@@ -449,6 +449,33 @@ P9 的下一個實作點不是繼續修 UI，也不是重做掃描核心，而�
 
 P9c 應排在 P9b 基礎輸出之後。現有 rules 與 SPA 能力可以支撐目前掃描，但缺少 schema、profile 與追溯欄位，若太早加 GUI profile 設定，容易造成報告契約反覆變動。
 
+### 2026-07-18 P9c validation record
+
+P9c 評估已重新驗證，結論維持：下一步應先做 **P9c-1 Rules Schema 與驗證測試**。
+
+已確認的現況：
+
+- CLI 已有 `--domain-rules`、`--external-risk-rules`、`--site-link-rules` 三個 rules 入口。
+- 程式已有 `loadDomainCategoryRules`、`loadExternalRiskRules`、`loadSiteLinkRules`、`normalizeExternalRiskRules`、`normalizeSiteLinkRules` 等載入與 normalization 流程。
+- report 已記錄 rules source：`domainCategoryRulesSource`、`externalRiskRulesSource`、`siteLinkRulesSource`。
+- `schemas/` 目前只有 `report.schema.json` 與 `diff.schema.json`。
+- 尚未建立 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。
+- 尚未看到 profile 正式模型、CLI 入口或 `profileExpandedOptions` / `rulesVersion` 追溯欄位落地。
+- `__NEXT_DATA__` 目前有 signal 偵測與 framework / site-rule extraction 輔助，但還不是完整 Next.js payload parser。
+
+驗證方式：
+
+- 搜尋 CLI 入口、rules loader / normalizer、rules source 欄位與 Next.js signal / extraction 相關程式碼。
+- 檢查 `schemas/` 目錄，目前只有 report / diff schema。
+- 檢查測試清單，目前尚無 rules schema 專用驗證測試。
+
+決策：
+
+1. P9c-1：先補三份 rules schema 與驗證測試，固定既有 rules 契約，不改 CLI 行為。
+2. P9c-2：再補 rules 追溯欄位，例如 `rulesVersion` 或 rules fingerprint / source metadata。
+3. P9c-3：等 rules schema 穩定後再做 profiles，避免設定面反覆變動。
+4. P9c-4：Next.js `__NEXT_DATA__` parser 先保持評估項；若 site-link-rules 已足夠，不急著升成核心必做。
+
 ## 建議分支
 
 P9 建議從新分支開始：

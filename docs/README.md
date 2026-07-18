@@ -35,4 +35,4 @@
 - P7 TTL URL result cache 已完成第一版與發布收尾，實作前評估記錄於 `archive/P7_CACHE_EVALUATION.md`，發布驗收記錄於 `archive/P7_RELEASE_CLOSURE.md`。
 - P8 incremental scan 第一版已完成主要功能、呈現收尾與 main 合併，分析與驗收紀錄於 `archive/P8_INCREMENTAL_SCAN_ANALYSIS.md`。
 - P9 已完成 GUI / Analyzer 實作前評估；`P9a-1：修正主 GUI 進度語意`、`P9a-2：改善空狀態與第一屏`、`P9a-3：修正手機版可讀性` 與 `P9a-4：匯入型頁面流程化` 已完成第一版並於 2026-07-17 驗收通過。P9a 不再是下一個實作起點。
-- P9b 大型 report / NDJSON 輔助輸出已完成第一版；GUI log artifacts 會新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，GUI SSE complete event 不再傳完整 report，Analyzer 具備大檔提示、載入狀態、列表「載入更多」，並可匯入 `broken.ndjson` / `external-links.ndjson`。下一步是 P9c-1 Rules Schema 與驗證測試。
+- P9b 大型 report / NDJSON 輔助輸出已完成第一版；GUI log artifacts 會新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，GUI SSE complete event 不再傳完整 report，Analyzer 具備大檔提示、載入狀態、列表「載入更多」，並可匯入 `broken.ndjson` / `external-links.ndjson`。P9c 評估已驗證，下一步是 P9c-1 Rules Schema 與驗證測試。

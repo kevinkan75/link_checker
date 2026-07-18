@@ -147,6 +147,7 @@
 **狀態：** 待規劃  
 **目標：** 建立 profile 與規則治理，並擴充 Next.js `__NEXT_DATA__` 抽取。  
 **主要交付：** `normal`、`government-conservative`、`large-site`、`spa`、`external-governance` profile；rules schema 與 `rulesVersion`。  
+**已驗證結論：** 2026-07-18 已確認 CLI rules 入口與 normalization 流程存在，但 `schemas/` 尚無 rules schema；第一刀應做 P9c-1 Rules Schema 與驗證測試。  
 **驗收重點：** configured values 與 robots / Retry-After 後的 effective values 需可追溯。
 
 ### P10：治理與分級排程
