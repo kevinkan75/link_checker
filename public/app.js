@@ -146,6 +146,7 @@ const unfinishedScanWarning = "檢測尚未完成。切換功能頁面會中斷�
 let currentJobId = null;
 let eventSource = null;
 let currentReport = null;
+let currentReportUrl = null;
 let currentFilter = "all";
 let queuePollTimer = null;
 let watchedQueueItemId = null;
@@ -214,11 +215,32 @@ stopButton.addEventListener("click", async () => {
   setState("stopping");
 });
 
-downloadButton.addEventListener("click", () => {
+downloadButton.addEventListener("click", async () => {
+  if (currentReportUrl) {
+    await downloadReportFromUrl(currentReportUrl);
+    return;
+  }
   if (!currentReport) {
     return;
   }
-  const blob = new Blob([`${JSON.stringify(currentReport, null, 2)}\n`], {
+  downloadJsonReport(currentReport);
+});
+
+async function downloadReportFromUrl(reportUrl) {
+  try {
+    const response = await fetch(reportUrl);
+    if (!response.ok) {
+      throw new Error("無法下載完整 report");
+    }
+    const report = await response.json();
+    downloadJsonReport(report);
+  } catch (error) {
+    statusTitle.textContent = error.message;
+  }
+}
+
+function downloadJsonReport(report) {
+  const blob = new Blob([`${JSON.stringify(report, null, 2)}\n`], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
@@ -227,7 +249,7 @@ downloadButton.addEventListener("click", () => {
   anchor.download = `link-check-report-${Date.now()}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
-});
+}
 
 shutdownButton.addEventListener("click", async () => {
   const confirmed = window.confirm("關閉本機服務？目前開啟的 GUI 頁面會停止連線。");
@@ -311,7 +333,7 @@ filterBar.addEventListener("click", (event) => {
   currentFilter = button.dataset.filter;
   updateActiveFilter();
   if (currentReport) {
-    renderBrokenTable(currentReport.broken || []);
+    renderBrokenTableForReport(currentReport);
   }
 });
 
@@ -510,6 +532,7 @@ async function startCheck() {
   }
   closeEvents();
   currentReport = null;
+  currentReportUrl = null;
   currentJobId = null;
   watchedQueueItemId = null;
   watchedQueueUrl = null;
@@ -780,6 +803,7 @@ function watchQueueItemObject(item, { manual }) {
   watchedQueueUrl = item.url;
   manualWatchSelected = manual || manualWatchSelected;
   currentReport = null;
+  currentReportUrl = item.jobId ? `/api/jobs/${item.jobId}/report` : null;
   currentFilter = "all";
   scanInProgress = true;
   downloadButton.disabled = true;
@@ -823,6 +847,7 @@ async function viewQueueReport(id) {
   watchedQueueUrl = null;
   manualWatchSelected = true;
   currentReport = data;
+  currentReportUrl = `/api/queue/items/${id}/report`;
   currentFilter = "all";
   renderReport(data);
   setState("finished");
@@ -855,7 +880,8 @@ function connectEvents(url) {
   });
   eventSource.addEventListener("complete", (event) => {
     const data = JSON.parse(event.data);
-    currentReport = data.report;
+    currentReportUrl = data.reportUrl || (currentJobId ? `/api/jobs/${currentJobId}/report` : null);
+    currentReport = buildReportFromCompletePayload(data);
     renderReport(currentReport);
     showLogLocation(data);
     scanInProgress = false;
@@ -1056,27 +1082,44 @@ function appendLog(item) {
 }
 
 function renderReport(report) {
-  const broken = report.broken || [];
-  resultSummary.textContent = `${broken.length} 個問題連結`;
-  brokenCount.textContent = broken.length;
-  const reportPagesCrawled = Number(report.summary.pagesCrawled || 0);
-  const reportMaxPages = Number(report.options.maxPages || 0);
-  const reportUrlsChecked = Number(report.summary.urlsChecked || 0);
+  const summary = report.summary || {};
+  const options = report.options || {};
+  const hasBrokenDetails = Array.isArray(report.broken);
+  const broken = hasBrokenDetails ? report.broken : [];
+  const brokenTotal = Number(summary.brokenLinks ?? broken.length);
+  resultSummary.textContent = `${brokenTotal} 個問題連結`;
+  brokenCount.textContent = brokenTotal;
+  const reportPagesCrawled = Number(summary.pagesCrawled || 0);
+  const reportMaxPages = Number(options.maxPages || 0);
+  const reportUrlsChecked = Number(summary.urlsChecked || 0);
   const reportPendingUrls = getReportPendingUrlCount(report);
-  pages.textContent = `${reportPagesCrawled} / ${reportMaxPages || report.options.maxPages}`;
+  pages.textContent = `${reportPagesCrawled} / ${reportMaxPages || options.maxPages || 0}`;
   checked.textContent = reportUrlsChecked;
   updatePendingUrlDisplay(reportPendingUrls, reportUrlsChecked, 0);
-  updatePageDiscoveryDisplay(reportPagesCrawled, reportMaxPages || report.options.maxPages, report.runStatus?.pendingPages || 0);
-  skipped.textContent = report.summary.skippedExternal;
+  updatePageDiscoveryDisplay(reportPagesCrawled, reportMaxPages || options.maxPages || 0, report.runStatus?.pendingPages || 0);
+  skipped.textContent = summary.skippedExternal || 0;
   setProgressValue(getReportUrlValidationProgress(report));
-  updateIssueBreakdown(report.summary.brokenByType || buildBreakdown(broken), broken.length);
-  updateFilterCounts(report.summary.brokenByType || buildBreakdown(broken), broken.length);
-  updateRedirectBreakdown(report.summary.redirectByType || emptyRedirectBreakdown(), report.summary.redirects || 0);
-  updateConfirmationBreakdown(report.summary.confirmation || buildConfirmationBreakdown(report.checked || broken));
-  updateIncrementalSummary(report.summary.incremental || null);
+  updateIssueBreakdown(summary.brokenByType || buildBreakdown(broken), brokenTotal);
+  updateFilterCounts(summary.brokenByType || buildBreakdown(broken), brokenTotal);
+  updateRedirectBreakdown(summary.redirectByType || emptyRedirectBreakdown(), summary.redirects || 0);
+  updateConfirmationBreakdown(summary.confirmation || (Array.isArray(report.checked) ? buildConfirmationBreakdown(report.checked) : buildConfirmationBreakdown(broken)));
+  updateIncrementalSummary(summary.incremental || null);
   updateActiveFilter();
 
-  renderBrokenTable(broken);
+  renderBrokenTableForReport(report);
+}
+
+function buildReportFromCompletePayload(data) {
+  return {
+    schemaVersion: data.schemaVersion || "",
+    generator: data.generator || null,
+    startUrl: data.startUrl || "",
+    options: data.options || {},
+    runStatus: data.runStatus || { status: data.state === "stopped" ? "partial" : "complete" },
+    summary: data.summary || {},
+    reportFiles: data.reportFiles || null,
+    detailsDeferred: true,
+  };
 }
 
 function getReportPendingUrlCount(report) {
@@ -1097,12 +1140,30 @@ function getReportUrlValidationProgress(report) {
   return capIncompleteProgress((checkedTotal / totalKnownUrls) * 100);
 }
 
-function renderBrokenTable(broken) {
+function renderBrokenTableForReport(report) {
+  const hasBrokenDetails = Array.isArray(report.broken);
+  const broken = hasBrokenDetails ? report.broken : [];
+  const brokenTotal = Number(report.summary?.brokenLinks ?? broken.length);
+  renderBrokenTable(broken, {
+    detailsDeferred: !hasBrokenDetails && brokenTotal > 0,
+    totalBroken: brokenTotal,
+  });
+}
+
+function renderBrokenTable(broken, { detailsDeferred = false, totalBroken = broken.length } = {}) {
+  if (detailsDeferred) {
+    renderBrokenEmptyState(
+      "問題清單已保存到完整報告",
+      "為避免大型報告在完成瞬間卡住，這裡先顯示摘要；下載完整 report 或查看 log 目錄中的 broken.csv / broken.ndjson 可取得明細。",
+    );
+    return;
+  }
+
   const visible = currentFilter === "all"
     ? broken
     : broken.filter((item) => (item.issueType || getIssueType(item)) === currentFilter);
 
-  if (broken.length === 0) {
+  if (totalBroken === 0) {
     const hasReport = Boolean(currentReport);
     renderBrokenEmptyState(
       hasReport ? "沒有發現問題連結" : "正在等待結果",

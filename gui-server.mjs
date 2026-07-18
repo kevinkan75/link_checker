@@ -46,6 +46,7 @@ const MIME_TYPES = new Map([
   [".css", "text/css; charset=utf-8"],
   [".js", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
+  [".ndjson", "application/x-ndjson; charset=utf-8"],
   [".svg", "image/svg+xml"],
 ]);
 
@@ -175,6 +176,8 @@ function createJob(input) {
     logDir: null,
     logRelativePath: null,
     logError: null,
+    artifactSummary: null,
+    artifactManifest: null,
     createdAt: new Date().toISOString(),
   };
   jobs.set(job.id, job);
@@ -436,9 +439,19 @@ function countQueueItems() {
 }
 
 function buildCompletePayload(job) {
+  const summary = job.artifactSummary || buildLogSummary(job);
+  const manifest = job.artifactManifest || null;
   return {
     state: job.state,
-    report: job.report,
+    schemaVersion: job.report?.schemaVersion || summary.schemaVersion || REPORT_SCHEMA_VERSION,
+    generator: job.report?.generator || summary.generator || null,
+    startUrl: job.report?.startUrl || summary.startUrl || redactSensitiveQueryValue(job.startUrl, job.options),
+    options: job.report?.options || summary.options || job.options,
+    runStatus: job.report?.runStatus || null,
+    summary: job.report?.summary || summary.summary || null,
+    reportFiles: summary.reportFiles || null,
+    manifest,
+    reportUrl: `/api/jobs/${job.id}/report`,
     logDir: job.logDir,
     logRelativePath: job.logRelativePath,
     logError: job.logError,
@@ -458,6 +471,9 @@ async function saveJobArtifacts(job) {
       { path: "report.json", kind: "report", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
       { path: "broken.csv", kind: "csv", schemaVersion: null },
       { path: "external-links.csv", kind: "csv", schemaVersion: null },
+      { path: "checked.ndjson", kind: "ndjson", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
+      { path: "broken.ndjson", kind: "ndjson", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
+      { path: "external-links.ndjson", kind: "ndjson", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
       { path: "external-summary.json", kind: "external-summary", schemaVersion: externalSummary.schemaVersion || null },
       { path: "events.log", kind: "log", schemaVersion: null },
       { path: "README.txt", kind: "readme", schemaVersion: null },
@@ -471,11 +487,16 @@ async function saveJobArtifacts(job) {
         { path: "manifest.json", kind: "manifest", schemaVersion: null },
       ],
     });
+    job.artifactSummary = summary;
+    job.artifactManifest = manifest;
     await Promise.all([
       writeJsonFile(join(logDir, "summary.json"), summary),
       writeJsonFile(join(logDir, "report.json"), job.report || summary),
       writeFile(join(logDir, "broken.csv"), makeBrokenCsv(job.report?.broken || [], job.options), "utf8"),
       writeFile(join(logDir, "external-links.csv"), makeExternalLinksCsv(job.report?.externalLinks || [], job.options), "utf8"),
+      writeFile(join(logDir, "checked.ndjson"), makeNdjson(job.report?.checked || []), "utf8"),
+      writeFile(join(logDir, "broken.ndjson"), makeNdjson(job.report?.broken || []), "utf8"),
+      writeFile(join(logDir, "external-links.ndjson"), makeNdjson(job.report?.externalLinks || []), "utf8"),
       writeJsonFile(join(logDir, "external-summary.json"), externalSummary),
       writeFile(join(logDir, "events.log"), makeEventsLog(job.events, job.options), "utf8"),
       writeFile(join(logDir, "README.txt"), makeLogReadme(job, summary), "utf8"),
@@ -523,6 +544,9 @@ function buildLogSummary(job) {
       report: "report.json",
       brokenCsv: "broken.csv",
       externalLinksCsv: "external-links.csv",
+      checkedNdjson: "checked.ndjson",
+      brokenNdjson: "broken.ndjson",
+      externalLinksNdjson: "external-links.ndjson",
       externalSummary: "external-summary.json",
       events: "events.log",
       manifest: "manifest.json",
@@ -532,6 +556,13 @@ function buildLogSummary(job) {
 
 async function writeJsonFile(path, data) {
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+}
+
+function makeNdjson(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return "";
+  }
+  return `${items.map((item) => JSON.stringify(item)).join("\n")}\n`;
 }
 
 function makeBrokenCsv(items, options = DEFAULTS) {
@@ -850,6 +881,9 @@ function makeLogReadme(job, summary) {
     "- report.json: 完整 JSON 報告",
     "- broken.csv: 問題連結清單，可用 Excel 開啟",
     "- external-links.csv: External link inventory, usable in Excel",
+    "- checked.ndjson: Checked URL records, one JSON object per line",
+    "- broken.ndjson: Broken link records, one JSON object per line",
+    "- external-links.ndjson: External link records, one JSON object per line",
     "- external-summary.json: External link summary by domain, type, and category",
     "- events.log: 檢查過程事件紀錄",
     "- manifest.json: Generated file manifest and schema/runtime metadata",
@@ -1552,9 +1586,12 @@ async function main() {
 }
 
 export {
+  buildCompletePayload,
+  buildLogSummary,
   makeBrokenCsv,
   makeEventsLog,
   makeExternalLinksCsv,
+  makeNdjson,
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

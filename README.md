@@ -125,12 +125,15 @@ CLI 適合自動化、進階參數、規則檔與技術診斷。
 | --- | --- |
 | `external-links.csv` | 外部連結清單、分類、風險與來源頁 |
 | `external-summary.json` | 外部連結治理摘要 |
+| `checked.ndjson` | GUI 保存的大型報告輔助格式，每行一筆已檢查 URL |
+| `broken.ndjson` | GUI 保存的大型報告輔助格式，每行一筆問題連結 |
+| `external-links.ndjson` | GUI 保存的大型報告輔助格式，每行一筆外部連結 |
 | `events.log` | 執行過程事件紀錄 |
 | `manifest.json` | 同一次輸出的工具版本、schema 版本、runtime 與檔案清單 |
 
 CLI 使用 `--output <file>` 時會輸出指定的完整 JSON report，並在同目錄建立 `manifest.json`；目前沒有獨立的 CSV / summary 轉換指令，需要這些檔案時請使用 GUI 自動保存。
 
-大型報告的 NDJSON sidecar 仍屬 P9b 規劃，尚未是目前輸出功能。採納方向是未來 GUI log artifacts 會新增 `checked.ndjson`、`broken.ndjson` 與 `external-links.ndjson` 作為輔助格式，但 `report.json` 仍是正式完整報告。
+大型報告的 NDJSON sidecar 是 GUI log artifacts 的輔助格式，`report.json` 仍是正式完整報告。CLI `--output <file>` 目前只輸出指定 report 與同目錄 `manifest.json`，不會另外產生 NDJSON sidecar。
 
 ## 結果判讀
 

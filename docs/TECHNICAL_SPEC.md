@@ -577,9 +577,6 @@ GUI 完成後會保存：
 - `external-links.csv`
 - `external-summary.json`
 - `manifest.json`
-
-P9b-1 尚未實作前，GUI 不會產生 NDJSON sidecar。P9b-1 實作後，GUI log artifacts 預期額外保存：
-
 - `checked.ndjson`
 - `broken.ndjson`
 - `external-links.ndjson`
@@ -590,13 +587,13 @@ CLI 使用 `--output <file>` 時會寫出指定 report，並在同目錄建立 `
 
 目前 `report.json` 是完成後一次建立與寫出，仍是正式主契約。P9b 採納的方向是保留此契約，另以 NDJSON sidecar 支援大型報告處理。
 
-P9b-1 第一版採「完成後派生 sidecar」，也就是掃描完成並建立正式 `report.json` 後，再由 `report.checked`、`report.broken`、`report.externalLinks` 產生：
+P9b-1 第一版已採「完成後派生 sidecar」，也就是掃描完成並建立正式 `report.json` 後，再由 `report.checked`、`report.broken`、`report.externalLinks` 產生：
 
 - `checked.ndjson`
 - `broken.ndjson`
 - `external-links.ndjson`
 
-P9b-1 應同步讓 GUI SSE complete event 回傳輕量 summary / manifest / reportFiles / log path / reportUrl，不直接傳送完整 report，避免超大報告在使用者端一次解析或渲染時卡住。完整 `report.json` streaming parser、不斷線逐筆 append NDJSON、CLI sidecar 輸出設計都不列為 P9b-1 第一優先。
+GUI SSE complete event 會回傳輕量 summary / manifest / reportFiles / log path / reportUrl，不直接傳送完整 report，避免超大報告在使用者端一次解析或渲染時卡住。完整 `report.json` streaming parser、不斷線逐筆 append NDJSON、CLI sidecar 輸出設計都不列為 P9b-1 第一版範圍。
 
 ## 9. Exit Codes
 
