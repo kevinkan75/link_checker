@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local-link-checker.test/schemas/site-link-rules.schema.json",
+  "title": "Local Link Checker Site Link Rules",
+  "description": "Schema for --site-link-rules. Defines SPA/CMS payload fields and route mapping templates.",
+  "type": "object",
+  "additionalProperties": true,
+  "anyOf": [
+    {
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "type": "object",
+          "required": ["externalUrl"],
+          "properties": {
+            "externalUrl": {
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "type": "object",
+          "required": ["youtubeId"],
+          "properties": {
+            "youtubeId": {
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "type": "object",
+          "required": ["routePath"],
+          "properties": {
+            "routePath": {
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": ["routeMappings"],
+      "properties": {
+        "routeMappings": {
+          "minItems": 1
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "externalUrl": {
+          "$ref": "#/$defs/fieldList"
+        },
+        "youtubeId": {
+          "$ref": "#/$defs/fieldList"
+        },
+        "routePath": {
+          "$ref": "#/$defs/fieldList"
+        }
+      }
+    },
+    "routeMappings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/routeMapping"
+      }
+    }
+  },
+  "$defs": {
+    "fieldList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "routeMapping": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["template", "when"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1
+        },
+        "when": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

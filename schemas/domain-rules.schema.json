@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local-link-checker.test/schemas/domain-rules.schema.json",
+  "title": "Local Link Checker Domain Category Rules",
+  "description": "Schema for --domain-rules. The CLI accepts either an array of rules or an object with a rules array.",
+  "anyOf": [
+    {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/domainRule"
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["rules"],
+      "properties": {
+        "schemaVersion": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/domainRule"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "domainRule": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["category", "domains"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domains": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

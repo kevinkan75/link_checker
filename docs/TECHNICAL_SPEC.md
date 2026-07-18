@@ -170,6 +170,8 @@ Report summary 會輸出 `spaDetection`，包含：
 
 `--site-link-rules <file-or-url>` 用於站台或 CMS 特定欄位推導，避免把站台規則硬寫進 crawler。
 
+P9c-1 起，site link rules 公開契約記錄於 `schemas/site-link-rules.schema.json`。
+
 規則模型：
 
 ```json
@@ -205,6 +207,8 @@ Report summary 會輸出 `spaDetection`，包含：
 
 `--domain-rules <file-or-url>` 載入分類規則，例如政府、合作單位、社群、CDN、tracking、shortener 等。
 
+P9c-1 起，domain rules 公開契約記錄於 `schemas/domain-rules.schema.json`。
+
 ### 6.2 External risk rules
 
 `--external-risk-rules <file-or-url>` 支援：
@@ -213,6 +217,8 @@ Report summary 會輸出 `spaDetection`，包含：
 - blocklist
 - watchlist
 - rules array
+
+P9c-1 起，external risk rules 公開契約記錄於 `schemas/external-risk-rules.schema.json`。
 
 `externalRisk` 欄位：
 

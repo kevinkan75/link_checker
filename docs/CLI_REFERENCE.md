@@ -166,6 +166,16 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
 
 ## 規則檔格式
 
+P9c-1 起，三種規則檔都有對應 schema 作為公開契約與測試依據：
+
+| 規則檔 | Schema |
+| --- | --- |
+| Domain rules | `schemas/domain-rules.schema.json` |
+| External risk rules | `schemas/external-risk-rules.schema.json` |
+| Site link rules | `schemas/site-link-rules.schema.json` |
+
+CLI 載入仍依既有 normalization 流程執行；schema 用來固定可支援格式，避免文件與實作分歧。
+
 ### Domain rules
 
 `--domain-rules` 的 JSON 格式：
@@ -182,6 +192,8 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
   }
 ]
 ```
+
+Schema: `schemas/domain-rules.schema.json`。
 
 ### External risk rules
 
@@ -214,6 +226,8 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
 }
 ```
 
+Schema: `schemas/external-risk-rules.schema.json`。
+
 ### Site link rules
 
 `--site-link-rules` 的 JSON 格式：
@@ -234,6 +248,8 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
   ]
 }
 ```
+
+Schema: `schemas/site-link-rules.schema.json`。
 
 `fields.externalUrl` 會把欄位值視為完整 URL，`fields.youtubeId` 會轉成 YouTube watch URL，`fields.routePath` 會把 `/` 開頭路徑轉成站內 URL。`routeMappings` 可依 payload 欄位條件產生站台路由，`when` 支援精確比對與 `"*"` 非空值比對。
 

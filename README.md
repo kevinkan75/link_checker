@@ -242,9 +242,9 @@ cache 預設關閉，檔案預設寫到 `.cache/link-check-cache.json`。若需�
 | 批次檢查多個網站 | 支援 | 可自行搭配腳本 |
 | 即時進度 | 支援 | `--progress` |
 | 下載報告 | 支援 | `--output` |
-| 網域分類規則 | 尚未提供規則檔欄位 | `--domain-rules` |
-| 外部連結治理規則 | 尚未提供規則檔欄位 | `--external-risk-rules` |
-| SPA / CMS 站台規則 | 尚未提供規則檔欄位 | `--site-link-rules` |
+| 網域分類規則 | 尚未提供規則檔欄位 | `--domain-rules`；schema: `schemas/domain-rules.schema.json` |
+| 外部連結治理規則 | 尚未提供規則檔欄位 | `--external-risk-rules`；schema: `schemas/external-risk-rules.schema.json` |
+| SPA / CMS 站台規則 | 尚未提供規則檔欄位 | `--site-link-rules`；schema: `schemas/site-link-rules.schema.json` |
 | TTL URL result cache | 不提供表單控制，report 可保存摘要 | `--cache`、`--refresh-cache` |
 | 增量掃描 | 可顯示 report 內的增量摘要與復用標記；啟用入口暫以 CLI 為主 | `--incremental`、`--changed-only`、`--sitemap` |
 
@@ -282,7 +282,7 @@ dist\LinkChecker-portable.zip
 
 ## 專案文件
 
-- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b、P7 TTL URL result cache 與 P8 incremental scan 第一版已完成主要功能，後續規劃 P9。
+- [ROADMAP.md](ROADMAP.md)：目前開發主線；P6 report-to-report diff 第一版、P6.5a、P6.5b、P7 TTL URL result cache、P8 incremental scan、P9a、P9b 與 P9c-1 已完成第一版，下一步是 P9c-2。
 - [docs/README.md](docs/README.md)：文件目錄索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：完整 CLI 參數、規則檔格式與進階使用。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：架構、流程、資料模型與 report schema 技術規格。

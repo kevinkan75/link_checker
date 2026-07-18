@@ -12,7 +12,7 @@ P9 可以開始，但應分階段實作：
 2. P9b：大型 report / NDJSON 輔助輸出。
 3. P9c：Profile、Rules Schema 與 Next.js Payload。
 
-目前狀態：P9a 已於 2026-07-17 驗收通過，P9b-1、P9b-2、P9b-3 與 P9b-4 已完成第一版；下一個實作起點是 P9c-1 Rules Schema 與驗證測試。下方 P9a 分析保留作為歷史決策與驗收脈絡，不代表 P9a-1 仍是下一步。
+目前狀態：P9a 已於 2026-07-17 驗收通過，P9b-1、P9b-2、P9b-3、P9b-4 與 P9c-1 已完成第一版；下一個實作起點是 P9c-2 Rules 追溯欄位。下方 P9a 分析保留作為歷史決策與驗收脈絡，不代表 P9a-1 仍是下一步。
 
 P9b-1 的已落地方向是：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，並讓 GUI SSE complete event 不再傳完整 report。第一版採完成後從 `report.json` 派生 sidecar，不先重寫掃描核心、不先做完整 streaming parser、不先設計 CLI sidecar。
 
@@ -21,6 +21,8 @@ P9b-2 的已落地方向是：Report Analyzer 與 External Link Analyzer 在匯�
 P9b-3 的已落地方向是：Report Analyzer 壞連結清單與 External Link Analyzer 外連明細初始只渲染 200 筆，透過「載入更多」每次再展開 200 筆。排序、篩選仍在記憶體完成，匯出仍使用完整的目前篩選結果；此步只降低一次建立大量 DOM 的成本。
 
 P9b-4 的已落地方向是：Report Analyzer 可直接載入 `broken.ndjson`，External Link Analyzer 可直接載入 `external-links.ndjson`。第一版不支援 `checked.ndjson` 匯入、不做跨 sidecar 合併、不加入 streaming parser / Web Worker / IndexedDB。
+
+P9c-1 的已落地方向是：新增 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`，並以 `test-p9c1-rules-schema.mjs` 驗證公開 rules 格式、負例與現有 CEC site-link-rules 範例。此步不改 CLI 行為、不新增 profile，也不加入 report 追溯欄位。
 
 P9a 當時應先做，因為風險最低、使用者最有感，而且可以只動呈現層。P9b 會牽涉 Analyzer 載入策略與輔助輸出格式；P9c 會牽涉 CLI 參數、規則治理、payload extraction 與 report 欄位追溯，風險最高，應放在後段。
 
@@ -378,7 +380,7 @@ P9b-4 已完成第一版：
 - `node --check test-p9b4-ndjson-import.mjs`
 - `node test-p9b4-ndjson-import.mjs`
 
-下一步：P9c-1 Rules Schema 與驗證測試，先固定 `domain-rules`、`external-risk-rules`、`site-link-rules` 契約。
+下一步：P9c-2 Rules 追溯欄位；P9c-1 Rules Schema 與驗證測試已完成第一版。
 
 ## P9c 邊界
 
@@ -435,31 +437,32 @@ P9b-3 已完成第一版。Report Analyzer 壞連結清單與 External Link Anal
 
 P9b-4 已完成第一版。Report Analyzer 可載入 `broken.ndjson` 並以 partial sidecar report 呈現壞連結主列表；External Link Analyzer 可載入 `external-links.ndjson` 並沿用既有 normalization / dedupe / risk analysis。
 
-P9c 部分已有前置能力，但未完整交付。CLI 已支援 `--domain-rules`、`--external-risk-rules`、`--site-link-rules`，掃描報告也會記錄這些 rules source；SPA 偵測可辨識 `__NEXT_DATA__` signal，實際抽取仍主要依 inline script URL/path literal 與 site-link-rules，不是完整的 Next.js payload parser。`schemas/` 目前只有 `report.schema.json` 與 `diff.schema.json`，尚未建立 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。也尚未看到 `normal`、`government-conservative`、`large-site`、`spa`、`external-governance` 這類 profile 的正式資料模型、CLI 入口或 `profileExpandedOptions` / `rulesVersion` 追溯欄位。
+P9c 部分已有前置能力，且 P9c-1 已補上 rules schema 與驗證測試。CLI 已支援 `--domain-rules`、`--external-risk-rules`、`--site-link-rules`，掃描報告也會記錄這些 rules source；SPA 偵測可辨識 `__NEXT_DATA__` signal，實際抽取仍主要依 inline script URL/path literal 與 site-link-rules，不是完整的 Next.js payload parser。`schemas/` 已建立 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。尚未看到 `normal`、`government-conservative`、`large-site`、`spa`、`external-governance` 這類 profile 的正式資料模型、CLI 入口或 `profileExpandedOptions` / `rulesVersion` 追溯欄位。
 
 ### 重新排序
 
-1. P9c-1：補 rules schema 檔與驗證測試，先固定 `domain-rules`、`external-risk-rules`、`site-link-rules` 契約。
-2. P9c-2：再做 profiles 與 report 追溯欄位，避免在 schema 還未固定時擴大設定面。
-3. P9c-3：評估 Next.js `__NEXT_DATA__` 專用 parser；若只靠 URL/path literal 已足夠，先不要把它升成 P9c 必做。
+1. P9c-1：已補 rules schema 檔與驗證測試，固定 `domain-rules`、`external-risk-rules`、`site-link-rules` 契約。
+2. P9c-2：補 rules 追溯欄位，例如 `rulesVersion` 或 rules fingerprint / source metadata。
+3. P9c-3：再做 profiles，避免設定面早於追溯欄位擴大。
+4. P9c-4：評估 Next.js `__NEXT_DATA__` 專用 parser；若只靠 URL/path literal 已足夠，先不要把它升成 P9c 必做。
 
 ### 重新結論
 
-P9 的下一個實作點不是繼續修 UI，也不是重做掃描核心，而是 P9c-1。P9b-1 已解除完成瞬間傳送完整 report 的主要卡點，P9b-2 已保護 Analyzer 載入大型檔案時的使用者體驗，P9b-3 已降低大量列表一次渲染造成的 DOM 成本，P9b-4 已讓 Analyzer 可直接載入主要 NDJSON sidecar；接下來應固定 rules schema 與驗證測試。
+P9 的下一個實作點不是繼續修 UI，也不是重做掃描核心，而是 P9c-2。P9b-1 已解除完成瞬間傳送完整 report 的主要卡點，P9b-2 已保護 Analyzer 載入大型檔案時的使用者體驗，P9b-3 已降低大量列表一次渲染造成的 DOM 成本，P9b-4 已讓 Analyzer 可直接載入主要 NDJSON sidecar，P9c-1 已固定 rules schema 與驗證測試；接下來應補 rules 追溯欄位。
 
 P9c 應排在 P9b 基礎輸出之後。現有 rules 與 SPA 能力可以支撐目前掃描，但缺少 schema、profile 與追溯欄位，若太早加 GUI profile 設定，容易造成報告契約反覆變動。
 
 ### 2026-07-18 P9c validation record
 
-P9c 評估已重新驗證，結論維持：下一步應先做 **P9c-1 Rules Schema 與驗證測試**。
+P9c 評估已重新驗證；此段保留為 P9c-1 實作前依據。P9c-1 已完成第一版，下一步應做 **P9c-2 Rules 追溯欄位**。
 
 已確認的現況：
 
 - CLI 已有 `--domain-rules`、`--external-risk-rules`、`--site-link-rules` 三個 rules 入口。
 - 程式已有 `loadDomainCategoryRules`、`loadExternalRiskRules`、`loadSiteLinkRules`、`normalizeExternalRiskRules`、`normalizeSiteLinkRules` 等載入與 normalization 流程。
 - report 已記錄 rules source：`domainCategoryRulesSource`、`externalRiskRulesSource`、`siteLinkRulesSource`。
-- `schemas/` 目前只有 `report.schema.json` 與 `diff.schema.json`。
-- 尚未建立 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。
+- `schemas/` 已包含 `report.schema.json`、`diff.schema.json`、`domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。
+- P9c-1 已建立三份 rules schema 與 `test-p9c1-rules-schema.mjs`，用來驗證公開 rules 格式、負例與現有 CEC 範例。
 - 尚未看到 profile 正式模型、CLI 入口或 `profileExpandedOptions` / `rulesVersion` 追溯欄位落地。
 - `__NEXT_DATA__` 目前有 signal 偵測與 framework / site-rule extraction 輔助，但還不是完整 Next.js payload parser。
 
@@ -467,14 +470,31 @@ P9c 評估已重新驗證，結論維持：下一步應先做 **P9c-1 Rules Sche
 
 - 搜尋 CLI 入口、rules loader / normalizer、rules source 欄位與 Next.js signal / extraction 相關程式碼。
 - 檢查 `schemas/` 目錄，目前只有 report / diff schema。
-- 檢查測試清單，目前尚無 rules schema 專用驗證測試。
+- P9c-1 後已新增 rules schema 專用驗證測試：`test-p9c1-rules-schema.mjs`。
 
 決策：
 
-1. P9c-1：先補三份 rules schema 與驗證測試，固定既有 rules 契約，不改 CLI 行為。
+1. P9c-1：已補三份 rules schema 與驗證測試，固定既有 rules 契約，不改 CLI 行為。
 2. P9c-2：再補 rules 追溯欄位，例如 `rulesVersion` 或 rules fingerprint / source metadata。
-3. P9c-3：等 rules schema 穩定後再做 profiles，避免設定面反覆變動。
+3. P9c-3：等 rules schema 與追溯欄位穩定後再做 profiles，避免設定面反覆變動。
 4. P9c-4：Next.js `__NEXT_DATA__` parser 先保持評估項；若 site-link-rules 已足夠，不急著升成核心必做。
+
+### 2026-07-18 P9c-1 implementation record
+
+P9c-1 已完成第一版：
+
+- 新增 `schemas/domain-rules.schema.json`，支援 `--domain-rules` 的 array 格式與 `{ "rules": [...] }` 格式。
+- 新增 `schemas/external-risk-rules.schema.json`，支援 allow / block / watch bucket 格式與 explicit `rules` 格式，並涵蓋 `action`、`governanceStatus`、`status`、`type` 等既有別名。
+- 新增 `schemas/site-link-rules.schema.json`，支援 `fields.externalUrl`、`fields.youtubeId`、`fields.routePath` 與 `routeMappings`。
+- 新增 `test-p9c1-rules-schema.mjs`，用無外部依賴的小型 schema validator 驗證正例、負例與 `docs/rules/cec-site-link-rules.json`。
+- 此步只固定既有 rules 契約，不改 CLI 行為、不改 rules normalization、不新增 profile、不加入 `rulesVersion` / `profileExpandedOptions`。
+
+驗證通過：
+- `node --check test-p9c1-rules-schema.mjs`
+- `node test-p9c1-rules-schema.mjs`
+- `node --check link-checker.mjs`
+
+下一步：P9c-2 Rules 追溯欄位，評估 `rulesVersion` 或 rules fingerprint / source metadata。
 
 ## 建議分支
 
@@ -487,5 +507,5 @@ codex/p9-gui-analyzer-improvements
 下一個實作項目建議為：
 
 ```text
-P9c-1：Rules Schema 與驗證測試
+P9c-2：Rules 追溯欄位
 ```
