@@ -52,8 +52,14 @@ const ISSUE_LABELS = {
 
 const FILE_SIZE_WARN_BYTES = 15 * 1024 * 1024;
 const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
+const BROKEN_LIST_INITIAL_COUNT = 200;
+const BROKEN_LIST_INCREMENT = 200;
 
 let currentAnalysis = null;
+let brokenListState = {
+  key: "",
+  visibleCount: BROKEN_LIST_INITIAL_COUNT,
+};
 
 function startSessionHeartbeat() {
   const send = () => fetch("/api/session/heartbeat", {
@@ -87,6 +93,7 @@ exportCsvButton.addEventListener("click", () => {
 
 clearButton.addEventListener("click", () => {
   currentAnalysis = null;
+  resetBrokenListState();
   reportFileInput.value = "";
   searchInput.value = "";
   resetSelect(issueFilterInput, "全部");
@@ -122,6 +129,7 @@ async function loadReportFile() {
       throw makeImportError("json", error, file);
     }
     currentAnalysis = analyzeReport(report);
+    resetBrokenListState();
     populateFilters(currentAnalysis);
     renderAnalysis(applyFilters(currentAnalysis));
     exportCsvButton.disabled = false;
@@ -544,14 +552,60 @@ function renderBrokenTable(items) {
   }
 
   const sortedItems = sortBrokenItemsForDisplay(items);
-  const visibleItems = sortedItems.slice(0, 800);
-  linksTable.replaceChildren(...visibleItems.map(renderIssueItem));
-  if (items.length > visibleItems.length) {
-    const note = document.createElement("p");
-    note.className = "list-limit-note";
-    note.textContent = `目前顯示前 ${visibleItems.length} 筆，請用搜尋、問題類型或狀態碼縮小範圍。`;
-    linksTable.append(note);
+  const key = getBrokenListKey(items);
+  if (brokenListState.key !== key) {
+    brokenListState = {
+      key,
+      visibleCount: BROKEN_LIST_INITIAL_COUNT,
+    };
   }
+  const visibleCount = Math.min(brokenListState.visibleCount, sortedItems.length);
+  const visibleItems = sortedItems.slice(0, visibleCount);
+  linksTable.replaceChildren(...visibleItems.map(renderIssueItem));
+  if (sortedItems.length > visibleItems.length) {
+    linksTable.append(renderLoadMoreControl({
+      shown: visibleItems.length,
+      total: sortedItems.length,
+      onLoadMore: () => {
+        brokenListState.visibleCount += BROKEN_LIST_INCREMENT;
+        renderBrokenTable(items);
+      },
+    }));
+  }
+}
+
+function resetBrokenListState() {
+  brokenListState = {
+    key: "",
+    visibleCount: BROKEN_LIST_INITIAL_COUNT,
+  };
+}
+
+function getBrokenListKey(items) {
+  return [
+    searchInput.value.trim().toLowerCase(),
+    issueFilterInput.value,
+    statusFilterInput.value,
+    items.length,
+  ].join("\u0001");
+}
+
+function renderLoadMoreControl({ shown, total, onLoadMore }) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "list-pagination";
+
+  const note = document.createElement("p");
+  note.className = "list-limit-note";
+  note.textContent = `目前顯示 ${formatNumber(shown)} / ${formatNumber(total)} 筆。`;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "load-more-button";
+  button.textContent = "載入更多";
+  button.addEventListener("click", onLoadMore);
+
+  wrapper.append(note, button);
+  return wrapper;
 }
 
 function renderEmpty(message = "請先上傳 report.json。") {

@@ -595,7 +595,9 @@ P9b-1 第一版已採「完成後派生 sidecar」，也就是掃描完成並建
 
 GUI SSE complete event 會回傳輕量 summary / manifest / reportFiles / log path / reportUrl，不直接傳送完整 report，避免超大報告在使用者端一次解析或渲染時卡住。完整 `report.json` streaming parser、不斷線逐筆 append NDJSON、CLI sidecar 輸出設計都不列為 P9b-1 第一版範圍。
 
-P9b-2 第一版保護現有 Analyzer 匯入流程，不改 `report.json` 或 CSV 契約。Report Analyzer 與 External Link Analyzer 會在選檔 / 載入期間顯示檔案大小與狀態，暫停容易造成重複操作的控制項，並將 JSON / CSV / rules 匯入錯誤轉成可行訊息。NDJSON 匯入、列表分頁、Web Worker 與 IndexedDB 不列為 P9b-2 範圍，後續分別留給 P9b-3 / P9b-4 或更後段評估。
+P9b-2 第一版保護現有 Analyzer 匯入流程，不改 `report.json` 或 CSV 契約。Report Analyzer 與 External Link Analyzer 會在選檔 / 載入期間顯示檔案大小與狀態，暫停容易造成重複操作的控制項，並將 JSON / CSV / rules 匯入錯誤轉成可行訊息。NDJSON 匯入、Web Worker 與 IndexedDB 不列為 P9b-2 範圍，後續分別留給 P9b-4 或更後段評估。
+
+P9b-3 第一版只降低前端列表 DOM 建立成本，不改排序、篩選或匯出資料範圍。Report Analyzer 壞連結清單與 External Link Analyzer 外連明細會初始顯示 200 筆，使用者可透過「載入更多」每次再展開 200 筆；CSV / JSON 匯出仍使用完整的目前篩選結果。
 
 ## 9. Exit Codes
 

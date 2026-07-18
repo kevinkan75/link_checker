@@ -5,10 +5,11 @@
 ## 目前狀態摘要
 
 - P0-P8 已完成第一版。
-- 目前下一個主線為 P9b-3：前端列表分頁 / 載入更多。
+- 目前下一個主線為 P9b-4：NDJSON 匯入支援。
 - P9a 已於 2026-07-17 驗收通過；不要再把 P9a-1 視為下一個實作起點。
 - P9b-1 已完成第一版：GUI log artifacts 會從 `report.json` 派生 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，且 GUI SSE complete event 不再傳完整 report。
 - P9b-2 已完成第一版：Report Analyzer / External Link Analyzer 已加入大檔提示、載入狀態、控制項暫停與更清楚的匯入錯誤訊息。
+- P9b-3 已完成第一版：Report Analyzer 壞連結清單與 External Link Analyzer 外連明細改為初始 200 筆，並可用「載入更多」逐批展開。
 - P6 已完成 report-to-report diff 第一版。
 - P6.5a 已完成輸出契約、manifest、redaction、body/source limit、Header / Accept-Encoding 與 Keep-Alive。
 - P6.5b 已完成 SSRF、`runStatus`、robots / compliance、Retry-After / host diagnostics 與 WAF signature schema。
@@ -37,7 +38,7 @@
 | 4 | P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | 無 | WAF/Bot 繞過 |
 | 5 | P7 | 已完成第一版 | TTL URL result cache | 後續僅保留 P9/P10 整合呈現 | page HTML cache 優先化 |
 | 6 | P8 | 已完成第一版 | report diff / cache / scan state 上的增量掃描；P8a-P8e 已完成第一版，已合併 main | GUI 啟用入口與 state 管理移交 P9 / P10 評估 | 跳過 HTML inventory 發現的新 URL；GUI state 管理 |
-| 7 | P9 | 進行中 | GUI 易用性、Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | P9a / P9b-1 / P9b-2 已通過；下一步 P9b-3 前端列表分頁 / 載入更多 | 空 UI、改 `report.json` 主契約、第一刀重寫掃描核心 |
+| 7 | P9 | 進行中 | GUI 易用性、Analyzer / GUI 大型報告、profile、rules schema、Next.js payload | P9a / P9b-1 / P9b-2 / P9b-3 已通過；下一步 P9b-4 NDJSON 匯入支援 | 空 UI、改 `report.json` 主契約、第一刀重寫掃描核心 |
 | 8 | P10 | 待規劃 | 治理與分級排程、WAF 協調建議、`--respect-robots` | P9 後設計 | 常駐 scheduler 優先化 |
 | 9 | P11 | 待規劃 | 輔助格式、release / packaging governance | P10 後評估 | 早於核心契約與誤判降低 |
 
@@ -132,12 +133,12 @@
 
 ### P9b：大型報告處理與 NDJSON 輔助輸出
 
-**狀態：** P9b-1 / P9b-2 已完成第一版，下一步 P9b-3  
+**狀態：** P9b-1 / P9b-2 / P9b-3 已完成第一版，下一步 P9b-4  
 **目標：** 讓 Analyzer / GUI 可處理大型 report。  
 **主要交付：** NDJSON 輔助輸出、GUI complete payload 瘦身、Analyzer 大檔保護、GUI 分頁 / 載入更多、NDJSON 匯入支援。  
 **建議切分：** P9b-1 NDJSON 輔助輸出與 GUI complete payload 瘦身、P9b-2 Analyzer 大檔保護、P9b-3 前端分頁 / 載入更多、P9b-4 NDJSON 匯入支援。  
-**已完成第一版：** P9b-1：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，更新 manifest / summary / README，並讓 GUI SSE complete event 不再直接傳送完整 report。P9b-2：Report Analyzer / External Link Analyzer 已加入大檔提示、載入狀態、控制項暫停與更清楚的匯入錯誤訊息。  
-**下一步：** P9b-3：前端列表分頁 / 載入更多，先處理 Report Analyzer 壞連結清單與 External Link Analyzer 外連明細。  
+**已完成第一版：** P9b-1：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，更新 manifest / summary / README，並讓 GUI SSE complete event 不再直接傳送完整 report。P9b-2：Report Analyzer / External Link Analyzer 已加入大檔提示、載入狀態、控制項暫停與更清楚的匯入錯誤訊息。P9b-3：Report Analyzer 壞連結清單與 External Link Analyzer 外連明細改為初始 200 筆，並可用「載入更多」逐批展開。  
+**下一步：** P9b-4：NDJSON 匯入支援，先支援 `broken.ndjson` 與 `external-links.ndjson` 的主要列表與摘要。  
 **排除範圍：** NDJSON 不取代 `report.json` 主格式；不優先做完整 `report.json` streaming parser；CLI sidecar 與真正邊跑邊 append 屬延後項目。
 
 ### P9c：Profile、Rules Schema 與 Next.js Payload
@@ -207,7 +208,7 @@
 - P6：純 report diff，只讀兩份既有 report 並輸出 diff，不改掃描行為。
 - P6.5a：低風險穩定性與輸出契約，包括 manifest、redaction、response size limit、Header / Keep-Alive。
 - P6.5b：稽查語意與誤判降低，包括 SSRF、partial report、robots / compliance、Retry-After 與 WAF schema。
-- P9：P9a GUI 易用性、P9b-1 sidecar artifacts / GUI complete payload 瘦身與 P9b-2 Analyzer 大檔保護已通過；下一步是 P9b-3 前端列表分頁 / 載入更多；rules schema 與 profile 留在 P9c。
+- P9：P9a GUI 易用性、P9b-1 sidecar artifacts / GUI complete payload 瘦身、P9b-2 Analyzer 大檔保護與 P9b-3 前端列表分頁 / 載入更多已通過；下一步是 P9b-4 NDJSON 匯入支援；rules schema 與 profile 留在 P9c。
 - P11：release / packaging governance、SBOM、dependency audit 與正式簽章評估。
 
 README / ROADMAP 易讀性與一致性建議採納紀錄請參閱 [docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md](docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md)。

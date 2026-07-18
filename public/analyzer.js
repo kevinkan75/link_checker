@@ -80,10 +80,16 @@ const UT1_SECURITY_CATEGORIES = new Set([
 
 const FILE_SIZE_WARN_BYTES = 15 * 1024 * 1024;
 const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
+const LINK_LIST_INITIAL_COUNT = 200;
+const LINK_LIST_INCREMENT = 200;
 
 let currentAnalysis = null;
 let ut1Categories = [];
 let appliedUt1Rules = [];
+let linkListState = {
+  key: "",
+  visibleCount: LINK_LIST_INITIAL_COUNT,
+};
 
 function startSessionHeartbeat() {
   const send = () => fetch("/api/session/heartbeat", {
@@ -105,6 +111,7 @@ linksFileInput.addEventListener("change", () => {
   const file = linksFileInput.files?.[0];
   if (!file) {
     currentAnalysis = null;
+    resetLinkListState();
     exportJsonButton.disabled = true;
     exportCsvButton.disabled = true;
     analyzeButton.disabled = true;
@@ -114,6 +121,7 @@ linksFileInput.addEventListener("change", () => {
     return;
   }
   currentAnalysis = null;
+  resetLinkListState();
   exportJsonButton.disabled = true;
   exportCsvButton.disabled = true;
   analyzeButton.disabled = false;
@@ -126,6 +134,7 @@ linksFileInput.addEventListener("change", () => {
 for (const input of [searchInput, riskFilterInput, governanceFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
   input.addEventListener("input", () => {
     if (currentAnalysis) {
+      resetLinkListState();
       currentAnalysis = analyze(currentAnalysis.links, currentAnalysis.ruleIndex);
       renderAnalysis(currentAnalysis);
     }
@@ -196,6 +205,7 @@ ut1ApplyButton.addEventListener("click", () => {
     rulesFileInput.value = "";
     if (currentAnalysis) {
       const ruleIndex = buildCombinedRuleIndex([]);
+      resetLinkListState();
       currentAnalysis = analyze(currentAnalysis.links, ruleIndex);
       renderAnalysis(currentAnalysis);
     }
@@ -229,6 +239,7 @@ analyzeButton.addEventListener("click", async () => {
     await yieldToBrowser();
     const links = await loadLinksFile();
     const ruleIndex = await loadRulesFile();
+    resetLinkListState();
     currentAnalysis = analyze(links, ruleIndex);
     renderAnalysis(currentAnalysis);
     exportJsonButton.disabled = false;
@@ -1022,14 +1033,60 @@ function renderLinksTable(links) {
   }
 
   const sortedLinks = sortLinksForDisplay(links);
-  const visibleLinks = sortedLinks.slice(0, 500);
-  linksTable.replaceChildren(...visibleLinks.map(renderLinkItem));
-  if (links.length > visibleLinks.length) {
-    const note = document.createElement("p");
-    note.className = "list-limit-note";
-    note.textContent = `目前顯示前 ${visibleLinks.length} 筆，請用搜尋或顯示風險縮小範圍。`;
-    linksTable.append(note);
+  const key = getLinkListKey(links);
+  if (linkListState.key !== key) {
+    linkListState = {
+      key,
+      visibleCount: LINK_LIST_INITIAL_COUNT,
+    };
   }
+  const visibleCount = Math.min(linkListState.visibleCount, sortedLinks.length);
+  const visibleLinks = sortedLinks.slice(0, visibleCount);
+  linksTable.replaceChildren(...visibleLinks.map(renderLinkItem));
+  if (sortedLinks.length > visibleLinks.length) {
+    linksTable.append(renderLoadMoreControl({
+      shown: visibleLinks.length,
+      total: sortedLinks.length,
+      onLoadMore: () => {
+        linkListState.visibleCount += LINK_LIST_INCREMENT;
+        renderLinksTable(links);
+      },
+    }));
+  }
+}
+
+function resetLinkListState() {
+  linkListState = {
+    key: "",
+    visibleCount: LINK_LIST_INITIAL_COUNT,
+  };
+}
+
+function getLinkListKey(links) {
+  return [
+    searchInput.value.trim().toLowerCase(),
+    riskFilterInput.value,
+    governanceFilterInput.value,
+    links.length,
+  ].join("\u0001");
+}
+
+function renderLoadMoreControl({ shown, total, onLoadMore }) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "list-pagination";
+
+  const note = document.createElement("p");
+  note.className = "list-limit-note";
+  note.textContent = `目前顯示 ${shown} / ${total} 筆。`;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "load-more-button";
+  button.textContent = "載入更多";
+  button.addEventListener("click", onLoadMore);
+
+  wrapper.append(note, button);
+  return wrapper;
 }
 
 function renderLinkItem(item) {
