@@ -122,12 +122,7 @@ async function loadReportFile() {
     exportCsvButton.disabled = true;
     await yieldToBrowser();
     const text = await file.text();
-    let report;
-    try {
-      report = JSON.parse(text);
-    } catch (error) {
-      throw makeImportError("json", error, file);
-    }
+    const report = loadReportContent(text, file);
     currentAnalysis = analyzeReport(report);
     resetBrokenListState();
     populateFilters(currentAnalysis);
@@ -142,10 +137,77 @@ async function loadReportFile() {
     clearButton.disabled = false;
     setFileStatus(error.message, "error");
     setReportFlow("load", "讀取失敗");
-    renderEmpty("無法解析 report.json。");
+    renderEmpty("無法解析匯入檔案。");
   } finally {
     reportFileInput.disabled = false;
   }
+}
+
+function loadReportContent(text, file) {
+  if (isNdjsonFile(file)) {
+    try {
+      if (!isBrokenNdjsonFile(file)) {
+        throw new Error("Report Analyzer 第一版只支援 broken.ndjson，不支援 checked.ndjson 或 external-links.ndjson。");
+      }
+      return makeBrokenSidecarReport(parseNdjsonContent(text), file.name);
+    } catch (error) {
+      throw makeImportError("ndjson", error, file);
+    }
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw makeImportError("json", error, file);
+  }
+}
+
+function makeBrokenSidecarReport(items, fileName) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error(`${fileName} 沒有可匯入的壞連結資料列。`);
+  }
+  return {
+    schemaVersion: "sidecar.ndjson",
+    sourceFile: fileName,
+    runStatus: {
+      status: "partial",
+      failureReason: "目前載入的是 broken.ndjson sidecar，只包含壞連結明細，沒有完整 checked / summary 資訊",
+    },
+    summary: {
+      pagesCrawled: 0,
+      urlsChecked: 0,
+      brokenLinks: items.length,
+      redirects: 0,
+      skippedExternal: 0,
+    },
+    checked: [],
+    broken: items,
+  };
+}
+
+function parseNdjsonContent(text) {
+  const rows = [];
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return;
+    }
+    try {
+      rows.push(JSON.parse(trimmed));
+    } catch (error) {
+      throw new Error(`第 ${index + 1} 行不是有效 JSON：${error.message}`);
+    }
+  });
+  return rows;
+}
+
+function isNdjsonFile(file) {
+  return file.name.toLowerCase().endsWith(".ndjson");
+}
+
+function isBrokenNdjsonFile(file) {
+  return file.name.toLowerCase() === "broken.ndjson";
 }
 
 function getFileSizeProfile(file) {
@@ -168,6 +230,9 @@ function getFileSizeProfile(file) {
 }
 
 function makeImportError(kind, error, file) {
+  if (kind === "ndjson") {
+    return new Error(`${file.name} 不是可解析的 broken.ndjson；請確認檔案是一行一筆 JSON object，且來源為 GUI log 目錄的 broken.ndjson。${error.message}`);
+  }
   if (kind === "json" && error instanceof SyntaxError) {
     return new Error(`${file.name} 不是可解析的 report.json；請確認檔案是完整 JSON，或改用 broken.csv / broken.ndjson。`);
   }

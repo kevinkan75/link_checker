@@ -277,12 +277,22 @@ exportCsvButton.addEventListener("click", () => {
 async function loadLinksFile() {
   const file = linksFileInput.files?.[0];
   if (!file) {
-    throw new Error("請先選擇 external-links.csv 或 report.json");
+    throw new Error("請先選擇 external-links.csv、external-links.ndjson 或 report.json");
   }
 
   try {
     const text = await file.text();
     const name = file.name.toLowerCase();
+    if (name.endsWith(".ndjson")) {
+      try {
+        if (!isExternalLinksNdjsonFile(file)) {
+          throw new Error("External Link Analyzer 第一版只支援 external-links.ndjson，不支援 checked.ndjson 或 broken.ndjson。");
+        }
+        return normalizeLinksFromNdjson(parseNdjsonContent(text));
+      } catch (error) {
+        throw makeImportError("ndjson", error, file);
+      }
+    }
     if (name.endsWith(".json")) {
       try {
         return normalizeLinksFromJson(JSON.parse(text));
@@ -324,7 +334,7 @@ function getFileSizeProfile(file) {
   if (file.size >= FILE_SIZE_LARGE_BYTES) {
     return {
       level: "warn",
-      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器分析可能會停頓。若是 GUI log 目錄輸出，建議優先使用 external-links.csv；external-links.ndjson 匯入會在 P9b-4 支援。`,
+      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器分析可能會停頓。若是 GUI log 目錄輸出，建議優先使用 external-links.csv 或 external-links.ndjson。`,
     };
   }
   if (file.size >= FILE_SIZE_WARN_BYTES) {
@@ -342,7 +352,9 @@ function getFileSizeProfile(file) {
 function makeImportError(kind, error, file) {
   let message;
   if (error instanceof RangeError || /allocation|memory|out of memory|maximum/i.test(error.message || "")) {
-    message = `${file.name} 太大，瀏覽器可能無法一次處理。請改用 external-links.csv，或先縮小報告範圍。`;
+    message = `${file.name} 太大，瀏覽器可能無法一次處理。請改用 external-links.csv / external-links.ndjson，或先縮小報告範圍。`;
+  } else if (kind === "ndjson") {
+    message = `${file.name} 不是可解析的 external-links.ndjson；請確認檔案是一行一筆 JSON object，且來源為 GUI log 目錄的 external-links.ndjson。${error.message}`;
   } else if (kind === "json" && error instanceof SyntaxError) {
     message = `${file.name} 不是可解析的 JSON；請確認檔案是完整 report.json 或含 externalLinks 的 JSON。`;
   } else if (kind === "csv") {
@@ -625,6 +637,17 @@ function normalizeLinksFromJson(value) {
   return dedupeLinks(items.map(normalizeLink).filter((item) => item.url));
 }
 
+function normalizeLinksFromNdjson(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("NDJSON 沒有資料列");
+  }
+  return dedupeLinks(items.map(normalizeLink).filter((item) => item.url));
+}
+
+function isExternalLinksNdjsonFile(file) {
+  return file.name.toLowerCase() === "external-links.ndjson";
+}
+
 function normalizeLinksFromCsv(rows) {
   if (rows.length < 2) {
     throw new Error("CSV 沒有資料列");
@@ -635,6 +658,23 @@ function normalizeLinksFromCsv(rows) {
     .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] || ""])))
     .map(normalizeLink)
     .filter((item) => item.url));
+}
+
+function parseNdjsonContent(text) {
+  const rows = [];
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return;
+    }
+    try {
+      rows.push(JSON.parse(trimmed));
+    } catch (error) {
+      throw new Error(`第 ${index + 1} 行不是有效 JSON：${error.message}`);
+    }
+  });
+  return rows;
 }
 
 function dedupeLinks(links) {
