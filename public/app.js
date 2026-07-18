@@ -88,15 +88,15 @@ const filterBar = document.querySelector("#filter-bar");
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const defaultUserAgent = `${browserUserAgent} LocalLinkChecker/1.0`;
 const defaultSettings = {
-  maxPages: "100",
-  maxDepth: "2",
+  maxPages: "300",
+  maxDepth: "3",
   concurrency: "6",
   perHostConcurrency: "2",
   requestDelayMs: "1000",
   requestDelayMinMs: "",
   requestDelayMaxMs: "",
   timeoutMs: "15000",
-  retryCount: "2",
+  retryCount: "1",
   maxRedirects: "10",
   longRedirectThreshold: "3",
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
@@ -114,6 +114,8 @@ const defaultSettings = {
 const presets = {
   fast: {
     ...defaultSettings,
+    maxPages: "100",
+    maxDepth: "2",
     concurrency: "12",
     perHostConcurrency: "4",
     requestDelayMs: "500",

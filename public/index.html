@@ -42,7 +42,7 @@
           <details class="advanced-settings">
             <summary>
               <span>掃描模式與進階設定</span>
-              <span id="advanced-summary" class="advanced-summary">100 頁 / 深度 2 / 併發 6 / 每 host 2 / 固定 1000ms</span>
+              <span id="advanced-summary" class="advanced-summary">300 頁 / 深度 3 / 併發 6 / 每 host 2 / 固定 1000ms</span>
             </summary>
             <div class="advanced-settings-body">
               <div class="preset-row" aria-label="掃描模式">
@@ -61,12 +61,12 @@
                 <div class="settings-grid two-column">
                   <label>
                     <span class="field-label">最多頁面 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="最多頁面說明" aria-describedby="help-max-pages" data-help-trigger>?</span><span id="help-max-pages" class="help-tooltip" role="tooltip">限制實際爬取的站內頁面數；不等於總 URL 檢查數。</span></span></span>
-                    <input id="max-pages" name="maxPages" type="number" min="1" max="5000" value="100">
+                    <input id="max-pages" name="maxPages" type="number" min="1" max="5000" value="300">
                   </label>
 
                   <label>
                     <span class="field-label">最大深度 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="最大深度說明" aria-describedby="help-max-depth" data-help-trigger>?</span><span id="help-max-depth" class="help-tooltip" role="tooltip">從起始頁往外爬取的層數。0 只檢查起始頁。</span></span></span>
-                    <input id="max-depth" name="maxDepth" type="number" min="0" max="50" value="2">
+                    <input id="max-depth" name="maxDepth" type="number" min="0" max="50" value="3">
                   </label>
                 </div>
               </section>
@@ -114,7 +114,7 @@
 
                   <label>
                     <span class="field-label">重試次數 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="重試次數說明" aria-describedby="help-retry-count" data-help-trigger>?</span><span id="help-retry-count" class="help-tooltip" role="tooltip">只適合暫時性錯誤。一般 404、410 或 403 不會因重試而修正。</span></span></span>
-                    <input id="retry-count" name="retryCount" type="number" min="0" max="5" value="2">
+                    <input id="retry-count" name="retryCount" type="number" min="0" max="5" value="1">
                   </label>
                 </div>
               </section>

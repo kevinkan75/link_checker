@@ -15,7 +15,7 @@
 - P9 已於 2026-07-18 整體驗收；P9a、P9b 與 P9c 都已完成第一版並通過現有測試。
 - P9b-1 到 P9b-4 已驗收，包含 GUI log artifacts、NDJSON sidecar、GUI complete payload 瘦身、大檔提示、列表「載入更多」與 NDJSON 匯入。
 - P9c-1 / P9c-2 已驗收，包含 rules schema、root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
-- 目前下一個主線改為 P10：報告判讀與交辦友善強化。
+- 目前主線為 P10：報告判讀與交辦友善強化；P10a / P10b 已完成，P10c 收尾中。
 - P10 完成並驗收後，可進入正式版 release gate；P11 應定位為發布前 hardening / packaging 檢查，不再新增大型產品功能。
 - P9c 的定位是補齊 rules 信任基線：讓報告可追溯、讓 URL rules 載入安全；不是建立複雜規則平台，也不是重構 crawler。
 - 產品定位已校準為本地端、低門檻、輔助型工具，主要提供政府機關承辦人員使用，不取代 CMS、維運流程、稽核系統或正式監控平台。
@@ -71,7 +71,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 
 ### 2. P10：報告判讀與交辦友善強化
 
-**狀態：** 下一個主線  
+**狀態：** 進行中，P10a / P10b 已完成，P10c 收尾中
 **目標：** 讓承辦人更容易判斷哪些要修、哪些要人工確認、哪些只是外站限制或已知轉址。
 **階段定位：** P10 是正式版前的最後一個產品功能主線；P10 完成並驗收後，專案可進入正式版 release gate。
 
@@ -85,7 +85,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 
 建議交付：
 
-- 更清楚的結果分級：明確壞連結、可能失效、需人工確認、外站限制、已轉址但仍可用、頁內跳轉失效。
+- 更清楚的結果分級：明確壞連結、可能失效、需人工確認、外站限制、已轉址但仍可用；頁內跳轉失效僅作 optional 品質提醒。
 - CSV / Excel 交辦友善欄位：來源頁、問題網址、問題類型、建議處理、是否需人工確認。
 - GUI 摘要用業務語言呈現，不要求使用者理解所有 HTTP / WAF 細節。
 
@@ -96,7 +96,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | P10a | 判讀分類基線 | 定義 report / GUI / CSV 共用的人工可讀分類 |
 | P10b | 交辦欄位 | 補 CSV / Excel 友善欄位與建議處理文字 |
 | P10c | GUI 摘要改善 | 用承辦人語言呈現要修、要確認、可先忽略的結果 |
-| P10d | 頁內品質檢查 | Fragment / anchor 與 duplicate anchor，作為提醒類別 |
+| P10d | 頁內品質檢查 | Optional；Fragment / anchor 與 duplicate anchor，作為提醒類別 |
 
 P10a 評估紀錄：
 
@@ -129,7 +129,7 @@ P10a 實作紀錄：
 - `summary.interpretationByCategory` 已加入報告輸出與 schema，GUI 摘要會優先使用正式 summary 欄位；若讀到舊報告，仍會以既有 technical breakdown fallback 推導。
 - 分類規則已落地：已確認的 `404 / 410` 與 redirect 到錯誤頁歸為 `action_required`；同站 `403 / 429 / timeout / WAF / Bot / network error` 歸為 `needs_review`；外站限制歸為 `external_limited`；成功轉址歸為 `redirect_ok`。
 - 已新增 `test-p10a-interpretation.mjs` 覆蓋站內 404、站內 403、429、成功轉址、轉址到錯誤頁與外站 403。
-- CSV / Excel 交辦友善欄位仍歸 P10b 收尾，屆時應直接使用同一個 `interpretation` 契約，避免另做一套分類。
+- CSV / Excel 交辦友善欄位已由 P10b 完成，並直接使用同一個 `interpretation` 契約，避免另做一套分類。
 
 P10b 評估與實作紀錄：
 
@@ -139,15 +139,41 @@ P10b 評估與實作紀錄：
 - 原本技術欄位仍保留在後段，維持向後追查能力；新增欄位直接使用 `interpretation`，缺少舊報告欄位時才 fallback。
 - 已新增 `test-p10b-broken-csv.mjs`，驗收 BOM、CRLF、交辦欄位順序、P10a 判讀文字、final URL、來源頁與敏感 query 遮罩。
 
+P10c 評估紀錄：
+
+- 結論：P10c 應採用，作為 P10 的收尾項之一。它的價值不是新增掃描能力，而是把 P10a / P10b 的判讀分類帶到使用者每天看的畫面、Analyzer 與文件語言裡。
+- 主 GUI 已大致符合 P10c 方向：主畫面已使用「需判讀結果」、「判讀分類」、「需處理」、「需人工確認」、「外站限制」、「可能失效」、「已轉址仍可用」等承辦人語言，也已在明細中顯示「建議處理」。
+- 尚未完全同步的範圍是 Report Analyzer 與 README：Analyzer 仍多處使用「壞連結」與 `issueType` 技術分類；README 仍有 `404 / 403 / 429` 技術導向說明，應補成以判讀分類為主、HTTP 狀態為輔。
+- 建議實作範圍只做語言與呈現同步：Analyzer 優先顯示 `interpretation.label`、`interpretation.action` 與 `interpretation.needsManualReview`；README 補判讀分類表；technical spec 補 GUI / Analyzer 應優先顯示 interpretation。
+- 不納入 P10c：新的 dashboard、派工流程、複雜技術型 profile presets、Analyzer 大型重構、report 契約變更。
+
+Profile presets 決策紀錄：
+
+- 結論：不需要再大幅簡化，也不應擴張。主 GUI 維持少量、可理解的掃描模式即可。
+- 保留 `標準保守` 作為預設，符合承辦人接獲正式清查指令後，需要產出可回報結果的主要情境。
+- 保留 `快速掃描`，供小站或初步檢查使用，固定為較輕量的 `100` 頁 / 深度 `2`，但文案需持續提醒較容易遇到 `403`、`429` 或 timeout。
+- 保留 `更保守`，供政府網站、防護較強網站、容易 timeout 的站使用，沿用正式清查頁數但降低單一 host 併發與增加延遲。
+- `還原預設` 可保留，定位為重設操作，不視為新的 profile。
+- 不新增 `government-conservative`、`large-site`、`blog-scan`、`external-governance`、`spa`、`audit`、`deep scan` 等技術型 profile；網誌清查需求以頁數建議與說明文字處理，不做成新 profile。
+
+GUI 預設掃描數值執行紀錄：
+
+- 已採用承辦人正式清查情境作為主 GUI 預設，而不是以快速試掃作為預設。
+- `標準保守` / `balanced` 預設固定為 `300` 頁、深度 `3`、全站併發 `6`、單一 host 併發 `2`、固定延遲 `1000ms`、重試 `1` 次。
+- `快速掃描` / `fast` 明確固定為 `100` 頁、深度 `2`、全站併發 `12`、單一 host 併發 `4`、固定延遲 `500ms`，定位為初步試跑，不作為正式清查預設。
+- `更保守` / `conservative` 沿用 `300` 頁、深度 `3`，並降低單一 host 併發到 `1`、使用 `2000-5000ms` 隨機延遲、瀏覽器 User-Agent 與 `GET` 優先，供容易 `403`、`429` 或 timeout 的網站使用。
+- CLI 核心預設目前仍維持 `100` 頁，避免無預警改變既有 CLI 使用者行為；若後續要讓 CLI 也對齊正式清查情境，需另行評估並記錄。
+- 後續不得未經重新評估就把主 GUI `標準保守` 預設改回 `100` 頁 / 深度 `2`，以免偏離本專案協助承辦人完成正式無效連結清查並回復上級的主旨。
+
 2026-07-18 重新檢視 P10：
 
-- P10 方向正確，且已部分啟動；主 GUI 已先採用承辦人判讀分類與較保守的掃描模式，但 P10 不能算完成。
+- P10 方向正確，且已進入收尾；P10a / P10b 已完成，主 GUI 已採用承辦人判讀分類與較保守的掃描模式。
 - P10a：核心契約已完成，report / schema / GUI 可共用 `interpretation` 與 `interpretationByCategory`；CSV / Excel 欄位串接留給 P10b。
 - P10b：已完成 `broken.csv` 交辦友善欄位，直接使用 P10a `interpretation` 契約；後續只需視需要讓 Analyzer 匯出也同步同欄位。
 - P10c：已部分完成。主畫面已改為「待判讀結果」與判讀分類，進階設定也已改成「標準保守 / 快速掃描 / 更保守」且預設較保守；仍需讓 Analyzer 與 README 同步使用同一套判讀語言。
 - P10d：維持 optional。Fragment / anchor 與 duplicate anchor 有價值，但不應阻擋 P10a-c 完成後進入 release gate。
-- GUI 一鍵模式目前已足夠，不應擴大成完整 profile presets 或把所有 CLI 參數搬進 GUI。
-- P10 接下來應收斂為兩個收尾項：同步 Analyzer / README 的判讀語言，並評估 P10d 頁內品質提醒是否納入 release gate。
+- GUI 掃描模式目前已足夠，不應擴大成複雜技術型 profile presets 或把所有 CLI 參數搬進 GUI。
+- P10 接下來應收斂為 P10c：同步 Analyzer / README 的判讀語言；P10d 僅保留 optional，不列為 release gate 阻擋項，除非後續另行評估採用。
 
 與舊規劃比對：
 
@@ -158,12 +184,12 @@ P10b 評估與實作紀錄：
 | CSV / Excel 交辦欄位 | 保留，最符合政府承辦人需求 |
 | Fragment / anchor 檢查 | 保留，但定位為頁面品質提醒 |
 | Duplicate anchor 檢查 | 保留，但不要混入明確壞連結主清單 |
-| GUI 一鍵模式 | 降級為後續評估，不先於判讀與交辦 |
+| GUI 掃描模式 | 已決策，保留少量可理解模式，不展開複雜技術型 profile |
 | 整站檢測策略強化 | 收斂為小步分類與呈現，不做治理平台 |
 | Incremental / sitemap 整合 | 已有基礎，P10 不擴大成排程 |
 | Scheduler / 平台化監控 | 移出 P10 |
 | 複雜 suppress rules | 移出 P10 |
-| 複雜 profile presets | 移出 P10 |
+| 複雜技術型 profile presets | 移出 P10 |
 | Headless render 預設化 | 移出 P10 |
 
 不納入 P10：
@@ -173,7 +199,7 @@ P10b 評估與實作紀錄：
 - 多人審核 / 派工流程。
 - 複雜規則治理。
 - GUI rules URL 表單。
-- 完整 profile presets。
+- 複雜技術型 profile presets；保留少量 GUI 掃描模式。
 - headless render 預設化。
 - Web Worker / IndexedDB 大改。
 - 取代 W3C Link Checker 或機關既有工具。
@@ -189,7 +215,7 @@ P10 完成後的正式版 release gate：
 
 ### 3. 頁內連結品質檢查
 
-**狀態：** P10 內優先評估  
+**狀態：** P10d optional，不阻擋 release gate
 **目標：** 借鏡 W3C Link Checker，補足一般 HTTP status 看不出的頁面內部連結問題。
 
 建議交付：
@@ -202,21 +228,23 @@ P10 完成後的正式版 release gate：
 - 不與明確 404 壞連結混在一起。
 - 優先作為可修復提醒，避免產生過度警報。
 
-### 4. GUI 一鍵模式簡化
+### 4. GUI 掃描模式簡化
 
-**狀態：** 後續評估  
-**目標：** 用少量、安全、容易理解的模式取代過多參數。
+**狀態：** 已決策
+**目標：** 用少量、安全、容易理解的掃描模式取代過多參數，不展開複雜技術型 profile。
 
-候選模式：
+已採用模式：
 
-- 一般檢查。
-- 保守檢查。
-- 外部連結盤點。
+- `標準保守`：主 GUI 預設，供承辦人正式清查與回報使用。
+- `快速掃描`：小站或初步試跑使用。
+- `更保守`：政府網站、防護較強網站或容易 timeout 的網站使用。
+- `還原預設`：重設操作，不視為新的 profile。
 
 網誌清查頁數評估紀錄：
 
 - 參考 GOV.UK、Canada.ca 與 Digital.gov 的連結治理方向後，網誌清查應強調定期維護、分批清查、確認 redirect 是否仍正確，以及外部連結是否仍可信；不應把單次超大頁數作為預設。
-- 一般網站維持標準保守預設 `100` 頁即可。
+- 若以承辦人接獲正式清查指令、需檢測網站無效連結並回復上級為主情境，主 GUI 的 `標準保守` 預設應採 `300` 頁 / 深度 `3`，比 `100` 頁更能涵蓋公告、最新消息、活動紀錄與分頁列表後的文章頁。
+- `快速掃描` 仍維持 `100` 頁 / 深度 `2`，定位為初步試跑，不作為正式清查預設。
 - 若承辦人員目標是清查網誌、最新消息、活動紀錄或文章型頁面的無效連結，建議以 `300` 頁作為第一輪清查值。
 - 年度或半年正式清查可使用 `500` 頁；若文章橫跨多年或分類很多，應以年份、分類頁或列表頁分批掃描，每批 `300` 到 `500` 頁。
 - 不建議一開始使用 `1000+` 作為 GUI 預設或一般建議，避免掃描時間過長、增加網站壓力，並偏離本工具「本地端、低門檻、輔助型」定位。
@@ -241,7 +269,7 @@ P10 完成後的正式版 release gate：
 | P9b | 已驗收 | 大型報告處理、NDJSON sidecar、Analyzer 載入更多 | 不取代 `report.json` 主契約 |
 | P9c-1 | 已驗收 | Rules Schema | 已接續完成 P9c-2 |
 | P9c-2 | 已驗收 | Rules 追溯與 rules URL 載入安全 | 後續只保留小修 |
-| P10 | 下一個主線 | 報告判讀、人工複核分類、交辦友善欄位與頁內品質提醒 | 完成後進入正式版 release gate |
+| P10 | 進行中 | 報告判讀、人工複核分類、交辦友善欄位與 GUI / Analyzer 語言同步 | P10c 收尾後進入正式版 release gate；P10d optional |
 | P11 | Release gate | 發布前 hardening、portable package、manifest、checksum、smoke test、文件與版本檢查 | P10 驗收後執行 |
 
 ## 已完成里程碑索引
@@ -268,7 +296,7 @@ P10 完成後的正式版 release gate：
 | `report.json` streaming parser | P9b 已先用 NDJSON sidecar 與「載入更多」降低大型報告痛點；等真的常遇到瀏覽器無法載入再做 |
 | CLI sidecar 邊跑邊 append | 對承辦人價值不直接，且會牽涉 partial output、manifest 一致性與中斷恢復 |
 | GUI rules URL 表單 | rules URL 安全基線已補齊，但 GUI 欄位仍需獨立 UX、錯誤訊息與承辦人操作負擔評估 |
-| 複雜 profile presets | 先用少量 GUI 一鍵模式；避免承辦人需要理解過多技術 profile |
+| 複雜技術型 profile presets | 已採少量 GUI 掃描模式；避免承辦人需要理解過多技術 profile |
 | Next.js `__NEXT_DATA__` 專用 parser | 保持 opt-in / rules-driven，不把站台特定邏輯硬寫回 crawler |
 | Headless render 預設化 | 成本高、容易觸發 bot protection，只能作進階 fallback |
 | 常駐 scheduler / 平台化監控 | 偏離本地輔助工具定位，也可能與機關既有工具重疊 |
@@ -322,7 +350,7 @@ P10 完成後的正式版 release gate：
 | body / source limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes`、`--max-sources-per-url` | P6.5a | 已完成 |
 | rules governance | `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json` | P9c | P9c-1 已完成 |
 | rules tracing | root `rulesTrace`、fingerprint、source metadata、load warnings、rules URL 安全載入 | P9c-2 | 已完成第一版 |
-| report interpretation | 人工複核分類、頁內跳轉失效、交辦友善欄位 | P10 | 下一步 |
+| report interpretation | 人工複核分類、交辦友善欄位、GUI / Analyzer 判讀語言同步；頁內跳轉失效 optional | P10 | P10c 收尾 |
 | release | package manifest、Node runtime version、smoke test、dependency audit、license summary、SBOM、checksum / signing | P11 / release gate | P10 後執行 |
 
 ## 參考文件
