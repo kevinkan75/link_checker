@@ -130,6 +130,8 @@ CLI 適合自動化、進階參數、規則檔與技術診斷。
 
 CLI 使用 `--output <file>` 時會輸出指定的完整 JSON report，並在同目錄建立 `manifest.json`；目前沒有獨立的 CSV / summary 轉換指令，需要這些檔案時請使用 GUI 自動保存。
 
+大型報告的 NDJSON sidecar 仍屬 P9b 規劃，尚未是目前輸出功能。採納方向是未來 GUI log artifacts 會新增 `checked.ndjson`、`broken.ndjson` 與 `external-links.ndjson` 作為輔助格式，但 `report.json` 仍是正式完整報告。
+
 ## 結果判讀
 
 注意：工具回報的問題連結不一定都代表連結已失效。例如 `403`、防護阻擋、逾時或 `429`，可能與網站權限、防護政策或請求頻率有關，建議再以瀏覽器人工確認。

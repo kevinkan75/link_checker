@@ -7,7 +7,7 @@
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)：架構、掃描流程、資料模型、report schema、GUI API 與可重用設計點。
 - [CLI_REFERENCE.md](CLI_REFERENCE.md)：完整 CLI 參數、規則檔格式、Report diff 與進階用法。
 - [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：P6 report-to-report diff 的 normalization 原則。
-- [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 改善的實作前評估、分階段建議與 P9a 驗收標準。
+- [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 改善的實作前評估、P9a 驗收紀錄、P9b consolidated decision 與後續分階段建議。
 - [archive/GUI_USABILITY_ASSESSMENT.md](archive/GUI_USABILITY_ASSESSMENT.md)：GUI 易用性第一優先評估與執行紀錄。
 - [archive/RELEASE_SECURITY_ASSESSMENT.md](archive/RELEASE_SECURITY_ASSESSMENT.md)：`.cmd` / portable `.exe` 降低防毒與 SmartScreen 警戒的 release security 評估。
 - [archive/DOCUMENTATION_IMPROVEMENT_RECORD.md](archive/DOCUMENTATION_IMPROVEMENT_RECORD.md)：README / ROADMAP 易讀性與一致性建議採納紀錄。
@@ -34,5 +34,5 @@
 - P6.5b-1 到 P6.5b-5 已完成，包含 SSRF / URL security policy、partial report、robots / compliance、Retry-After / host diagnostics 與 WAF schema 收斂。
 - P7 TTL URL result cache 已完成第一版與發布收尾，實作前評估記錄於 `archive/P7_CACHE_EVALUATION.md`，發布驗收記錄於 `archive/P7_RELEASE_CLOSURE.md`。
 - P8 incremental scan 第一版已完成主要功能、呈現收尾與 main 合併，分析與驗收紀錄於 `archive/P8_INCREMENTAL_SCAN_ANALYSIS.md`。
-- P9 已完成 GUI / Analyzer 實作前評估；`P9a-1：修正主 GUI 進度語意`、`P9a-2：改善空狀態與第一屏`、`P9a-3：修正手機版可讀性` 與 `P9a-4：匯入型頁面流程化` 已完成第一版並於 2026-07-17 驗收通過。
-- P9b 大型 report / NDJSON 輔助輸出已完成實作前評估；已採納 `report.json` 維持主契約、NDJSON 作為大型報告輔助輸出，建議先做 P9b-1 NDJSON 輔助輸出與 GUI complete payload 瘦身。
+- P9 已完成 GUI / Analyzer 實作前評估；`P9a-1：修正主 GUI 進度語意`、`P9a-2：改善空狀態與第一屏`、`P9a-3：修正手機版可讀性` 與 `P9a-4：匯入型頁面流程化` 已完成第一版並於 2026-07-17 驗收通過。P9a 不再是下一個實作起點。
+- P9b 大型 report / NDJSON 輔助輸出已完成實作前評估與合併決策；下一步是 P9b-1：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，並讓 GUI SSE complete event 不再傳完整 report。第一版採完成後從 `report.json` 派生 sidecar，不先做掃描核心重寫、完整 streaming parser 或 CLI sidecar。

@@ -12,7 +12,11 @@ P9 可以開始，但應分階段實作：
 2. P9b：大型 report / NDJSON 輔助輸出。
 3. P9c：Profile、Rules Schema 與 Next.js Payload。
 
-P9a 應先做，因為風險最低、使用者最有感，而且可以只動呈現層。P9b 會牽涉 Analyzer 載入策略與輔助輸出格式；P9c 會牽涉 CLI 參數、規則治理、payload extraction 與 report 欄位追溯，風險最高，應放在後段。
+目前狀態：P9a 已於 2026-07-17 驗收通過；下一個實作起點是 P9b-1。下方 P9a 分析保留作為歷史決策與驗收脈絡，不代表 P9a-1 仍是下一步。
+
+P9b-1 的最終採納方向是：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，並讓 GUI SSE complete event 不再傳完整 report。第一版採完成後從 `report.json` 派生 sidecar，不先重寫掃描核心、不先做完整 streaming parser、不先設計 CLI sidecar。
+
+P9a 當時應先做，因為風險最低、使用者最有感，而且可以只動呈現層。P9b 會牽涉 Analyzer 載入策略與輔助輸出格式；P9c 會牽涉 CLI 參數、規則治理、payload extraction 與 report 欄位追溯，風險最高，應放在後段。
 
 ## P9a 優先實作
 
@@ -197,6 +201,101 @@ JSON 與 NDJSON 分工：
 3. P9b 不優先投入完整 streaming JSON parser；若後續仍需要讀超大 `report.json`，應另開小步驟評估。
 4. Analyzer 的大型檔支援應先走「提示、保護、分頁、NDJSON 匯入」，再考慮更複雜的 JSON streaming parser。
 
+### 2026-07-18 P9b focused re-analysis
+
+目前程式碼顯示 P9b 的主要風險集中在三個位置：
+
+1. 掃描核心：`LinkChecker.buildReport()` 仍在結束時一次組出 `checked[]`、`broken[]`、`externalLinks[]`，所以第一版 P9b 不應承諾「真正邊跑邊寫」來降低 Node 端記憶體。較穩的第一步是完成後從正式 report 派生 sidecar，先固定輸出契約。
+2. GUI server：`saveJobArtifacts()` 只保存 JSON / CSV / log / manifest；`buildCompletePayload()` 仍把完整 `job.report` 放進 SSE complete event。大型掃描最大的前端卡頓點在這裡，因為 complete event 會先 JSON.stringify 完整 report，再讓瀏覽器 JSON.parse 與 render。
+3. Analyzer：Report Analyzer 與 External Link Analyzer 都使用 `file.text()` + `JSON.parse()` / CSV parse 全量讀入；列表雖有顯示上限，但載入與分析階段仍是全量記憶體操作。
+
+因此 P9b 重新切分如下：
+
+#### P9b-1：sidecar artifacts 與 complete payload 瘦身
+
+第一版建議採用「完成後派生 NDJSON」：
+
+- GUI log 目錄新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`。
+- 每行是一筆已 redacted 的 report item，直接來自 `report.checked`、`report.broken`、`report.externalLinks`。
+- `manifest.json` 的 `generatedFiles` 加入三個 NDJSON sidecar，`summary.json.reportFiles` 也加入對應路徑。
+- `README.txt` 說明 NDJSON 是大型報告輔助輸出，`report.json` 仍是正式完整報告。
+- GUI SSE complete event 改成輕量 payload，只回傳 `state`、`summary`、`reportFiles`、`manifest` 或 `manifestPath`、`logRelativePath`、`reportUrl`、`logError`，不直接放完整 `report`。
+- 主 GUI 需要在 complete 後先顯示 summary；使用者按下載時再走既有 `/api/jobs/:id/report` 或 log artifact，而不是從 `currentReport` 重新 stringify。
+
+P9b-1 不必先改 CLI `--output`。CLI 目前只寫指定 `report.json` 與 `manifest.json`，沒有 log artifact 目錄；若要 CLI 也輸出 NDJSON，建議另開 `--output-dir` 或 `--sidecar-output` 設計，不要塞進 P9b-1 第一刀。
+
+P9b-1 驗收標準：
+
+- GUI 掃描完成時，SSE complete event 不包含 `report.checked`、`report.broken`、`report.externalLinks`。
+- GUI log 目錄包含 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`。
+- NDJSON 行數分別等於 report 的 `checked.length`、`broken.length`、`externalLinks.length`。
+- `manifest.json` 與 `summary.json.reportFiles` 能找到所有新 sidecar。
+- 主 GUI 完成後仍能顯示總覽、壞連結數、log 位置，並仍能下載完整 report。
+- 不改 `report.json` schema、不改掃描分類語意、不改 exit code。
+
+#### P9b-2：Analyzer 大檔保護
+
+第二步先保護載入體驗，不急著做 NDJSON 匯入：
+
+- Report Analyzer 選到過大的 `report.json` 時，先顯示檔案大小提示與載入中狀態。
+- 若檔案超過保守門檻，提示使用 `broken.csv` / `external-links.csv` / NDJSON sidecar。
+- External Link Analyzer 同樣在 JSON / CSV 載入前提示檔案大小與可能耗時。
+- 錯誤訊息需區分「格式錯誤」與「檔案太大或瀏覽器無法處理」。
+
+#### P9b-3：前端列表分頁 / 載入更多
+
+第三步處理渲染成本：
+
+- Report Analyzer 壞連結清單從固定前 800 筆改為「初始 200 筆 + 載入更多」。
+- External Link Analyzer 外連明細從固定前 500 筆改為「初始 200 筆 + 載入更多」。
+- 排序與篩選可以仍在記憶體完成；此步目標是避免一次建立大量 DOM。
+
+#### P9b-4：NDJSON 匯入
+
+第四步再讓 Analyzer 能直接吃 sidecar：
+
+- Report Analyzer 先支援 `broken.ndjson`，並以 summary / manifest 補足總覽；若沒有 summary，至少能顯示壞連結清單與分類。
+- External Link Analyzer 支援 `external-links.ndjson`。
+- `checked.ndjson` 第一版不必直接匯入 UI，除非要做完整檢查結果瀏覽器。
+
+#### 延後項目
+
+- 真正掃描過程中 append NDJSON。
+- 完整 `report.json` streaming parser。
+- CLI sidecar 輸出設計。
+- 以 IndexedDB 或 Web Worker 重做 Analyzer 資料層。
+
+重新結論：P9b-1 的價值不只是產生 NDJSON，而是把「掃描完成瞬間」從大 payload 變成小 payload。若只新增 sidecar、但 complete event 仍回傳完整 report，P9b 的主要風險仍未解除。
+
+### 2026-07-18 P9b consolidated decision
+
+綜合前後兩次 P9b 分析後，最佳效益不是推翻舊結論，而是把舊結論的完整方向與新結論的低風險落地方式合併。
+
+舊結論的長處：
+
+- 清楚指出 P9b 需要處理大型報告、NDJSON 輔助輸出、Analyzer 保護、列表分頁與 NDJSON 匯入。
+- 保持 `report.json` 是正式主契約，不讓 NDJSON 取代既有格式。
+- 及早把 streaming parser 排除在第一優先之外，避免過度實作。
+
+新結論的長處：
+
+- 更精準地指出最大痛點是 GUI 掃描完成瞬間仍透過 SSE complete event 傳送完整 report。
+- 明確收斂第一版 NDJSON 為「完成後從 `report.json` 派生 sidecar」，不承諾一開始就邊跑邊 append。
+- 把 Analyzer 大檔保護與列表分頁排在 NDJSON 匯入之前，先降低使用者可感知的卡頓與失敗風險。
+- 明確延後 CLI sidecar、完整 `report.json` streaming parser 與 Analyzer 資料層重做。
+
+採納的合併路線：
+
+1. 先不重寫掃描核心。
+2. 先不做完整 streaming parser。
+3. 先不急著設計 CLI sidecar。
+4. 先讓 GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`。
+5. 同步讓 GUI SSE complete event 不再傳完整 `report`，改傳 summary / manifest / reportFiles / log path / reportUrl 等輕量資訊。
+6. 接著補 Analyzer 大檔保護與列表分頁。
+7. 最後才加入 `broken.ndjson` 與 `external-links.ndjson` 匯入支援。
+
+最終決策：P9b 的最高效益第一刀是 **P9b-1：GUI log artifacts 新增 NDJSON sidecar，並讓 SSE complete event 不再傳完整 report**。這一步同時保留舊結論的方向完整性，也採用新結論的保守落地方式；能最大幅降低大型掃描完成時的前端卡頓風險，且不改 `report.json` schema、不改掃描語意、不改 CLI exit code。
+
 ## P9c 邊界
 
 P9c 目標是建立 profile、rules schema 與 Next.js payload 支援。
@@ -238,6 +337,32 @@ P9a 第一版驗收通過：
 - 本機頁面載入驗證通過：`/`、`/analyzer.html`、`/report-analyzer.html` 均回應 `200`。
 - 未修改掃描語意，未修改 `report.json` 主契約。
 
+## 2026-07-18 P9 重新分析
+
+### 目前狀態
+
+P9a 已完成且仍可視為通過。主 GUI 已改用 URL 檢測進度作為主要進度，頁面探索只作輔助資訊；External Link Analyzer 與 Report Analyzer 也已有匯入流程狀態與較清楚的空狀態。這部分不需要重新打開，除非後續 P9b 改動導致 GUI 完成事件或報告載入流程變動。
+
+P9b 尚未實作。現有 GUI / CLI 仍以完成後一次建立完整 `report.json` 為主契約，GUI log 目錄會寫出 `summary.json`、`report.json`、`broken.csv`、`external-links.csv`、`external-summary.json`、`events.log`、`manifest.json`。技術規格已記錄 P9b 方向，但程式碼尚未產生 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`。此外，GUI complete event 目前仍回傳完整 `report`，大型掃描完成瞬間仍可能造成前端記憶體與渲染壓力。
+
+P9c 部分已有前置能力，但未完整交付。CLI 已支援 `--domain-rules`、`--external-risk-rules`、`--site-link-rules`，掃描報告也會記錄這些 rules source；SPA 偵測可辨識 `__NEXT_DATA__` signal，實際抽取仍主要依 inline script URL/path literal 與 site-link-rules，不是完整的 Next.js payload parser。`schemas/` 目前只有 `report.schema.json` 與 `diff.schema.json`，尚未建立 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。也尚未看到 `normal`、`government-conservative`、`large-site`、`spa`、`external-governance` 這類 profile 的正式資料模型、CLI 入口或 `profileExpandedOptions` / `rulesVersion` 追溯欄位。
+
+### 重新排序
+
+1. P9b-1：新增 NDJSON sidecar 輸出，並同步瘦身 GUI complete payload。
+2. P9b-2：為大型報告加入前端保護，例如檔案大小提示、載入狀態與更清楚的錯誤訊息。
+3. P9b-3：為 Report Analyzer / External Link Analyzer 加入列表分頁或載入更多，降低一次建立大量 DOM 的成本。
+4. P9b-4：讓 Report Analyzer / External Link Analyzer 可載入 NDJSON sidecar，至少先支援 `broken.ndjson` 與 `external-links.ndjson`。
+5. P9c-1：補 rules schema 檔與驗證測試，先固定 `domain-rules`、`external-risk-rules`、`site-link-rules` 契約。
+6. P9c-2：再做 profiles 與 report 追溯欄位，避免在 schema 還未固定時擴大設定面。
+7. P9c-3：評估 Next.js `__NEXT_DATA__` 專用 parser；若只靠 URL/path literal 已足夠，先不要把它升成 P9c 必做。
+
+### 重新結論
+
+P9 的下一個實作點不是繼續修 UI，而是 P9b-1。原因是 P9a 已解決主要可用性問題，現在最大的風險是大型掃描輸出仍集中在完成瞬間產生與傳送完整 `report.json`。NDJSON sidecar 應是輔助輸出，不取代 `report.json`；但 GUI complete event 必須改成輕量 payload，前端需要改由 log path / manifest / summary 引導使用者下載或載入完整報告。
+
+P9c 應排在 P9b 基礎輸出之後。現有 rules 與 SPA 能力可以支撐目前掃描，但缺少 schema、profile 與追溯欄位，若太早加 GUI profile 設定，容易造成報告契約反覆變動。
+
 ## 建議分支
 
 P9 建議從新分支開始：
@@ -249,5 +374,5 @@ codex/p9-gui-analyzer-improvements
 第一個實作項目建議為：
 
 ```text
-P9a-1：修正主 GUI 進度語意
+P9b-1：新增 NDJSON sidecar 輸出並瘦身 GUI complete payload
 ```
