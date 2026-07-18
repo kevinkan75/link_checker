@@ -19,6 +19,7 @@ const DEFAULT_MAX_HTML_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_BODY_PREVIEW_BYTES = 4096;
 const DEFAULT_MAX_DOWNLOAD_PROBE_BYTES = 64 * 1024;
 const DEFAULT_MAX_SOURCES_PER_URL = 50;
+const DEFAULT_MAX_RULES_BYTES = 5 * 1024 * 1024;
 const DEFAULT_KEEP_ALIVE_MSECS = 1000;
 const DEFAULT_RETRY_AFTER_MAX_MS = 30000;
 const DEFAULT_CACHE_FILE = ".cache/link-check-cache.json";
@@ -28,6 +29,7 @@ const CACHE_POLICY_VERSION = "p7-cache-policy-v1";
 const DEFAULT_INCREMENTAL_STATE_FILE = ".cache/link-check-state.json";
 const INCREMENTAL_STATE_SCHEMA_VERSION = "1.0.0";
 const INCREMENTAL_POLICY_VERSION = "p8-incremental-policy-v1";
+const RULES_TRACE_SCHEMA_VERSION = "rules-trace.p9c2";
 const DEFAULT_SITEMAP_MAX_URLS = 50000;
 const DEFAULT_SITEMAP_INDEX_MAX_CHILDREN = 20;
 const DEFAULT_SITEMAP_SAMPLE_URLS = 5;
@@ -139,6 +141,7 @@ const DEFAULTS = {
   maxBodyPreviewBytes: DEFAULT_MAX_BODY_PREVIEW_BYTES,
   maxDownloadProbeBytes: DEFAULT_MAX_DOWNLOAD_PROBE_BYTES,
   maxSourcesPerUrl: DEFAULT_MAX_SOURCES_PER_URL,
+  maxRulesBytes: DEFAULT_MAX_RULES_BYTES,
   keepAlive: true,
   keepAliveMsecs: DEFAULT_KEEP_ALIVE_MSECS,
   cache: false,
@@ -549,6 +552,7 @@ class LinkChecker {
     this.options.maxBodyPreviewBytes = normalizeByteLimit(this.options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
     this.options.maxDownloadProbeBytes = normalizeByteLimit(this.options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
     this.options.maxSourcesPerUrl = normalizeIntegerLimit(this.options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+    this.options.maxRulesBytes = normalizeByteLimit(this.options.maxRulesBytes, DEFAULTS.maxRulesBytes);
     this.options.cache = this.options.cache === true;
     this.options.cacheFile = normalizeCacheFile(this.options.cacheFile);
     this.options.cacheTtlHours = normalizeCacheTtlHours(this.options.cacheTtlHours);
@@ -653,12 +657,29 @@ class LinkChecker {
     };
     this.spaDetections = [];
     this.retryAfterEvents = [];
+    const customDomainCategoryRules = normalizeDomainCategoryRules(options.domainCategoryRules || []);
+    const customExternalRiskRules = normalizeExternalRiskRules(options.externalRiskRules || []);
+    const customSiteLinkRules = normalizeSiteLinkRules(options.siteLinkRules || {});
     this.domainCategoryRules = [
       ...EXTERNAL_CATEGORY_RULES,
-      ...normalizeDomainCategoryRules(options.domainCategoryRules || []),
+      ...customDomainCategoryRules,
     ];
-    this.externalRiskRules = normalizeExternalRiskRules(options.externalRiskRules || []);
-    this.siteLinkRules = normalizeSiteLinkRules(options.siteLinkRules || {});
+    this.externalRiskRules = customExternalRiskRules;
+    this.siteLinkRules = customSiteLinkRules;
+    this.rulesTrace = normalizeRulesTrace(options.rulesTrace, {
+      domainCategoryRules: buildInlineRulesTraceEntry({
+        source: this.options.domainCategoryRulesSource,
+        ruleCount: customDomainCategoryRules.length,
+      }),
+      externalRiskRules: buildInlineRulesTraceEntry({
+        source: this.options.externalRiskRulesSource,
+        ruleCount: customExternalRiskRules.length,
+      }),
+      siteLinkRules: buildInlineRulesTraceEntry({
+        source: this.options.siteLinkRulesSource,
+        ruleCount: countSiteLinkRules(customSiteLinkRules),
+      }),
+    });
     this.skippedExternal = 0;
     this.reporter = options.reporter || null;
     this.currentPages = new Map();
@@ -2198,6 +2219,7 @@ class LinkChecker {
       completedAt: runStatus.completedAt,
       runStatus,
       startUrl: this.startUrl,
+      rulesTrace: this.rulesTrace,
       options: {
         maxPages: this.options.maxPages,
         maxDepth: this.options.maxDepth,
@@ -2234,6 +2256,7 @@ class LinkChecker {
         maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
         maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
         maxSourcesPerUrl: this.options.maxSourcesPerUrl,
+        maxRulesBytes: this.options.maxRulesBytes,
         blockPrivateIp: this.options.blockPrivateIp,
         allowLocalhost: this.options.allowLocalhost,
         allowPrivateIp: this.options.allowPrivateIp,
@@ -6809,6 +6832,86 @@ function hasSiteLinkRules(value = {}) {
   );
 }
 
+function countSiteLinkRules(value = {}) {
+  return (value.fields?.externalUrl?.length || 0)
+    + (value.fields?.youtubeId?.length || 0)
+    + (value.fields?.routePath?.length || 0)
+    + (value.routeMappings?.length || 0);
+}
+
+function normalizeRulesTrace(value, fallback = {}) {
+  const trace = isPlainObject(value) ? value : {};
+  return {
+    schemaVersion: String(trace.schemaVersion || RULES_TRACE_SCHEMA_VERSION),
+    domainCategoryRules: normalizeRulesTraceEntry(trace.domainCategoryRules || fallback.domainCategoryRules),
+    externalRiskRules: normalizeRulesTraceEntry(trace.externalRiskRules || fallback.externalRiskRules),
+    siteLinkRules: normalizeRulesTraceEntry(trace.siteLinkRules || fallback.siteLinkRules),
+  };
+}
+
+function normalizeRulesTraceEntry(value = {}) {
+  const entry = isPlainObject(value) ? value : {};
+  return {
+    enabled: entry.enabled === true,
+    sourceType: entry.sourceType || null,
+    source: entry.source || null,
+    finalUrl: entry.finalUrl || null,
+    loadedAt: entry.loadedAt || null,
+    rulesVersion: entry.rulesVersion || null,
+    fingerprint: entry.fingerprint || null,
+    byteSize: Number.isInteger(entry.byteSize) ? entry.byteSize : null,
+    ruleCount: Number.isInteger(entry.ruleCount) ? entry.ruleCount : 0,
+    redirectCount: Number.isInteger(entry.redirectCount) ? entry.redirectCount : 0,
+    warnings: Array.isArray(entry.warnings) ? entry.warnings.map(String) : [],
+  };
+}
+
+function buildInlineRulesTraceEntry({ source = null, ruleCount = 0 } = {}) {
+  const enabled = Boolean(source) || ruleCount > 0;
+  return normalizeRulesTraceEntry({
+    enabled,
+    sourceType: source ? getRulesSourceType(source) : (ruleCount > 0 ? "inline" : null),
+    source: source || (ruleCount > 0 ? "inline" : null),
+    ruleCount,
+  });
+}
+
+function getRulesSourceType(source) {
+  if (!source) {
+    return null;
+  }
+  return /^https?:\/\//i.test(String(source)) ? "url" : "file";
+}
+
+function extractRulesVersion(parsed) {
+  if (!isPlainObject(parsed)) {
+    return null;
+  }
+  return parsed.schemaVersion || parsed.rulesVersion || parsed.version || null;
+}
+
+function buildLoadedRulesTraceEntry({
+  source,
+  loaded,
+  parsed,
+  ruleCount,
+  warnings = [],
+}) {
+  return normalizeRulesTraceEntry({
+    enabled: true,
+    sourceType: loaded.sourceType,
+    source,
+    finalUrl: loaded.finalUrl || null,
+    loadedAt: loaded.loadedAt,
+    rulesVersion: extractRulesVersion(parsed),
+    fingerprint: loaded.fingerprint,
+    byteSize: loaded.byteSize,
+    ruleCount,
+    redirectCount: loaded.redirectCount || 0,
+    warnings: [...(loaded.warnings || []), ...warnings],
+  });
+}
+
 function classifyLinkType(link, extension) {
   if (isPayloadLink(link)) {
     if (DOWNLOAD_EXTENSIONS.has(extension)) {
@@ -7860,21 +7963,25 @@ function parseArgs(argv) {
   options.maxBodyPreviewBytes = normalizeByteLimit(options.maxBodyPreviewBytes, DEFAULTS.maxBodyPreviewBytes);
   options.maxDownloadProbeBytes = normalizeByteLimit(options.maxDownloadProbeBytes, DEFAULTS.maxDownloadProbeBytes);
   options.maxSourcesPerUrl = normalizeIntegerLimit(options.maxSourcesPerUrl, DEFAULTS.maxSourcesPerUrl);
+  options.maxRulesBytes = normalizeByteLimit(options.maxRulesBytes, DEFAULTS.maxRulesBytes);
   Object.assign(options, normalizeSecurityPolicy(options));
   Object.assign(options, normalizeComplianceOptions(options));
   Object.assign(options, normalizeConnectionOptions(options));
   return { startUrl, options, output, json, progress, verbose, domainRulesSource, externalRiskRulesSource, siteLinkRulesSource };
 }
 
-async function loadDomainCategoryRules(source) {
+async function loadDomainCategoryRules(source, options = DEFAULTS) {
   if (!source) {
-    return [];
+    return {
+      rules: [],
+      trace: buildInlineRulesTraceEntry(),
+    };
   }
 
-  const text = await readRulesText(source, "--domain-rules");
+  const loaded = await readRulesText(source, "--domain-rules", options);
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(loaded.text);
   } catch {
     throw new Error("--domain-rules must point to JSON");
   }
@@ -7884,21 +7991,33 @@ async function loadDomainCategoryRules(source) {
   if (normalized.length === 0) {
     throw new Error("--domain-rules did not contain any valid rules");
   }
-  return normalized.map((rule) => ({
+  const rulesWithSource = normalized.map((rule) => ({
     ...rule,
     source,
   }));
+  return {
+    rules: rulesWithSource,
+    trace: buildLoadedRulesTraceEntry({
+      source,
+      loaded,
+      parsed,
+      ruleCount: rulesWithSource.length,
+    }),
+  };
 }
 
-async function loadExternalRiskRules(source) {
+async function loadExternalRiskRules(source, options = DEFAULTS) {
   if (!source) {
-    return [];
+    return {
+      rules: [],
+      trace: buildInlineRulesTraceEntry(),
+    };
   }
 
-  const text = await readRulesText(source, "--external-risk-rules");
+  const loaded = await readRulesText(source, "--external-risk-rules", options);
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(loaded.text);
   } catch {
     throw new Error("--external-risk-rules must point to JSON");
   }
@@ -7907,18 +8026,29 @@ async function loadExternalRiskRules(source) {
   if (normalized.length === 0) {
     throw new Error("--external-risk-rules did not contain any valid rules");
   }
-  return normalized;
+  return {
+    rules: normalized,
+    trace: buildLoadedRulesTraceEntry({
+      source,
+      loaded,
+      parsed,
+      ruleCount: normalized.length,
+    }),
+  };
 }
 
-async function loadSiteLinkRules(source) {
+async function loadSiteLinkRules(source, options = DEFAULTS) {
   if (!source) {
-    return normalizeSiteLinkRules({});
+    return {
+      rules: normalizeSiteLinkRules({}),
+      trace: buildInlineRulesTraceEntry(),
+    };
   }
 
-  const text = await readRulesText(source, "--site-link-rules");
+  const loaded = await readRulesText(source, "--site-link-rules", options);
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(loaded.text);
   } catch {
     throw new Error("--site-link-rules must point to JSON");
   }
@@ -7927,24 +8057,175 @@ async function loadSiteLinkRules(source) {
   if (!hasSiteLinkRules(normalized)) {
     throw new Error("--site-link-rules did not contain any valid rules");
   }
-  return normalized;
+  return {
+    rules: normalized,
+    trace: buildLoadedRulesTraceEntry({
+      source,
+      loaded,
+      parsed,
+      ruleCount: countSiteLinkRules(normalized),
+    }),
+  };
 }
 
-async function readRulesText(source, optionName) {
+async function readRulesText(source, optionName, options = DEFAULTS) {
   if (/^https?:\/\//i.test(source)) {
-    const response = await fetch(source, {
+    return readRulesUrlText(source, optionName, options);
+  }
+
+  const text = await readFile(source, "utf8");
+  return {
+    text,
+    sourceType: "file",
+    finalUrl: null,
+    loadedAt: new Date().toISOString(),
+    fingerprint: hashLabel(text),
+    byteSize: Buffer.byteLength(text, "utf8"),
+    redirectCount: 0,
+    warnings: [],
+  };
+}
+
+async function readRulesUrlText(source, optionName, options = DEFAULTS) {
+  const securityPolicy = normalizeSecurityPolicy(options);
+  const timeoutMs = Number.parseInt(options.timeoutMs ?? DEFAULTS.timeoutMs, 10) || DEFAULTS.timeoutMs;
+  const maxRedirects = normalizeIntegerLimit(options.maxRedirects, DEFAULTS.maxRedirects);
+  const maxRulesBytes = normalizeByteLimit(options.maxRulesBytes, DEFAULTS.maxRulesBytes);
+  let currentUrl = source;
+  const redirectChain = [];
+  const seenUrls = new Set([normalizeRedirectVisitUrl(currentUrl)]);
+
+  while (true) {
+    const securityCheck = await evaluateUrlSecurity(currentUrl, securityPolicy);
+    if (!securityCheck.allowed) {
+      throw new Error(`Unable to load ${optionName} URL: blocked by security policy (${securityCheck.reason || "blocked"})`);
+    }
+
+    const response = await fetchRulesUrl(currentUrl, { timeoutMs, userAgent: options.userAgent || DEFAULTS.userAgent });
+    if (isRedirectStatus(response.status)) {
+      const location = response.headers.get("location");
+      if (!location) {
+        await cancelResponseBody(response);
+        throw new Error(`Unable to load ${optionName} URL: redirect without Location`);
+      }
+
+      const nextUrl = new URL(location, currentUrl).toString();
+      redirectChain.push({
+        from: currentUrl,
+        status: response.status,
+        to: nextUrl,
+      });
+      await cancelResponseBody(response);
+
+      const redirectSecurityCheck = await evaluateUrlSecurity(nextUrl, securityPolicy);
+      if (!redirectSecurityCheck.allowed) {
+        throw new Error(`Unable to load ${optionName} URL: redirect blocked by security policy (${redirectSecurityCheck.reason || "blocked"})`);
+      }
+      if (redirectChain.length > maxRedirects) {
+        throw new Error(`Unable to load ${optionName} URL: too many redirects after ${maxRedirects} redirects`);
+      }
+
+      const visitUrl = normalizeRedirectVisitUrl(nextUrl);
+      if (seenUrls.has(visitUrl)) {
+        throw new Error(`Unable to load ${optionName} URL: redirect loop detected`);
+      }
+      seenUrls.add(visitUrl);
+      currentUrl = nextUrl;
+      continue;
+    }
+
+    if (!response.ok) {
+      await cancelResponseBody(response);
+      throw new Error(`Unable to load ${optionName} URL: HTTP ${response.status}`);
+    }
+
+    const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
+    if (Number.isFinite(contentLength) && contentLength > maxRulesBytes) {
+      await cancelResponseBody(response);
+      throw new Error(`Unable to load ${optionName} URL: content length exceeds ${maxRulesBytes} bytes`);
+    }
+
+    let body;
+    try {
+      body = await readResponseTextWithinLimit(response, maxRulesBytes);
+    } catch (error) {
+      throw new Error(`Unable to load ${optionName} URL: ${error.message}`);
+    }
+    const { text, byteSize } = body;
+    const warnings = [];
+    if (redirectChain.length > 0) {
+      warnings.push("rules_url_redirected");
+    }
+    return {
+      text,
+      sourceType: "url",
+      finalUrl: currentUrl,
+      loadedAt: new Date().toISOString(),
+      fingerprint: hashLabel(text),
+      byteSize,
+      redirectCount: redirectChain.length,
+      warnings,
+    };
+  }
+}
+
+async function fetchRulesUrl(url, { timeoutMs, userAgent }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
       headers: {
-        "user-agent": DEFAULTS.userAgent,
+        "user-agent": userAgent,
         "accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
       },
     });
-    if (!response.ok) {
-      throw new Error(`Unable to load ${optionName} URL: HTTP ${response.status}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readResponseTextWithinLimit(response, maxBytes) {
+  const limit = Math.max(0, Number.isFinite(maxBytes) ? Math.floor(maxBytes) : DEFAULT_MAX_RULES_BYTES);
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const text = await response.text();
+    const byteSize = Buffer.byteLength(text, "utf8");
+    if (byteSize > limit) {
+      throw new Error(`Rules body exceeds ${limit} bytes`);
     }
-    return response.text();
+    return { text, byteSize };
   }
 
-  return readFile(source, "utf8");
+  const chunks = [];
+  let byteSize = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    const chunk = Buffer.from(value);
+    byteSize += chunk.length;
+    if (byteSize > limit) {
+      await reader.cancel();
+      throw new Error(`Rules body exceeds ${limit} bytes`);
+    }
+    chunks.push(chunk);
+  }
+  return {
+    text: Buffer.concat(chunks).toString("utf8"),
+    byteSize,
+  };
+}
+
+async function cancelResponseBody(response) {
+  try {
+    await response.body?.cancel?.();
+  } catch {
+    // Ignore body cancellation errors while preparing a clearer rules loading error.
+  }
 }
 
 function readPositiveInteger(value, name) {
@@ -8214,9 +8495,9 @@ async function main() {
     return;
   }
 
-  const domainCategoryRules = await loadDomainCategoryRules(parsed.domainRulesSource);
-  const externalRiskRules = await loadExternalRiskRules(parsed.externalRiskRulesSource);
-  const siteLinkRules = await loadSiteLinkRules(parsed.siteLinkRulesSource);
+  const domainCategoryRulesLoaded = await loadDomainCategoryRules(parsed.domainRulesSource, parsed.options);
+  const externalRiskRulesLoaded = await loadExternalRiskRules(parsed.externalRiskRulesSource, parsed.options);
+  const siteLinkRulesLoaded = await loadSiteLinkRules(parsed.siteLinkRulesSource, parsed.options);
 
   const reporter = parsed.json
     ? null
@@ -8227,12 +8508,17 @@ async function main() {
       });
   const checker = new LinkChecker(parsed.startUrl, {
     ...parsed.options,
-    domainCategoryRules,
+    domainCategoryRules: domainCategoryRulesLoaded.rules,
     domainCategoryRulesSource: parsed.domainRulesSource,
-    externalRiskRules,
+    externalRiskRules: externalRiskRulesLoaded.rules,
     externalRiskRulesSource: parsed.externalRiskRulesSource,
-    siteLinkRules,
+    siteLinkRules: siteLinkRulesLoaded.rules,
     siteLinkRulesSource: parsed.siteLinkRulesSource,
+    rulesTrace: {
+      domainCategoryRules: domainCategoryRulesLoaded.trace,
+      externalRiskRules: externalRiskRulesLoaded.trace,
+      siteLinkRules: siteLinkRulesLoaded.trace,
+    },
     reporter,
   });
   const report = await checker.run();

@@ -14,7 +14,8 @@
 - P9a 已於 2026-07-17 驗收通過；不要再把 P9a-1 當成下一個起點。
 - P9b-1 到 P9b-4 已完成第一版，包含 GUI log artifacts、NDJSON sidecar、GUI complete payload 瘦身、大檔提示、列表「載入更多」與 NDJSON 匯入。
 - P9c-1 Rules Schema 已完成第一版，包含 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json` 與 `test-p9c1-rules-schema.mjs`。
-- 目前下一個主線是 P9c-2：Rules 追溯欄位與 rules URL 載入安全化。
+- P9c-2 Rules 追溯欄位與 rules URL 載入安全化已完成第一版，包含 root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
+- 目前下一個主線改為 P10：報告判讀、人工複核分類、交辦友善欄位與整站檢測策略的小步強化。
 - P9c 的定位是補齊 rules 信任基線：讓報告可追溯、讓 URL rules 載入安全；不是建立複雜規則平台，也不是重構 crawler。
 - 產品定位已校準為本地端、低門檻、輔助型工具，主要提供政府機關承辦人員使用，不取代 CMS、維運流程、稽核系統或正式監控平台。
 
@@ -34,22 +35,23 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 
 ### 1. P9c-2：Rules 追溯與載入安全
 
-**狀態：** 下一個實作主線  
+**狀態：** 已完成第一版  
 **目標：** 讓 report 能追溯使用了哪些 rules，並讓 rules URL 載入套用與主掃描一致的安全邊界。
 
 重新評估結論：
 
 - P9c-1 已解決「規則檔格式」問題；P9c-2 應聚焦「這次用了哪份規則」與「規則來源是否安全」。
 - 目前 report 只保存 rules source 字串，還不足以支援存查、複核與跨次比對。
-- 目前 rules URL 載入仍是直接取回文字，尚未套用主掃描已具備的 URL security policy、redirect 目標檢查與大小限制。
-- 因此 P9c-2 是信任基線修補，不是功能擴張；應小步新增 rules loader / metadata helper，不啟動 crawler 大重構。
+- P9c-2 已補上 root `rulesTrace`，讓 report 可保存規則來源、版本、fingerprint、byte size、rule count、loadedAt 與 warnings。
+- rules URL 載入已改為安全 loader，套用 URL security policy、redirect 目標檢查、timeout、content length / body size limit 與清楚錯誤訊息。
+- P9c-2 是信任基線修補，不是功能擴張；實作以 rules loader / metadata helper 為界，不啟動 crawler 大重構。
 
-建議交付：
+已交付：
 
-- report 新增 rules trace 欄位，例如 `rules` 或 `rulesTrace`。
+- report 新增 root `rulesTrace` 欄位。
 - 每類 rules 記錄是否啟用、source type、source path / URL、loadedAt、content hash / fingerprint、byte size、rule counts 與 load warnings。
 - rules URL 載入安全化：URL security policy、redirect 目標檢查、timeout、content length / body size limit、清楚錯誤訊息。
-- 回歸測試：local file rules metadata、rules URL blocked cases、rules fingerprint 穩定性、既有 P9c-1 schema regression。
+- 回歸測試：`test-p9c2-rules-trace.mjs`、local file rules metadata、rules URL blocked cases、rules fingerprint 穩定性、既有 P9c-1 schema regression。
 
 不納入：
 
@@ -68,7 +70,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 
 ### 2. 報告判讀與交辦友善
 
-**狀態：** P9c-2 後優先評估  
+**狀態：** 下一個主線  
 **目標：** 讓承辦人更容易判斷哪些要修、哪些要人工確認、哪些只是外站限制或已知轉址。
 
 建議交付：
@@ -79,7 +81,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 
 ### 3. 頁內連結品質檢查
 
-**狀態：** P9c-2 後優先評估  
+**狀態：** P10 內優先評估  
 **目標：** 借鏡 W3C Link Checker，補足一般 HTTP status 看不出的頁面內部連結問題。
 
 建議交付：
@@ -120,9 +122,9 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | P8 | 已完成第一版 | incremental scan、sitemap seed、changed-only result reuse | GUI state 管理延後 |
 | P9a | 已驗收 | GUI 易用性、手機可讀性、匯入流程 | 不再是下一個起點 |
 | P9b | 已完成第一版 | 大型報告處理、NDJSON sidecar、Analyzer 載入更多 | 不取代 `report.json` 主契約 |
-| P9c-1 | 已完成第一版 | Rules Schema | 下一步 P9c-2 |
-| P9c-2 | 下一個主線 | Rules 追溯與 rules URL 載入安全 | 優先實作 |
-| P10 | 待規劃 | 輔助型分級、人工複核、整站檢測策略小步強化 | P9c-2 後評估 |
+| P9c-1 | 已完成第一版 | Rules Schema | 已接續完成 P9c-2 |
+| P9c-2 | 已完成第一版 | Rules 追溯與 rules URL 載入安全 | 後續只保留小修 |
+| P10 | 下一個主線 | 輔助型分級、人工複核、整站檢測策略小步強化 | 優先評估 |
 | P11 | 後續評估 | 輔助格式、release / packaging governance | P10 後評估 |
 
 ## 已完成里程碑索引
@@ -148,7 +150,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | 完整重構 crawler | 目前核心行為穩定；只應在需要維護時小步抽出 rules loader、security policy、report builder 等邊界清楚的模組 |
 | `report.json` streaming parser | P9b 已先用 NDJSON sidecar 與「載入更多」降低大型報告痛點；等真的常遇到瀏覽器無法載入再做 |
 | CLI sidecar 邊跑邊 append | 對承辦人價值不直接，且會牽涉 partial output、manifest 一致性與中斷恢復 |
-| GUI rules URL 表單 | 需等 P9c-2 rules URL 載入安全化完成後再開放 |
+| GUI rules URL 表單 | rules URL 安全基線已補齊，但 GUI 欄位仍需獨立 UX、錯誤訊息與承辦人操作負擔評估 |
 | 複雜 profile presets | 先用少量 GUI 一鍵模式；避免承辦人需要理解過多技術 profile |
 | Next.js `__NEXT_DATA__` 專用 parser | 保持 opt-in / rules-driven，不把站台特定邏輯硬寫回 crawler |
 | Headless render 預設化 | 成本高、容易觸發 bot protection，只能作進階 fallback |
@@ -172,7 +174,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 - robots.txt、授權掃描與 compliance 只記錄工具行為與使用者宣告，不代表工具驗證授權。
 - 本機工具也需有安全邊界；預設不得請求 localhost、metadata IP、private IP 或 blocked scheme，除非明確開啟相容模式。
 - report、CSV 與 logs 應避免輸出敏感 query value。
-- rules URL 載入應補齊主掃描同等安全邊界，這是 P9c-2 的重要部分。
+- rules URL 載入已在 P9c-2 補齊主掃描同等安全邊界；後續若開放 GUI rules URL 表單，仍需重新檢視使用者提示與錯誤呈現。
 
 ### 輸出與版本
 
@@ -202,8 +204,8 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | redaction CLI | `--redact-sensitive-query`、`--no-redact-sensitive-query`、`--redact-query-keys <list>` | P6.5a | 已完成 |
 | body / source limit CLI | `--max-html-bytes`、`--max-body-preview-bytes`、`--max-download-probe-bytes`、`--max-sources-per-url` | P6.5a | 已完成 |
 | rules governance | `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json` | P9c | P9c-1 已完成 |
-| rules tracing | rules trace、fingerprint、source metadata、load warnings、rules URL 安全載入 | P9c-2 | 下一步 |
-| report interpretation | 人工複核分類、頁內跳轉失效、交辦友善欄位 | P10 | 待規劃 |
+| rules tracing | root `rulesTrace`、fingerprint、source metadata、load warnings、rules URL 安全載入 | P9c-2 | 已完成第一版 |
+| report interpretation | 人工複核分類、頁內跳轉失效、交辦友善欄位 | P10 | 下一步 |
 | release | package manifest、Node runtime version、smoke test、dependency audit、license summary、SBOM、checksum / signing | P11 | 後續評估 |
 
 ## 參考文件

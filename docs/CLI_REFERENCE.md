@@ -174,7 +174,9 @@ P9c-1 起，三種規則檔都有對應 schema 作為公開契約與測試依據
 | External risk rules | `schemas/external-risk-rules.schema.json` |
 | Site link rules | `schemas/site-link-rules.schema.json` |
 
-CLI 載入仍依既有 normalization 流程執行；schema 用來固定可支援格式，避免文件與實作分歧。
+CLI 載入仍依既有 normalization 流程執行；schema 用來固定可支援格式，避免文件與實作分歧。P9c-2 起，JSON report 會輸出 root `rulesTrace`，記錄三類 rules 是否啟用、來源、版本、fingerprint、byte size、rule count、載入時間與 warnings。
+
+若規則來源是 URL，載入時會套用 URL security policy、redirect 目標檢查、timeout、content length 與 body size limit。預設會阻擋 localhost、private IP、metadata IP 與不安全 redirect；GUI 目前仍不提供 rules URL 表單。
 
 ### Domain rules
 

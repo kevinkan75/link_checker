@@ -240,6 +240,7 @@ Report root：
   completedAt,
   runStatus,
   startUrl,
+  rulesTrace,
   options,
   scanPolicy,
   compliance,
@@ -259,6 +260,10 @@ P6.5b-3 起，scan report 會輸出 `summary.robotsTxt`、root `scanPolicy` 與 
 P6.5b-4 起，429 / 503 response 若帶 `Retry-After`，工具會解析秒數或 HTTP-date，並依 `retryAfterMaxMs` 設定 per-host cooldown；預設上限為 `30000` ms。cooldown 只套用到同一 host，不阻塞其他 host。`summary.hostDiagnostics` 會彙整各 host 的 403、429、protected、suspected WAF/Bot、Retry-After cooldown 與 block-rate warning，`report-diff.mjs` 也會比較 `summary.hostDiagnostics`。
 
 P6.5b-5 起，防護層診斷會收斂到 `checked[].protection` / `broken[].protection`，穩定保存 `provider`、`headerEvidence`、`bodySignatureRuleIds`、`blockedReason`、`blockedRuleId`、`suspectedWaf` 與 `suspectedBot`。`bodySignature` 預設只保存 rule id、title 與 sanitized snippet，不保存完整 body，也不預設保存 `bodyHash`；只有 CLI `--protection-body-hash` 或等效 options opt-in 時才輸出 SHA-256 `bodyHash`，且 `compliance.bodyHashEnabled=true`。WAF/Bot body signature 命中時，即使 HTTP status 是 404/410，也分類為 `protected`，避免被當成一般 missing link。
+
+P9c-2 起，report root 會輸出 `rulesTrace`。此欄位記錄 `domainCategoryRules`、`externalRiskRules`、`siteLinkRules` 是否啟用、source type、source path / URL、final URL、loadedAt、rulesVersion、fingerprint、byteSize、ruleCount、redirectCount 與 warnings。未啟用的 rules 也會輸出 `enabled=false`，方便存查與跨次複核。
+
+P9c-2 起，rules URL 載入使用專用安全 loader，不再直接 `fetch()`：載入前與每次 redirect 後都會套用 URL security policy，並檢查 timeout、content length、body size limit、redirect loop 與 max redirects。預設會阻擋 localhost、private IP、metadata IP 與不安全 redirect。
 
 ### 7.1 options
 

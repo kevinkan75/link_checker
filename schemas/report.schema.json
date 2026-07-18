@@ -53,6 +53,9 @@
     "startUrl": {
       "type": "string"
     },
+    "rulesTrace": {
+      "$ref": "#/$defs/rulesTrace"
+    },
     "options": {
       "$ref": "#/$defs/options"
     },
@@ -88,6 +91,44 @@
     }
   },
   "$defs": {
+    "rulesTrace": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schemaVersion": {
+          "type": "string"
+        },
+        "domainCategoryRules": {
+          "$ref": "#/$defs/rulesTraceEntry"
+        },
+        "externalRiskRules": {
+          "$ref": "#/$defs/rulesTraceEntry"
+        },
+        "siteLinkRules": {
+          "$ref": "#/$defs/rulesTraceEntry"
+        }
+      }
+    },
+    "rulesTraceEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "sourceType": { "type": ["string", "null"] },
+        "source": { "type": ["string", "null"] },
+        "finalUrl": { "type": ["string", "null"] },
+        "loadedAt": { "type": ["string", "null"] },
+        "rulesVersion": { "type": ["string", "null"] },
+        "fingerprint": { "type": ["string", "null"] },
+        "byteSize": { "type": ["integer", "null"] },
+        "ruleCount": { "type": "integer" },
+        "redirectCount": { "type": "integer" },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "options": {
       "type": "object",
       "additionalProperties": true,
@@ -132,6 +173,9 @@
           "$ref": "#/$defs/nonNegativeInteger"
         },
         "maxSourcesPerUrl": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "maxRulesBytes": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
         "keepAlive": {
