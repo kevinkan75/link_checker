@@ -41,16 +41,17 @@
 
           <details class="advanced-settings">
             <summary>
-              <span>進階設定</span>
-              <span id="advanced-summary" class="advanced-summary">100 頁 / 深度 2 / 併發 12 / 每 host 4 / 固定 500ms</span>
+              <span>掃描模式與進階設定</span>
+              <span id="advanced-summary" class="advanced-summary">100 頁 / 深度 2 / 併發 6 / 每 host 2 / 固定 1000ms</span>
             </summary>
             <div class="advanced-settings-body">
-              <div class="preset-row" aria-label="設定預設">
+              <div class="preset-row" aria-label="掃描模式">
+                <button type="button" class="active" data-preset="balanced">標準保守</button>
                 <button type="button" data-preset="fast">快速掃描</button>
-                <button type="button" data-preset="balanced">平衡</button>
-                <button type="button" data-preset="conservative">保守</button>
+                <button type="button" data-preset="conservative">更保守</button>
                 <button type="button" data-preset="defaults">還原預設</button>
               </div>
+              <p class="settings-note">一般網站建議使用標準保守；快速掃描較快，但較容易遇到 403、429 或逾時。</p>
 
               <p id="advanced-validation" class="validation-message" role="alert" hidden></p>
 
@@ -76,17 +77,17 @@
                 <div class="settings-grid">
                   <label>
                     <span class="field-label">全站總併發 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="全站總併發說明" aria-describedby="help-concurrency" data-help-trigger>?</span><span id="help-concurrency" class="help-tooltip" role="tooltip">同時檢查多少個 URL。數字越高越快，但較容易被限流或阻擋。</span></span></span>
-                    <input id="concurrency" name="concurrency" type="number" min="1" max="100" value="12">
+                    <input id="concurrency" name="concurrency" type="number" min="1" max="100" value="6">
                   </label>
 
                   <label>
                     <span class="field-label">單一 host 併發 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="單一 host 併發說明" aria-describedby="help-per-host-concurrency" data-help-trigger>?</span><span id="help-per-host-concurrency" class="help-tooltip" role="tooltip">同一網域同時送出的請求數。政府或防護較強網站建議設為 1 到 2。</span></span></span>
-                    <input id="per-host-concurrency" name="perHostConcurrency" type="number" min="1" max="50" value="4">
+                    <input id="per-host-concurrency" name="perHostConcurrency" type="number" min="1" max="50" value="2">
                   </label>
 
                   <label>
                     <span class="field-label">每 host 固定間隔 ms <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="每 host 固定間隔說明" aria-describedby="help-request-delay" data-help-trigger>?</span><span id="help-request-delay" class="help-tooltip" role="tooltip">同一 host 每次請求前等待的時間。可降低 403、429 或逾時。</span></span></span>
-                    <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="500">
+                    <input id="request-delay" name="requestDelayMs" type="number" min="0" max="60000" step="100" value="1000">
                   </label>
 
                   <label>
@@ -119,8 +120,8 @@
               </section>
 
               <section class="settings-section" aria-labelledby="redirect-settings-title">
-                <h3 id="redirect-settings-title">Redirect</h3>
-                <p>最大轉址控制追蹤上限；轉址過長門檻用來標記需要檢視的 redirect chain。</p>
+                <h3 id="redirect-settings-title">轉址</h3>
+                <p>控制最多追蹤幾次轉址；轉址過長會標記為需要檢視。</p>
                 <div class="settings-grid two-column">
                   <label>
                     <span class="field-label">最大轉址 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="最大轉址說明" aria-describedby="help-max-redirects" data-help-trigger>?</span><span id="help-max-redirects" class="help-tooltip" role="tooltip">單一 URL 最多追蹤幾次 redirect。超過會標記為轉址問題。</span></span></span>
@@ -143,7 +144,7 @@
                     <span class="field-label">優先使用 GET <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="優先使用 GET 說明" aria-describedby="help-prefer-get" data-help-trigger>?</span><span id="help-prefer-get" class="help-tooltip" role="tooltip">較接近瀏覽器行為，但會下載更多內容，速度可能較慢。</span></span></span>
                   </label>
 
-                  <label class="toggle-field option-toggle">
+                  <label class="toggle-field option-toggle caution-toggle">
                     <input id="external-referer" name="externalReferer" type="checkbox">
                     <span class="field-label">外部連結帶 Referer <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="外部連結帶 Referer 說明" aria-describedby="help-external-referer" data-help-trigger>?</span><span id="help-external-referer" class="help-tooltip" role="tooltip">可降低部分外站誤判，但會把來源頁網址送給外部網站。</span></span></span>
                   </label>
@@ -155,12 +156,12 @@
 
                   <label class="toggle-field option-toggle">
                     <input id="legacy-tls" name="legacyTls" type="checkbox">
-                    <span class="field-label">Legacy TLS <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="Legacy TLS 說明" aria-describedby="help-legacy-tls" data-help-trigger>?</span><span id="help-legacy-tls" class="help-tooltip" role="tooltip">用於老舊網站 TLS 相容性。一般情況不要開啟。</span></span></span>
+                    <span class="field-label">相容老舊 TLS <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="相容老舊 TLS 說明" aria-describedby="help-legacy-tls" data-help-trigger>?</span><span id="help-legacy-tls" class="help-tooltip" role="tooltip">用於老舊網站 TLS 相容性。一般情況不要開啟。</span></span></span>
                   </label>
 
                   <label class="toggle-field option-toggle">
                     <input id="system-ca" name="systemCa" type="checkbox">
-                    <span class="field-label">System CA <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="System CA 說明" aria-describedby="help-system-ca" data-help-trigger>?</span><span id="help-system-ca" class="help-tooltip" role="tooltip">使用系統憑證庫，適合內部網站或自簽憑證環境。</span></span></span>
+                    <span class="field-label">使用 Windows 憑證 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="使用 Windows 憑證說明" aria-describedby="help-system-ca" data-help-trigger>?</span><span id="help-system-ca" class="help-tooltip" role="tooltip">使用系統憑證庫，適合內部網站或自簽憑證環境。</span></span></span>
                   </label>
 
                   <label class="toggle-field option-toggle">
@@ -168,9 +169,9 @@
                     <span class="field-label">宣告已授權掃描 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="宣告已授權掃描說明" aria-describedby="help-authorized-scan" data-help-trigger>?</span><span id="help-authorized-scan" class="help-tooltip" role="tooltip">只記錄使用者宣告，不代表工具會驗證授權。</span></span></span>
                   </label>
 
-                  <label class="toggle-field option-toggle">
+                  <label class="toggle-field option-toggle caution-toggle">
                     <input id="no-robots" name="noRobots" type="checkbox">
-                    <span class="field-label">不抓 robots.txt <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="不抓 robots.txt 說明" aria-describedby="help-no-robots" data-help-trigger>?</span><span id="help-no-robots" class="help-tooltip" role="tooltip">停用 robots.txt 讀取；報告會記錄這個策略。</span></span></span>
+                    <span class="field-label">停用 robots.txt 讀取 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="停用 robots.txt 讀取說明" aria-describedby="help-no-robots" data-help-trigger>?</span><span id="help-no-robots" class="help-tooltip" role="tooltip">只有在已確認組織政策允許時使用；報告會記錄這個策略。</span></span></span>
                   </label>
 
                   <label class="language-field">
@@ -275,18 +276,18 @@
           <div><span>待檢測 URL</span><strong id="pending-urls">0</strong></div>
           <div><span>目前請求</span><strong id="active">0</strong></div>
           <div><span>待爬佇列</span><strong id="queue">0</strong></div>
-          <div class="metric-card-danger"><span>問題連結</span><strong id="broken-count">0</strong></div>
+          <div class="metric-card-attention"><span>需判讀結果</span><strong id="broken-count">0</strong></div>
           <div><span>略過外部</span><strong id="skipped">0</strong></div>
         </div>
-        <h3 class="status-subheading">問題類型</h3>
+        <h3 class="status-subheading">判讀分類</h3>
         <div class="issue-grid">
-          <div><span>404 / 410</span><strong id="issue-not-found">0</strong></div>
-          <div><span>防護阻擋</span><strong id="issue-protected">0</strong></div>
-          <div><span>存取被拒</span><strong id="issue-access-denied">0</strong></div>
-          <div><span>HTTP 錯誤</span><strong id="issue-http">0</strong></div>
-          <div><span>逾時</span><strong id="issue-timeout">0</strong></div>
-          <div><span>網路錯誤</span><strong id="issue-network">0</strong></div>
-          <div><span>其他</span><strong id="issue-unknown">0</strong></div>
+          <div><span>需處理</span><strong id="issue-not-found">0</strong></div>
+          <div><span>需人工確認</span><strong id="issue-protected">0</strong></div>
+          <div><span>外站限制</span><strong id="issue-access-denied">0</strong></div>
+          <div><span>可能失效</span><strong id="issue-http">0</strong></div>
+          <div><span>已轉址仍可用</span><strong id="issue-timeout">0</strong></div>
+          <div><span>可先忽略 / 正常</span><strong id="issue-network">0</strong></div>
+          <div><span>頁內品質提醒</span><strong id="issue-unknown">0</strong></div>
         </div>
         <h3 class="status-subheading">Redirect 摘要</h3>
         <div class="redirect-grid">
@@ -321,23 +322,22 @@
       <section class="results-layout">
         <div class="results-panel">
           <div class="section-heading">
-            <h2>問題連結</h2>
+            <h2>待判讀結果</h2>
             <span id="result-summary">尚無結果</span>
           </div>
-          <div id="filter-bar" class="filter-bar" aria-label="問題連結分類篩選">
-            <button type="button" class="active" data-filter="all">全部 <span>0</span></button>
-            <button type="button" data-filter="not_found">404 / 410 <span>0</span></button>
-            <button type="button" data-filter="protected">防護阻擋 <span>0</span></button>
-            <button type="button" data-filter="access_denied">存取被拒 <span>0</span></button>
-            <button type="button" data-filter="http_error">HTTP 錯誤 <span>0</span></button>
-            <button type="button" data-filter="timeout">逾時 <span>0</span></button>
-            <button type="button" data-filter="network_error">網路錯誤 <span>0</span></button>
-            <button type="button" data-filter="unknown_error">其他 <span>0</span></button>
+          <div id="filter-bar" class="filter-bar" aria-label="判讀分類篩選">
+            <button type="button" data-filter="all">全部待判讀 <span>0</span></button>
+            <button type="button" class="active" data-filter="action_required">需處理 <span>0</span></button>
+            <button type="button" data-filter="needs_review">需人工確認 <span>0</span></button>
+            <button type="button" data-filter="external_limited">外站限制 <span>0</span></button>
+            <button type="button" data-filter="likely_problem">可能失效 <span>0</span></button>
+            <button type="button" data-filter="redirect_ok">已轉址仍可用 <span>0</span></button>
+            <button type="button" data-filter="page_quality_notice">頁內品質提醒 <span>0</span></button>
           </div>
           <div id="broken-table" class="broken-list-wrap">
             <div class="empty-state compact-empty-state">
               <strong>尚未開始檢查</strong>
-              <p>檢查完成或發現問題時，問題連結會依類型顯示在這裡。</p>
+              <p>檢查完成或發現需要判讀的結果時，會依分類顯示在這裡。</p>
             </div>
           </div>
         </div>

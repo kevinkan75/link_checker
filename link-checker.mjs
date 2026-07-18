@@ -2192,7 +2192,11 @@ class LinkChecker {
   }
 
   buildReport() {
-    const checked = [...this.results.values()];
+    const checked = [...this.results.values()]
+      .map((result) => ({
+        ...result,
+        interpretation: buildResultInterpretation(result, { startUrl: this.startUrl }),
+      }));
     const externalLinks = this.buildExternalLinks(checked);
     const inventorySummary = this.buildInventorySummary();
     const checkedByKind = this.buildCheckedByKind(checked);
@@ -2291,6 +2295,7 @@ class LinkChecker {
         urlsChecked: checked.length,
         brokenLinks: broken.length,
         brokenByType: countBrokenByType(broken),
+        interpretationByCategory: countInterpretationByCategory(checked),
         redirects: countRedirected(checked),
         redirectByType: countRedirectByType(checked),
         skippedExternal: this.skippedExternal,
@@ -7191,6 +7196,141 @@ function isTransientConfirmationResult(result) {
     || result.issueType === "timeout"
     || result.issueType === "network_error"
     || result.classification === "network_error";
+}
+
+const INTERPRETATION_CATEGORIES = [
+  "action_required",
+  "needs_review",
+  "external_limited",
+  "likely_problem",
+  "redirect_ok",
+  "ok",
+  "page_quality_notice",
+];
+
+const INTERPRETATION_LABELS = {
+  action_required: "需處理",
+  needs_review: "需人工確認",
+  external_limited: "外站限制",
+  likely_problem: "可能失效",
+  redirect_ok: "已轉址仍可用",
+  ok: "可先忽略 / 正常",
+  page_quality_notice: "頁內品質提醒",
+};
+
+const INTERPRETATION_ACTIONS = {
+  action_required: "請優先確認來源頁，並修正或移除連結。",
+  needs_review: "請用瀏覽器人工確認是否可正常開啟，再決定是否交辦修正。",
+  external_limited: "外部網站可能拒絕或限制工具請求，建議人工確認或與對方網站窗口協調。",
+  likely_problem: "請確認網址、伺服器狀態或頁面是否仍存在。",
+  redirect_ok: "連結目前可到達；若 final URL 穩定，可視情況更新原連結。",
+  ok: "目前不需處理。",
+  page_quality_notice: "此項屬頁內品質提醒，請視內容維護需求處理。",
+};
+
+const INTERPRETATION_SEVERITY = {
+  action_required: "high",
+  likely_problem: "medium",
+  needs_review: "review",
+  external_limited: "review",
+  redirect_ok: "info",
+  ok: "ok",
+  page_quality_notice: "notice",
+};
+
+function buildInterpretation(category) {
+  return {
+    category,
+    label: INTERPRETATION_LABELS[category] || category,
+    severity: INTERPRETATION_SEVERITY[category] || "review",
+    action: INTERPRETATION_ACTIONS[category] || INTERPRETATION_ACTIONS.needs_review,
+    needsManualReview: ["needs_review", "external_limited", "likely_problem"].includes(category),
+  };
+}
+
+function buildResultInterpretation(result, { startUrl = "" } = {}) {
+  if (result?.interpretation?.category) {
+    return {
+      ...buildInterpretation(result.interpretation.category),
+      ...result.interpretation,
+    };
+  }
+
+  const issueType = result.issueType || getIssueType(result);
+  const confirmationOutcome = result.confirmation?.outcome;
+  const externalLimited = isExternalLimitedResult(result, startUrl);
+
+  if (result.ok) {
+    return buildInterpretation(result.redirected ? "redirect_ok" : "ok");
+  }
+  if (issueType === "redirect_to_error" || issueType === "too_many_redirects" || issueType === "redirect_loop") {
+    return buildInterpretation("action_required");
+  }
+  if (issueType === "not_found") {
+    if (confirmationOutcome === "confirmed_missing") {
+      return buildInterpretation("action_required");
+    }
+    if (confirmationOutcome === "needs_review") {
+      return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
+    }
+    return buildInterpretation("likely_problem");
+  }
+  if (
+    issueType === "protected"
+    || issueType === "access_denied"
+    || issueType === "timeout"
+    || issueType === "network_error"
+    || result.status === 429
+    || result.suspectedWaf
+    || result.suspectedBot
+  ) {
+    return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
+  }
+  if (result.status >= 400 || issueType === "http_error" || issueType === "unknown_error") {
+    return buildInterpretation("likely_problem");
+  }
+  if (result.redirected) {
+    return buildInterpretation("redirect_ok");
+  }
+  return buildInterpretation("needs_review");
+}
+
+function isExternalLimitedResult(result, startUrl) {
+  if (!result?.url || !startUrl) {
+    return false;
+  }
+  const issueType = result.issueType || getIssueType(result);
+  if (!["protected", "access_denied", "timeout", "network_error", "http_error", "unknown_error"].includes(issueType)
+      && result.status !== 429
+      && !result.suspectedWaf
+      && !result.suspectedBot) {
+    return false;
+  }
+  try {
+    return new URL(result.url).origin !== new URL(startUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
+function createEmptyInterpretationCounts() {
+  return INTERPRETATION_CATEGORIES.reduce((counts, category) => {
+    counts[category] = 0;
+    return counts;
+  }, {});
+}
+
+function countInterpretationByCategory(items) {
+  const counts = createEmptyInterpretationCounts();
+  for (const item of items) {
+    const category = item.interpretation?.category || "needs_review";
+    if (Object.prototype.hasOwnProperty.call(counts, category)) {
+      counts[category] += 1;
+    } else {
+      counts.needs_review += 1;
+    }
+  }
+  return counts;
 }
 
 function countBrokenByType(items) {

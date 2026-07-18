@@ -462,6 +462,11 @@ input:focus {
   flex: 0 0 auto;
 }
 
+.option-toggle.caution-toggle {
+  border-color: #dcc49d;
+  background: #fffaf0;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -807,6 +812,16 @@ body.scan-idle .results-layout {
   color: var(--danger);
 }
 
+.metric-grid .metric-card-attention {
+  border-color: #dcc49d;
+  background: #fff8e8;
+}
+
+.metric-grid .metric-card-attention span,
+.metric-grid .metric-card-attention strong {
+  color: #7a4b0b;
+}
+
 .status-subheading {
   margin-top: 16px;
   color: var(--text);
@@ -1044,19 +1059,35 @@ tr:last-child td {
   min-width: 64px;
   border-radius: 999px;
   padding: 4px 8px;
-  background: var(--danger-bg);
-  color: var(--danger);
+  background: var(--surface-muted);
+  color: var(--text);
   font-weight: 700;
 }
 
-.status-code.protected {
+.status-code.interpretation-action-required {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.status-code.interpretation-likely-problem {
   background: #fff7e6;
   color: #8a5a12;
 }
 
-.status-code.access-denied {
+.status-code.interpretation-needs-review,
+.status-code.interpretation-external-limited {
   background: #eef2ff;
   color: #3730a3;
+}
+
+.status-code.interpretation-redirect-ok {
+  background: #e7f3f4;
+  color: var(--primary-dark);
+}
+
+.status-code.interpretation-page-quality-notice {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .diagnosis {

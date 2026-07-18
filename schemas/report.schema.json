@@ -357,6 +357,9 @@
         "skippedExternal": { "$ref": "#/$defs/nonNegativeInteger" },
         "externalLinks": { "$ref": "#/$defs/nonNegativeInteger" },
         "externalDomains": { "$ref": "#/$defs/nonNegativeInteger" },
+        "interpretationByCategory": {
+          "$ref": "#/$defs/interpretationByCategory"
+        },
         "robotsTxt": {
           "$ref": "#/$defs/robotsTxtSummary"
         },
@@ -472,6 +475,9 @@
         "bodySignature": {
           "$ref": "#/$defs/bodySignature"
         },
+        "interpretation": {
+          "$ref": "#/$defs/interpretation"
+        },
         "protection": {
           "$ref": "#/$defs/protection"
         },
@@ -500,9 +506,51 @@
         "bodySignature": {
           "$ref": "#/$defs/bodySignature"
         },
+        "interpretation": {
+          "$ref": "#/$defs/interpretation"
+        },
         "protection": {
           "$ref": "#/$defs/protection"
         }
+      }
+    },
+    "interpretationByCategory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action_required": { "$ref": "#/$defs/nonNegativeInteger" },
+        "needs_review": { "$ref": "#/$defs/nonNegativeInteger" },
+        "external_limited": { "$ref": "#/$defs/nonNegativeInteger" },
+        "likely_problem": { "$ref": "#/$defs/nonNegativeInteger" },
+        "redirect_ok": { "$ref": "#/$defs/nonNegativeInteger" },
+        "ok": { "$ref": "#/$defs/nonNegativeInteger" },
+        "page_quality_notice": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "label", "severity", "action", "needsManualReview"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "action_required",
+            "needs_review",
+            "external_limited",
+            "likely_problem",
+            "redirect_ok",
+            "ok",
+            "page_quality_notice"
+          ]
+        },
+        "label": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["high", "medium", "review", "info", "ok", "notice"]
+        },
+        "action": { "type": "string" },
+        "needsManualReview": { "type": "boolean" }
       }
     },
     "bodySignature": {

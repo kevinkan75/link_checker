@@ -98,6 +98,49 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | P10c | GUI 摘要改善 | 用承辦人語言呈現要修、要確認、可先忽略的結果 |
 | P10d | 頁內品質檢查 | Fragment / anchor 與 duplicate anchor，作為提醒類別 |
 
+P10a 評估紀錄：
+
+- 結論：P10a 應優先做，屬於 P10 的核心地基。它不是新增掃描能力，而是把現有 `issueType`、`classification`、`confirmation.outcome`、redirect labels 與 `externalRisk` 等技術訊號，統一翻譯成 report / GUI / CSV 共用的人讀分類契約。
+- 建議新增 additive 欄位，例如每筆 `checked[]` / `broken[]` 補 `interpretation`，包含 `category`、`label`、`severity`、`action` 與 `needsManualReview`。同時在 `summary` 補 `interpretationByCategory`，供 GUI 摘要與 CSV 欄位使用。
+- 建議分類 vocabulary：
+  - `action_required`：明確壞連結，例如二次確認後仍為 `404 / 410`，或 redirect 最終到錯誤頁。
+  - `likely_problem`：可能失效，例如其他 `4xx / 5xx`，但尚未達高信心確認。
+  - `needs_review`：需人工確認，例如 `403`、`429`、WAF / Bot、timeout、network error、TLS 問題。
+  - `external_limited`：外站限制，例如外部網站拒絕、限流或防護阻擋；不直接算明確壞連結。
+  - `redirect_ok`：已轉址但仍可用，可視情況更新為 final URL。
+  - `ok`：正常、允許清單或低風險資訊。
+  - `page_quality_notice`：頁內品質提醒，留給 P10d 的 fragment / duplicate anchor，不混入壞連結主清單。
+- 優先順序規則：
+  - `confirmation.outcome === "confirmed_missing"` 優先判為 `action_required`。
+  - redirect 到錯誤、redirect loop、too many redirects 判為需處理。
+  - `403`、`429`、WAF / Bot、timeout、network error 與 TLS 問題不得稱為明確壞連結，應歸為 `needs_review` 或 `external_limited`。
+  - redirect 成功但 final URL 不同，判為 `redirect_ok`。
+  - 外部風險分類只輔助判讀，不覆蓋明確 HTTP 結果。
+- 驗收標準：
+  - 同一筆結果在 report、GUI、CSV 使用同一個人讀分類。
+  - `403`、`429`、WAF / Bot、timeout 不會被歸成明確壞連結。
+  - `404 / 410` 搭配二次確認後能區分「確認不存在」與「需人工確認」。
+  - redirect 成功與 redirect 到錯誤能分開。
+  - 新欄位維持 additive，不破壞舊 report、Analyzer 或 report diff。
+
+P10a 實作紀錄：
+
+- 狀態：核心 report 契約已完成。每筆 `checked[]` / `broken[]` 會補上 additive `interpretation`，包含 `category`、`label`、`severity`、`action` 與 `needsManualReview`。
+- `summary.interpretationByCategory` 已加入報告輸出與 schema，GUI 摘要會優先使用正式 summary 欄位；若讀到舊報告，仍會以既有 technical breakdown fallback 推導。
+- 分類規則已落地：已確認的 `404 / 410` 與 redirect 到錯誤頁歸為 `action_required`；同站 `403 / 429 / timeout / WAF / Bot / network error` 歸為 `needs_review`；外站限制歸為 `external_limited`；成功轉址歸為 `redirect_ok`。
+- 已新增 `test-p10a-interpretation.mjs` 覆蓋站內 404、站內 403、429、成功轉址、轉址到錯誤頁與外站 403。
+- CSV / Excel 交辦友善欄位仍歸 P10b 收尾，屆時應直接使用同一個 `interpretation` 契約，避免另做一套分類。
+
+2026-07-18 重新檢視 P10：
+
+- P10 方向正確，且已部分啟動；主 GUI 已先採用承辦人判讀分類與較保守的掃描模式，但 P10 不能算完成。
+- P10a：核心契約已完成，report / schema / GUI 可共用 `interpretation` 與 `interpretationByCategory`；CSV / Excel 欄位串接留給 P10b。
+- P10b：尚未完成。下一個最重要工作是把判讀分類、建議處理、是否需人工確認、來源頁、問題網址、技術原因與 final URL 補進 CSV / Excel 友善輸出。
+- P10c：已部分完成。主畫面已改為「待判讀結果」與判讀分類，進階設定也已改成「標準保守 / 快速掃描 / 更保守」且預設較保守；仍需讓 Analyzer 與 README 同步使用同一套判讀語言。
+- P10d：維持 optional。Fragment / anchor 與 duplicate anchor 有價值，但不應阻擋 P10a-c 完成後進入 release gate。
+- GUI 一鍵模式目前已足夠，不應擴大成完整 profile presets 或把所有 CLI 參數搬進 GUI。
+- P10 接下來應收斂為三個收尾項：固定 report `interpretation` 契約、補 CSV / Excel 交辦欄位、同步 Analyzer / README。
+
 與舊規劃比對：
 
 | 項目 | 重新評估 |
@@ -161,6 +204,15 @@ P10 完成後的正式版 release gate：
 - 一般檢查。
 - 保守檢查。
 - 外部連結盤點。
+
+網誌清查頁數評估紀錄：
+
+- 參考 GOV.UK、Canada.ca 與 Digital.gov 的連結治理方向後，網誌清查應強調定期維護、分批清查、確認 redirect 是否仍正確，以及外部連結是否仍可信；不應把單次超大頁數作為預設。
+- 一般網站維持標準保守預設 `100` 頁即可。
+- 若承辦人員目標是清查網誌、最新消息、活動紀錄或文章型頁面的無效連結，建議以 `300` 頁作為第一輪清查值。
+- 年度或半年正式清查可使用 `500` 頁；若文章橫跨多年或分類很多，應以年份、分類頁或列表頁分批掃描，每批 `300` 到 `500` 頁。
+- 不建議一開始使用 `1000+` 作為 GUI 預設或一般建議，避免掃描時間過長、增加網站壓力，並偏離本工具「本地端、低門檻、輔助型」定位。
+- 若網站容易出現 `403`、`429` 或 timeout，頁數可維持 `300`，但應搭配更保守模式或降低每 host 併發到 `1`。
 
 不急著做：
 

@@ -90,9 +90,9 @@ const defaultUserAgent = `${browserUserAgent} LocalLinkChecker/1.0`;
 const defaultSettings = {
   maxPages: "100",
   maxDepth: "2",
-  concurrency: "12",
-  perHostConcurrency: "4",
-  requestDelayMs: "500",
+  concurrency: "6",
+  perHostConcurrency: "2",
+  requestDelayMs: "1000",
   requestDelayMinMs: "",
   requestDelayMaxMs: "",
   timeoutMs: "15000",
@@ -112,12 +112,14 @@ const defaultSettings = {
   authorizationNote: "",
 };
 const presets = {
-  fast: { ...defaultSettings },
+  fast: {
+    ...defaultSettings,
+    concurrency: "12",
+    perHostConcurrency: "4",
+    requestDelayMs: "500",
+  },
   balanced: {
     ...defaultSettings,
-    concurrency: "6",
-    perHostConcurrency: "2",
-    requestDelayMs: "1000",
   },
   conservative: {
     ...defaultSettings,
@@ -129,7 +131,7 @@ const presets = {
     retryCount: "1",
     userAgent: browserUserAgent,
     preferGet: true,
-    externalReferer: true,
+    externalReferer: false,
   },
   defaults: { ...defaultSettings },
 };
@@ -142,17 +144,36 @@ const buttonLabels = {
   stopQueue: "停止佇列",
 };
 const unfinishedScanWarning = "檢測尚未完成。切換功能頁面會中斷目前頁面的即時進度顯示，確定要離開嗎？";
+const defaultInterpretationFilter = "action_required";
+const interpretationCategories = [
+  "action_required",
+  "needs_review",
+  "external_limited",
+  "likely_problem",
+  "redirect_ok",
+  "ok",
+  "page_quality_notice",
+];
+const interpretationLabels = {
+  action_required: "需處理",
+  needs_review: "需人工確認",
+  external_limited: "外站限制",
+  likely_problem: "可能失效",
+  redirect_ok: "已轉址仍可用",
+  ok: "可先忽略 / 正常",
+  page_quality_notice: "頁內品質提醒",
+};
 
 let currentJobId = null;
 let eventSource = null;
 let currentReport = null;
 let currentReportUrl = null;
-let currentFilter = "all";
+let currentFilter = defaultInterpretationFilter;
 let queuePollTimer = null;
 let watchedQueueItemId = null;
 let watchedQueueUrl = null;
 let manualWatchSelected = false;
-let activePreset = null;
+let activePreset = "balanced";
 let scanInProgress = false;
 let queueInProgress = false;
 let suppressNextUnloadWarning = false;
@@ -447,7 +468,7 @@ function installHelpTooltips() {
 function applyPreset(name) {
   const preset = presets[name] || defaultSettings;
   applySettings(preset);
-  setActivePreset(name === "defaults" ? null : name);
+  setActivePreset(name === "defaults" ? "balanced" : name);
   updateAdvancedSummary();
   validateAdvancedSettings({ showValid: false });
 }
@@ -537,13 +558,14 @@ async function startCheck() {
   watchedQueueItemId = null;
   watchedQueueUrl = null;
   manualWatchSelected = false;
-  currentFilter = "all";
+  currentFilter = defaultInterpretationFilter;
+  updateActiveFilter();
   downloadButton.disabled = true;
   setScanEmptyStateVisible(false);
-  renderBrokenEmptyState("正在檢查", "發現問題連結後會顯示在這裡。");
+  renderBrokenEmptyState("正在檢查", "發現需要判讀的結果後會顯示在這裡。");
   resultSummary.textContent = "檢查中";
-  updateIssueBreakdown(emptyBreakdown(), 0);
-  updateFilterCounts(emptyBreakdown(), 0);
+  updateIssueBreakdown(emptyInterpretationCounts(), 0);
+  updateFilterCounts(emptyInterpretationCounts(), 0);
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
   updateIncrementalSummary(null);
   pendingUrls.textContent = "0";
@@ -804,7 +826,8 @@ function watchQueueItemObject(item, { manual }) {
   manualWatchSelected = manual || manualWatchSelected;
   currentReport = null;
   currentReportUrl = item.jobId ? `/api/jobs/${item.jobId}/report` : null;
-  currentFilter = "all";
+  currentFilter = defaultInterpretationFilter;
+  updateActiveFilter();
   scanInProgress = true;
   downloadButton.disabled = true;
   eventLog.replaceChildren();
@@ -848,7 +871,7 @@ async function viewQueueReport(id) {
   manualWatchSelected = true;
   currentReport = data;
   currentReportUrl = `/api/queue/items/${id}/report`;
-  currentFilter = "all";
+  currentFilter = defaultInterpretationFilter;
   renderReport(data);
   setState("finished");
   setBusy(false);
@@ -954,8 +977,17 @@ function updateStatus(status) {
   brokenCount.textContent = status.brokenLinks || 0;
   skipped.textContent = status.skippedExternal || 0;
   currentUrl.textContent = status.currentUrl || "目前沒有處理中的 URL";
-  updateIssueBreakdown(status.brokenByType || emptyBreakdown(), status.brokenLinks || 0);
-  updateFilterCounts(status.brokenByType || emptyBreakdown(), status.brokenLinks || 0);
+  const interpretationCounts = buildInterpretationCountsFromSummary({
+    urlsChecked: status.urlsChecked || 0,
+    brokenLinks: status.brokenLinks || 0,
+    brokenByType: status.brokenByType || emptyBreakdown(),
+    redirectByType: status.redirectByType || emptyRedirectBreakdown(),
+    redirects: status.redirects || 0,
+  });
+  const interpretationTotal = countDisplayInterpretations(interpretationCounts);
+  brokenCount.textContent = interpretationTotal;
+  updateIssueBreakdown(interpretationCounts, interpretationTotal);
+  updateFilterCounts(interpretationCounts, interpretationTotal);
   updateRedirectBreakdown(status.redirectByType || emptyRedirectBreakdown(), status.redirects || 0);
   updateConfirmationBreakdown(emptyConfirmationBreakdown());
   updateIncrementalSummary(null);
@@ -1086,9 +1118,10 @@ function renderReport(report) {
   const options = report.options || {};
   const hasBrokenDetails = Array.isArray(report.broken);
   const broken = hasBrokenDetails ? report.broken : [];
-  const brokenTotal = Number(summary.brokenLinks ?? broken.length);
-  resultSummary.textContent = `${brokenTotal} 個問題連結`;
-  brokenCount.textContent = brokenTotal;
+  const interpretationView = buildInterpretationView(report);
+  const interpretationTotal = interpretationView.displayTotal;
+  resultSummary.textContent = `${interpretationTotal} 筆需判讀結果`;
+  brokenCount.textContent = interpretationTotal;
   const reportPagesCrawled = Number(summary.pagesCrawled || 0);
   const reportMaxPages = Number(options.maxPages || 0);
   const reportUrlsChecked = Number(summary.urlsChecked || 0);
@@ -1099,8 +1132,8 @@ function renderReport(report) {
   updatePageDiscoveryDisplay(reportPagesCrawled, reportMaxPages || options.maxPages || 0, report.runStatus?.pendingPages || 0);
   skipped.textContent = summary.skippedExternal || 0;
   setProgressValue(getReportUrlValidationProgress(report));
-  updateIssueBreakdown(summary.brokenByType || buildBreakdown(broken), brokenTotal);
-  updateFilterCounts(summary.brokenByType || buildBreakdown(broken), brokenTotal);
+  updateIssueBreakdown(interpretationView.counts, interpretationTotal);
+  updateFilterCounts(interpretationView.counts, interpretationTotal);
   updateRedirectBreakdown(summary.redirectByType || emptyRedirectBreakdown(), summary.redirects || 0);
   updateConfirmationBreakdown(summary.confirmation || (Array.isArray(report.checked) ? buildConfirmationBreakdown(report.checked) : buildConfirmationBreakdown(broken)));
   updateIncrementalSummary(summary.incremental || null);
@@ -1142,18 +1175,17 @@ function getReportUrlValidationProgress(report) {
 
 function renderBrokenTableForReport(report) {
   const hasBrokenDetails = Array.isArray(report.broken);
-  const broken = hasBrokenDetails ? report.broken : [];
-  const brokenTotal = Number(report.summary?.brokenLinks ?? broken.length);
-  renderBrokenTable(broken, {
-    detailsDeferred: !hasBrokenDetails && brokenTotal > 0,
-    totalBroken: brokenTotal,
+  const interpretationView = buildInterpretationView(report);
+  renderBrokenTable(interpretationView.displayItems, {
+    detailsDeferred: !hasBrokenDetails && interpretationView.displayTotal > 0,
+    totalBroken: interpretationView.displayTotal,
   });
 }
 
 function renderBrokenTable(broken, { detailsDeferred = false, totalBroken = broken.length } = {}) {
   if (detailsDeferred) {
     renderBrokenEmptyState(
-      "問題清單已保存到完整報告",
+      "判讀清單已保存到完整報告",
       "為避免大型報告在完成瞬間卡住，這裡先顯示摘要；下載完整 report 或查看 log 目錄中的 broken.csv / broken.ndjson 可取得明細。",
     );
     return;
@@ -1161,19 +1193,19 @@ function renderBrokenTable(broken, { detailsDeferred = false, totalBroken = brok
 
   const visible = currentFilter === "all"
     ? broken
-    : broken.filter((item) => (item.issueType || getIssueType(item)) === currentFilter);
+    : broken.filter((item) => getInterpretation(item).category === currentFilter);
 
   if (totalBroken === 0) {
     const hasReport = Boolean(currentReport);
     renderBrokenEmptyState(
-      hasReport ? "沒有發現問題連結" : "正在等待結果",
-      hasReport ? "這份報告目前沒有需要列出的問題連結。" : "檢查進行中，發現問題時會立即出現在這裡。",
+      hasReport ? "沒有需要判讀的結果" : "正在等待結果",
+      hasReport ? "這份報告目前沒有需要列出的判讀項目。" : "檢查進行中，發現需要判讀的結果時會立即出現在這裡。",
     );
     return;
   }
 
   if (visible.length === 0) {
-    renderBrokenEmptyState("此分類沒有問題連結", "切回「全部」可查看其他類型的問題。");
+    renderBrokenEmptyState("此分類沒有待判讀結果", "切回「全部待判讀」可查看其他分類。");
     return;
   }
 
@@ -1209,21 +1241,20 @@ function renderBrokenItem(item) {
   const header = document.createElement("div");
   header.className = "broken-item-header";
   const statusCode = document.createElement("span");
+  const interpretation = getInterpretation(item);
   const issueType = item.issueType || getIssueType(item);
-  const statusClass = item.classification === "protected"
-    ? "protected"
-    : issueType === "access_denied"
-      ? "access-denied"
-      : "";
+  const statusClass = `interpretation-${interpretation.category.replaceAll("_", "-")}`;
   statusCode.className = `status-code ${statusClass}`;
-  statusCode.textContent = formatIssueLabel(item);
-  header.append(statusCode, metaBadge(item.method || "HTTP"), metaBadge(item.status ? `Status ${item.status}` : "No status"));
+  statusCode.textContent = interpretation.label;
+  header.append(statusCode, metaBadge(formatIssueLabel(item)), metaBadge(item.method || "HTTP"), metaBadge(item.status ? `Status ${item.status}` : "No status"));
   const incrementalBadge = getIncrementalResultBadge(item);
   if (incrementalBadge) {
     header.append(metaBadge(incrementalBadge.text, incrementalBadge.modifier));
   }
 
   row.append(header, detailLine("URL", item.url));
+  row.append(detailLine("建議處理", interpretation.action));
+  row.append(detailLine("技術原因", formatIssueLabel(item)));
   if (item.checkedAt) {
     row.append(detailLine("檢查時間", item.checkedAt));
   }
@@ -1374,6 +1405,197 @@ function emptyConfirmationBreakdown() {
   };
 }
 
+function emptyInterpretationCounts() {
+  return interpretationCategories.reduce((counts, category) => {
+    counts[category] = 0;
+    return counts;
+  }, {});
+}
+
+function buildInterpretationView(report) {
+  const checkedItems = Array.isArray(report?.checked) ? report.checked : [];
+  const brokenItems = Array.isArray(report?.broken) ? report.broken : [];
+  if (checkedItems.length === 0 && brokenItems.length === 0) {
+    const counts = buildInterpretationCountsFromSummary(report?.summary || {});
+    return {
+      counts,
+      displayItems: [],
+      displayTotal: countDisplayInterpretations(counts),
+    };
+  }
+
+  const counts = emptyInterpretationCounts();
+  const brokenByKey = new Map(brokenItems.map((item) => [getInterpretationItemKey(item), item]));
+  const sourceItems = checkedItems.length > 0 ? checkedItems : brokenItems;
+  const displayItems = [];
+  const displayedKeys = new Set();
+
+  for (const item of sourceItems) {
+    const displaySource = brokenByKey.get(getInterpretationItemKey(item)) || item;
+    const interpretation = getInterpretation(displaySource, report);
+    counts[interpretation.category] = (counts[interpretation.category] || 0) + 1;
+    if (!shouldDisplayInterpretation(displaySource, interpretation)) {
+      continue;
+    }
+
+    const key = getInterpretationItemKey(displaySource);
+    if (displayedKeys.has(key)) {
+      continue;
+    }
+    displayedKeys.add(key);
+    displayItems.push({ ...displaySource, interpretation });
+  }
+
+  return {
+    counts,
+    displayItems,
+    displayTotal: displayItems.length,
+  };
+}
+
+function buildInterpretationCountsFromSummary(summary = {}) {
+  if (summary.interpretationByCategory && typeof summary.interpretationByCategory === "object") {
+    return {
+      ...emptyInterpretationCounts(),
+      ...summary.interpretationByCategory,
+    };
+  }
+
+  const counts = emptyInterpretationCounts();
+  const brokenByType = summary.brokenByType || emptyBreakdown();
+  const redirectByType = summary.redirectByType || emptyRedirectBreakdown();
+  const confirmedMissing = Number(summary.confirmation?.confirmed_missing || 0);
+  const redirectProblems = Number(redirectByType.redirect_to_error || 0)
+    + Number(redirectByType.too_many_redirects || 0)
+    + Number(redirectByType.redirect_loop || 0);
+
+  counts.action_required = confirmedMissing + redirectProblems;
+  counts.needs_review = Number(brokenByType.protected || 0)
+    + Number(brokenByType.access_denied || 0)
+    + Number(brokenByType.timeout || 0)
+    + Number(brokenByType.network_error || 0);
+  counts.likely_problem = Math.max(0, Number(brokenByType.not_found || 0) - confirmedMissing)
+    + Number(brokenByType.http_error || 0)
+    + Number(brokenByType.unknown_error || 0);
+  counts.redirect_ok = Math.max(0, Number(summary.redirects || 0) - redirectProblems);
+
+  const displayTotal = countDisplayInterpretations(counts);
+  counts.ok = Math.max(0, Number(summary.urlsChecked || 0) - displayTotal);
+  return counts;
+}
+
+function countDisplayInterpretations(counts) {
+  return Object.entries(counts || {})
+    .filter(([category]) => category !== "ok")
+    .reduce((total, [, count]) => total + (Number(count) || 0), 0);
+}
+
+function getInterpretationItemKey(item) {
+  return item?.canonicalUrl || item?.url || item?.finalUrl || JSON.stringify(item);
+}
+
+function shouldDisplayInterpretation(item, interpretation) {
+  if (!interpretation || interpretation.category === "ok") {
+    return false;
+  }
+  return Boolean(item?.url || item?.finalUrl);
+}
+
+function getInterpretation(item, report = currentReport) {
+  const existing = item?.interpretation;
+  if (existing?.category) {
+    return {
+      ...buildInterpretation(existing.category, item),
+      ...existing,
+    };
+  }
+
+  const issueType = item.issueType || getIssueType(item);
+  const confirmationOutcome = item.confirmation?.outcome;
+  const externalLimited = isExternalLimitedResult(item, report);
+
+  if (item.ok) {
+    return buildInterpretation(item.redirected ? "redirect_ok" : "ok", item);
+  }
+  if (issueType === "redirect_to_error" || issueType === "too_many_redirects" || issueType === "redirect_loop") {
+    return buildInterpretation("action_required", item);
+  }
+  if (issueType === "not_found") {
+    if (confirmationOutcome === "confirmed_missing") {
+      return buildInterpretation("action_required", item);
+    }
+    if (confirmationOutcome === "needs_review") {
+      return buildInterpretation(externalLimited ? "external_limited" : "needs_review", item);
+    }
+    return buildInterpretation("likely_problem", item);
+  }
+  if (
+    issueType === "protected"
+    || issueType === "access_denied"
+    || issueType === "timeout"
+    || issueType === "network_error"
+    || item.status === 429
+    || item.suspectedWaf
+    || item.suspectedBot
+  ) {
+    return buildInterpretation(externalLimited ? "external_limited" : "needs_review", item);
+  }
+  if (item.status >= 400 || issueType === "http_error" || issueType === "unknown_error") {
+    return buildInterpretation("likely_problem", item);
+  }
+  if (item.redirected) {
+    return buildInterpretation("redirect_ok", item);
+  }
+  return buildInterpretation("needs_review", item);
+}
+
+function buildInterpretation(category, item) {
+  const actions = {
+    action_required: "請優先確認來源頁，並修正或移除連結。",
+    needs_review: "請用瀏覽器人工確認是否可正常開啟，再決定是否交辦修正。",
+    external_limited: "外部網站可能拒絕或限制工具請求，建議人工確認或與對方網站窗口協調。",
+    likely_problem: "請確認網址、伺服器狀態或頁面是否仍存在。",
+    redirect_ok: "連結目前可到達；若 final URL 穩定，可視情況更新原連結。",
+    ok: "目前不需處理。",
+    page_quality_notice: "此項屬頁內品質提醒，請視內容維護需求處理。",
+  };
+  const severity = {
+    action_required: "high",
+    likely_problem: "medium",
+    needs_review: "review",
+    external_limited: "review",
+    redirect_ok: "info",
+    ok: "ok",
+    page_quality_notice: "notice",
+  };
+
+  return {
+    category,
+    label: interpretationLabels[category] || category,
+    severity: severity[category] || "review",
+    action: actions[category] || actions.needs_review,
+    needsManualReview: ["needs_review", "external_limited", "likely_problem"].includes(category),
+  };
+}
+
+function isExternalLimitedResult(item, report = currentReport) {
+  if (!item?.url || !report?.startUrl) {
+    return false;
+  }
+  const issueType = item.issueType || getIssueType(item);
+  if (!["protected", "access_denied", "timeout", "network_error", "http_error", "unknown_error"].includes(issueType)
+      && item.status !== 429
+      && !item.suspectedWaf
+      && !item.suspectedBot) {
+    return false;
+  }
+  try {
+    return new URL(item.url).origin !== new URL(report.startUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
 function buildBreakdown(items) {
   const counts = emptyBreakdown();
   for (const item of items) {
@@ -1412,13 +1634,13 @@ function buildConfirmationBreakdown(items) {
 }
 
 function updateIssueBreakdown(counts, total) {
-  issueNotFound.textContent = counts.not_found || 0;
-  issueProtected.textContent = counts.protected || 0;
-  issueAccessDenied.textContent = counts.access_denied || 0;
-  issueHttp.textContent = counts.http_error || 0;
-  issueTimeout.textContent = counts.timeout || 0;
-  issueNetwork.textContent = counts.network_error || 0;
-  issueUnknown.textContent = counts.unknown_error || 0;
+  issueNotFound.textContent = counts.action_required || 0;
+  issueProtected.textContent = counts.needs_review || 0;
+  issueAccessDenied.textContent = counts.external_limited || 0;
+  issueHttp.textContent = counts.likely_problem || 0;
+  issueTimeout.textContent = counts.redirect_ok || 0;
+  issueNetwork.textContent = counts.ok || 0;
+  issueUnknown.textContent = counts.page_quality_notice || 0;
   brokenCount.textContent = total || 0;
 }
 
