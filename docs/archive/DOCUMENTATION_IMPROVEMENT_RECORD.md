@@ -1,5 +1,7 @@
 # Documentation Improvement Record
 
+狀態：歷史文件維護紀錄。現行使用入口請看 [../../README.md](../../README.md)，現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，文件索引請看 [../README.md](../README.md)。
+
 本文件記錄 README 與 ROADMAP 易讀性、一致性改善建議的採納狀態。
 
 ## 來源
@@ -74,6 +76,10 @@
 | 細部規格索引增加狀態 | 已採納 | ROADMAP `細部規格索引` |
 | 暫不納入近期主線分類整理 | 已採納 | ROADMAP `暫不納入近期主線` |
 | 暫不納入項目補理由 | 已採納 | ROADMAP 使用表格列出理由 |
+| 2026-07-18 Roadmap 主文收斂 | 已採納 | ROADMAP 改為主線導航頁，前段聚焦目前狀態、產品定位護欄、近期主線、延後項目與索引 |
+| 2026-07-18 README 主文收斂 | 已採納 | README 改為第一次使用者與承辦人入口，保留快速開始、判讀、輸出、安全提醒與文件連結，進階細節分流到 CLI / 技術文件 |
+| 2026-07-18 Archive 索引補強 | 已採納 | 新增 `docs/archive/README.md`，將歸檔文件依主線歷史、階段評估、GUI / 發布與站台案例分類 |
+| 2026-07-18 歷史文件狀態導覽補齊 | 已採納 | 為缺少開頭狀態說明的 archive 文件補上現行主線連結與歷史定位 |
 
 ## 未完全採納與理由
 
@@ -87,8 +93,48 @@
 
 ## 新增與調整文件
 
-- `README.md`：改為入口型文件，快速開始與 GUI 優先。
-- `ROADMAP.md`：改為開發主線入口，前段呈現目前狀態與 P7 下一步。
+- `README.md`：改為入口型文件，快速開始與 GUI 優先；2026-07-18 再收斂為承辦人可讀版本，移除過多階段、cache、incremental 與 GUI/CLI 差異細節。
+- `ROADMAP.md`：改為開發主線入口，2026-07-18 再整理為易讀導航頁；已完成階段細節改由 archive 文件承接，主文聚焦目前狀態、P9c-2、產品定位護欄、延後項目與規格索引。
 - `docs/CLI_REFERENCE.md`：新增完整 CLI 參數、規則檔格式與進階用法。
 - `docs/archive/DOCUMENTATION_IMPROVEMENT_RECORD.md`：新增本採納紀錄。
 - `docs/README.md`：補入新文件索引。
+- `docs/archive/README.md`：新增 archive 入口索引與維護提醒。
+
+## 2026-07-18 Roadmap 易讀性更新
+
+本次重新檢視 `ROADMAP.md` 後，採納以下整理方向：
+
+- 將 Roadmap 定位為主線導航，而不是完整歷史紀錄。
+- 前段保留目前狀態、產品定位護欄、近期主線與 P9c-2 實作邊界。
+- 已完成階段改成索引表，詳細脈絡連到 `docs/archive/`。
+- 延後項目集中呈現，避免未來把 crawler 重構、scheduler、平台化監控或完整整站策略重做插入近期主線。
+- 保留全域原則與細部規格索引，作為後續實作前的檢查清單。
+
+## 2026-07-18 README 易讀性更新
+
+本次比照 Roadmap 重新檢視 `README.md`，採納以下整理方向：
+
+- 將 README 定位為第一次使用者、政府機關承辦人員與網站窗口的入口文件。
+- 前段保留產品定位、快速開始、常見情境、GUI 使用與結果判讀。
+- 把進階 CLI、rules、cache、incremental 與技術細節分流到 `docs/CLI_REFERENCE.md`、`docs/TECHNICAL_SPEC.md` 與 Roadmap。
+- 輸出檔案改以一般使用者最常用的檔案為主，保留 NDJSON sidecar 的簡短說明。
+- 結果判讀改用「代表意義 / 建議處理」語氣，避免讓 `403`、`429`、WAF 或 timeout 被誤認為明確壞連結。
+- 安全邊界與授權提醒保留在 README，因為會直接影響工具使用方式。
+
+## 2026-07-18 Archive 索引更新
+
+本次檢視 `docs/archive/` 後，採納以下整理方向：
+
+- 新增 `docs/archive/README.md` 作為 archive 入口。
+- 將歸檔文件分成主線歷史與近期決策、階段評估與收尾、GUI / 發布與站台案例。
+- 明確提醒 archive 是歷史與決策背景，不是目前主線入口。
+- 新增歸檔文件時需同步更新 `docs/archive/README.md` 與 `docs/README.md`。
+
+## 2026-07-18 歷史文件狀態導覽更新
+
+本次維護 archive 相關歷史文件，採納以下整理方向：
+
+- 為缺少開頭狀態說明的歷史文件補上「狀態」導覽。
+- 將 `ROADMAP_HISTORY.md` 的現行 Roadmap 連結修正為 [../../ROADMAP.md](../../ROADMAP.md)。
+- 保留歷史內容原文，不改變當時分析結論。
+- 讓每份 archive 文件一開頭就能辨識它是歷史分析、近期評估、發布收尾或索引文件。

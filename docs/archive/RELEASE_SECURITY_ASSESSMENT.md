@@ -1,5 +1,7 @@
 # Release Security Assessment
 
+狀態：歷史 release security 評估。portable build 與發布治理的現行規劃請以 [../../ROADMAP.md](../../ROADMAP.md) 的 P11 與本文件的安全原則為準。
+
 評估日期：2026-06-27
 
 本文件記錄針對本專案 `.cmd` 與 portable `.exe` 降低防毒軟體、Windows SmartScreen 或企業端安全工具警戒可能性的分析與優先建議。方向是提高透明度、可驗證性與最小權限；不採用繞過偵測、混淆、加殼或隱蔽行為。

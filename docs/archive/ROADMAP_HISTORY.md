@@ -1,6 +1,8 @@
 ﻿# Roadmap History
 
-本文件保存已完成里程碑的詳細設計、驗收矩陣與理由。現行開發主線請看 `../ROADMAP.md`。
+狀態：歷史 Roadmap 與已完成里程碑紀錄。現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，archive 索引請看 [README.md](README.md)。
+
+本文件保存已完成里程碑的詳細設計、驗收矩陣與理由。
 
 ### P0. 單機版服務生命週期（已完成）
 

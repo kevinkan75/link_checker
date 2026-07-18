@@ -1,5 +1,7 @@
 # P6 Implementation Analysis
 
+狀態：歷史實作分析。P6 report-to-report diff 已完成；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，Report normalization 原則請看 [../REPORT_NORMALIZATION.md](../REPORT_NORMALIZATION.md)。
+
 記錄日期：2026-06-21
 
 ## 結論

@@ -1,5 +1,7 @@
 # GUI Usability Assessment
 
+狀態：歷史 GUI 易用性評估。P9a 已依本文件與 [../P9_GUI_ANALYZER_ASSESSMENT.md](../P9_GUI_ANALYZER_ASSESSMENT.md) 完成並驗收；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)。
+
 評估日期：2026-06-27
 
 本文件記錄從一般使用者角度檢視三個 GUI 介面的易用性與易讀性結果。此評估已納入 `ROADMAP.md` 的 P9 第一優先。

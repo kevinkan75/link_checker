@@ -1,5 +1,7 @@
 # P6 Preflight Assessment
 
+狀態：歷史前置評估。P6 已完成；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，P6 實作分析請看 [P6_IMPLEMENTATION_ANALYSIS.md](P6_IMPLEMENTATION_ANALYSIS.md)。
+
 評估日期：2026-06-21
 
 ## 結論
