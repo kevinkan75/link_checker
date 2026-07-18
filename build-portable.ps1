@@ -318,15 +318,26 @@ if not exist "%NODE_EXE%" (
   echo Please extract the complete portable folder again, then retry.
   exit /b 1
 )
-if /I "%~1"=="--system-ca" (
-  if defined NODE_OPTIONS (
-    echo %NODE_OPTIONS% | findstr /C:"--use-system-ca" >nul || set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"
-  ) else (
-    set "NODE_OPTIONS=--use-system-ca"
-  )
-  shift
-)
+call :enableSystemCa %*
 "%NODE_EXE%" "%~dp0gui-server.mjs" %*
+exit /b %ERRORLEVEL%
+
+:enableSystemCa
+if "%~1"=="" exit /b 0
+if /I "%~1"=="--system-ca" (
+  call :appendSystemCa
+  exit /b 0
+)
+shift
+goto :enableSystemCa
+
+:appendSystemCa
+if defined NODE_OPTIONS (
+  echo(%NODE_OPTIONS% | findstr /C:"--use-system-ca" >nul || set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"
+) else (
+  set "NODE_OPTIONS=--use-system-ca"
+)
+exit /b 0
 '@
 
   $analyzerCmd = @'
@@ -339,9 +350,28 @@ if not exist "%NODE_EXE%" (
   echo Please extract the complete portable folder again, then retry.
   exit /b 1
 )
+call :enableSystemCa %*
 echo External Link Analyzer:
 echo   http://127.0.0.1:8787/analyzer.html
 "%NODE_EXE%" "%~dp0gui-server.mjs" %*
+exit /b %ERRORLEVEL%
+
+:enableSystemCa
+if "%~1"=="" exit /b 0
+if /I "%~1"=="--system-ca" (
+  call :appendSystemCa
+  exit /b 0
+)
+shift
+goto :enableSystemCa
+
+:appendSystemCa
+if defined NODE_OPTIONS (
+  echo(%NODE_OPTIONS% | findstr /C:"--use-system-ca" >nul || set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"
+) else (
+  set "NODE_OPTIONS=--use-system-ca"
+)
+exit /b 0
 '@
 
   Set-Content -LiteralPath (Join-Path $PackageDir "check-links.cmd") -Value $checkLinksCmd -Encoding ASCII

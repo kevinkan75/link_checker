@@ -340,7 +340,7 @@ node .\report-diff.mjs old-report.json new-report.json --output diff.json
 .\check-links.cmd https://example.com --system-ca
 ```
 
-支援動態設定憑證的 Node 版本可在執行時啟用系統憑證；不支援時，CLI 會改用 `--use-system-ca` 重新啟動。GUI 可針對需要的檢查勾選 `System CA`，也可以用 `.\gui.cmd --system-ca` 啟動，讓 GUI 一開始就載入系統根憑證。
+支援動態設定憑證的 Node 版本可在執行時啟用系統憑證；不支援時，CLI 會改用 `--use-system-ca` 重新啟動。GUI 可針對需要的檢查勾選 `System CA`，也可以用 `.\gui.cmd --system-ca` 啟動，讓 GUI 一開始就載入系統根憑證；此參數可與其他 GUI 啟動參數併用，例如 `.\gui.cmd --port 8788 --system-ca`。
 
 ## Redirect 判讀
 

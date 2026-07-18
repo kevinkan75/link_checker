@@ -48,7 +48,7 @@ CLI 基本用法：
 | 一般網站檢查 | 使用 GUI 預設設定 |
 | 一次檢查多個網站 | 使用 GUI 佇列，一行一個網址 |
 | 網站容易出現 `403`、`429` 或 timeout | 降低同時檢查數，或使用 CLI `--conservative` |
-| Windows 瀏覽器可開，但工具憑證失敗 | 使用 CLI `--system-ca` |
+| Windows 瀏覽器可開，但工具憑證失敗 | GUI 可勾選 `System CA`，或用 `.\gui.cmd --system-ca` 啟動；CLI 使用 `--system-ca` |
 | 舊式 TLS 網站無法連線 | 使用 CLI `--legacy-tls` |
 | 需要規則檔、自動化或完整 JSON | 使用 CLI，詳見 [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) |
 
