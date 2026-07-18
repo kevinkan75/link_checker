@@ -15,7 +15,7 @@
 - P9 已於 2026-07-18 整體驗收；P9a、P9b 與 P9c 都已完成第一版並通過現有測試。
 - P9b-1 到 P9b-4 已驗收，包含 GUI log artifacts、NDJSON sidecar、GUI complete payload 瘦身、大檔提示、列表「載入更多」與 NDJSON 匯入。
 - P9c-1 / P9c-2 已驗收，包含 rules schema、root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
-- 目前下一個主線改為 P10：報告判讀、人工複核分類、交辦友善欄位與整站檢測策略的小步強化。
+- 目前下一個主線改為 P10：報告判讀與交辦友善強化。
 - P9c 的定位是補齊 rules 信任基線：讓報告可追溯、讓 URL rules 載入安全；不是建立複雜規則平台，也不是重構 crawler。
 - 產品定位已校準為本地端、低門檻、輔助型工具，主要提供政府機關承辦人員使用，不取代 CMS、維運流程、稽核系統或正式監控平台。
 
@@ -68,16 +68,61 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 - rules URL 安全化可避免日後開放 GUI 或批次使用時誤讀內網、localhost、metadata IP 或不可信 redirect。
 - 小步抽出 rules loader 能降低後續維護成本，但不改變既有 crawler 行為。
 
-### 2. 報告判讀與交辦友善
+### 2. P10：報告判讀與交辦友善強化
 
 **狀態：** 下一個主線  
 **目標：** 讓承辦人更容易判斷哪些要修、哪些要人工確認、哪些只是外站限制或已知轉址。
+
+重新評估結論：
+
+- P10 應收斂為「報告判讀與交辦友善強化」，不是整站治理平台、排程系統或正式監控工具。
+- 舊規劃中的整站檢測策略應只保留對承辦人有直接幫助的小步分類、呈現與匯出改善。
+- P10 不應擴大為取代 CMS、維運流程、稽核系統、W3C Link Checker 或監控平台。
+- P10 的驗收重點應是「承辦人是否更容易看懂、交辦、複核」，而不是「工具是否能自動治理整個網站」。
 
 建議交付：
 
 - 更清楚的結果分級：明確壞連結、可能失效、需人工確認、外站限制、已轉址但仍可用、頁內跳轉失效。
 - CSV / Excel 交辦友善欄位：來源頁、問題網址、問題類型、建議處理、是否需人工確認。
 - GUI 摘要用業務語言呈現，不要求使用者理解所有 HTTP / WAF 細節。
+
+建議切分：
+
+| 階段 | 名稱 | 內容 |
+| --- | --- | --- |
+| P10a | 判讀分類基線 | 定義 report / GUI / CSV 共用的人工可讀分類 |
+| P10b | 交辦欄位 | 補 CSV / Excel 友善欄位與建議處理文字 |
+| P10c | GUI 摘要改善 | 用承辦人語言呈現要修、要確認、可先忽略的結果 |
+| P10d | 頁內品質檢查 | Fragment / anchor 與 duplicate anchor，作為提醒類別 |
+
+與舊規劃比對：
+
+| 項目 | 重新評估 |
+| --- | --- |
+| 報告判讀分類 | 保留，列為 P10 核心 |
+| 人工複核欄位 | 保留，列為 P10 核心 |
+| CSV / Excel 交辦欄位 | 保留，最符合政府承辦人需求 |
+| Fragment / anchor 檢查 | 保留，但定位為頁面品質提醒 |
+| Duplicate anchor 檢查 | 保留，但不要混入明確壞連結主清單 |
+| GUI 一鍵模式 | 降級為後續評估，不先於判讀與交辦 |
+| 整站檢測策略強化 | 收斂為小步分類與呈現，不做治理平台 |
+| Incremental / sitemap 整合 | 已有基礎，P10 不擴大成排程 |
+| Scheduler / 平台化監控 | 移出 P10 |
+| 複雜 suppress rules | 移出 P10 |
+| 複雜 profile presets | 移出 P10 |
+| Headless render 預設化 | 移出 P10 |
+
+不納入 P10：
+
+- 常駐排程。
+- 平台化 dashboard。
+- 多人審核 / 派工流程。
+- 複雜規則治理。
+- GUI rules URL 表單。
+- 完整 profile presets。
+- headless render 預設化。
+- Web Worker / IndexedDB 大改。
+- 取代 W3C Link Checker 或機關既有工具。
 
 ### 3. 頁內連結品質檢查
 
@@ -124,7 +169,7 @@ Local Link Checker 的目標是讓承辦人能在本機輸入網址、保守掃�
 | P9b | 已驗收 | 大型報告處理、NDJSON sidecar、Analyzer 載入更多 | 不取代 `report.json` 主契約 |
 | P9c-1 | 已驗收 | Rules Schema | 已接續完成 P9c-2 |
 | P9c-2 | 已驗收 | Rules 追溯與 rules URL 載入安全 | 後續只保留小修 |
-| P10 | 下一個主線 | 輔助型分級、人工複核、整站檢測策略小步強化 | 優先評估 |
+| P10 | 下一個主線 | 報告判讀、人工複核分類、交辦友善欄位與頁內品質提醒 | 優先評估 |
 | P11 | 後續評估 | 輔助格式、release / packaging governance | P10 後評估 |
 
 ## 已完成里程碑索引

@@ -12,7 +12,7 @@ P9 可以開始，但應分階段實作：
 2. P9b：大型 report / NDJSON 輔助輸出。
 3. P9c：Profile、Rules Schema 與 Next.js Payload。
 
-目前狀態：P9 已於 2026-07-18 整體驗收。P9a 已於 2026-07-17 驗收通過；P9b-1、P9b-2、P9b-3、P9b-4、P9c-1 與 P9c-2 都已完成第一版。下一個主線是 P10 報告判讀、人工複核分類、交辦友善欄位與整站檢測策略的小步強化。下方分析保留作為歷史決策與驗收脈絡，不代表 P9a、P9b 或 P9c 仍是下一步。
+目前狀態：P9 已於 2026-07-18 整體驗收。P9a 已於 2026-07-17 驗收通過；P9b-1、P9b-2、P9b-3、P9b-4、P9c-1 與 P9c-2 都已完成第一版。下一個主線是 P10 報告判讀與交辦友善強化。下方分析保留作為歷史決策與驗收脈絡，不代表 P9a、P9b 或 P9c 仍是下一步。
 
 P9b-1 的已落地方向是：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，並讓 GUI SSE complete event 不再傳完整 report。第一版採完成後從 `report.json` 派生 sidecar，不先重寫掃描核心、不先做完整 streaming parser、不先設計 CLI sidecar。
 
@@ -530,7 +530,7 @@ P9 整體驗收通過。
 - P9 已達成「改善 GUI / Analyzer 易用性、降低大型報告卡頓、固定 rules 契約並補足規則追溯」的第一版目標。
 - `report.json` 仍是正式主契約；NDJSON sidecar 是大型報告輔助格式，不取代主格式。
 - 掃描語意未因 P9a / P9b 改動而改變；P9c-2 只補 rules 載入與追溯基線，不重構 crawler。
-- 目前主線可正式移往 P10：報告判讀、人工複核分類、交辦友善欄位與整站檢測策略的小步強化。
+- 目前主線可正式移往 P10：報告判讀與交辦友善強化。
 
 驗收時通過：
 
@@ -559,5 +559,25 @@ codex/p9-gui-analyzer-improvements
 下一個主線：
 
 ```text
-P10：報告判讀、人工複核分類、交辦友善欄位與整站檢測策略小步強化
+P10：報告判讀與交辦友善強化
 ```
+
+## 2026-07-18 P10 handoff note
+
+P10 已重新評估並與舊規劃比對。結論是 P10 應收斂為「報告判讀與交辦友善強化」，不應擴大成整站治理平台、常駐 scheduler、正式監控工具或複雜規則治理流程。
+
+P10 應保留：
+
+- 結果分級：明確壞連結、可能失效、需人工確認、外站限制、已轉址但仍可用、頁內跳轉失效。
+- CSV / Excel 交辦欄位：來源頁、問題網址、問題類型、建議處理、是否需人工確認。
+- GUI 摘要文字改善：用承辦人語言呈現要修、要確認、可先忽略的結果。
+- Fragment / anchor 與 duplicate anchor 檢查，定位為頁面品質提醒。
+
+P10 不納入：
+
+- 常駐排程、平台化 dashboard、多人工單或派工流程。
+- 複雜 suppress rules、完整 profile presets、GUI rules URL 表單。
+- headless render 預設化、Web Worker / IndexedDB 大改。
+- 取代 W3C Link Checker、CMS、機關既有維運流程或正式監控系統。
+
+P10 的驗收標準應聚焦「承辦人是否更容易看懂、交辦、複核」，而不是工具是否能自動治理整個網站。
