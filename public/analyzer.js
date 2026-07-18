@@ -11,6 +11,7 @@ const analyzeButton = document.querySelector("#analyze-button");
 const exportJsonButton = document.querySelector("#export-json-button");
 const exportCsvButton = document.querySelector("#export-csv-button");
 const loadState = document.querySelector("#load-state");
+const fileStatus = document.querySelector("#file-status");
 const importEmptyState = document.querySelector("#import-empty-state");
 const flowSelect = document.querySelector("#flow-select");
 const flowAnalyze = document.querySelector("#flow-analyze");
@@ -77,6 +78,9 @@ const UT1_SECURITY_CATEGORIES = new Set([
   "vpn",
 ]);
 
+const FILE_SIZE_WARN_BYTES = 15 * 1024 * 1024;
+const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
+
 let currentAnalysis = null;
 let ut1Categories = [];
 let appliedUt1Rules = [];
@@ -104,6 +108,7 @@ linksFileInput.addEventListener("change", () => {
     exportJsonButton.disabled = true;
     exportCsvButton.disabled = true;
     analyzeButton.disabled = true;
+    setFileStatus(null);
     setImportFlow("select", "尚未載入外連清單");
     setImportEmptyStateVisible(true);
     return;
@@ -113,7 +118,9 @@ linksFileInput.addEventListener("change", () => {
   exportCsvButton.disabled = true;
   analyzeButton.disabled = false;
   setImportEmptyStateVisible(true);
-  setImportFlow("analyze", `已選擇 ${file.name}，下一步按「分析」`);
+  const profile = getFileSizeProfile(file);
+  setFileStatus(profile.message, profile.level);
+  setImportFlow("analyze", `已選擇 ${file.name}（${formatBytes(file.size)}），下一步按「分析」`);
 });
 
 for (const input of [searchInput, riskFilterInput, governanceFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
@@ -211,7 +218,15 @@ ut1DownloadButton.addEventListener("click", () => {
 analyzeButton.addEventListener("click", async () => {
   try {
     analyzeButton.disabled = true;
-    setImportFlow("analyze", "讀取與分析中");
+    const file = linksFileInput.files?.[0];
+    if (file) {
+      const profile = getFileSizeProfile(file);
+      setFileStatus(profile.message, profile.level);
+      setImportFlow("analyze", `讀取與分析 ${file.name}（${formatBytes(file.size)}）`);
+    } else {
+      setImportFlow("analyze", "讀取與分析中");
+    }
+    await yieldToBrowser();
     const links = await loadLinksFile();
     const ruleIndex = await loadRulesFile();
     currentAnalysis = analyze(links, ruleIndex);
@@ -219,14 +234,18 @@ analyzeButton.addEventListener("click", async () => {
     exportJsonButton.disabled = false;
     exportCsvButton.disabled = false;
     analyzeButton.disabled = false;
+    if (file) {
+      setFileStatus(`${file.name} 已分析，大小 ${formatBytes(file.size)}。`, "ok");
+    }
     setImportFlow("export", `${getAnalysisStatusText(currentAnalysis)}；可匯出目前篩選結果`);
   } catch (error) {
     currentAnalysis = null;
     analyzeButton.disabled = !linksFileInput.files?.[0];
     exportJsonButton.disabled = true;
     exportCsvButton.disabled = true;
+    setFileStatus(error.message, "error");
     setImportEmptyStateVisible(true);
-    setImportFlow("analyze", `分析失敗：${error.message}`);
+    setImportFlow("analyze", "分析失敗");
   }
 });
 
@@ -250,13 +269,28 @@ async function loadLinksFile() {
     throw new Error("請先選擇 external-links.csv 或 report.json");
   }
 
-  const text = await file.text();
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".json")) {
-    return normalizeLinksFromJson(JSON.parse(text));
-  }
+  try {
+    const text = await file.text();
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".json")) {
+      try {
+        return normalizeLinksFromJson(JSON.parse(text));
+      } catch (error) {
+        throw makeImportError("json", error, file);
+      }
+    }
 
-  return normalizeLinksFromCsv(parseCsv(text));
+    try {
+      return normalizeLinksFromCsv(parseCsv(text));
+    } catch (error) {
+      throw makeImportError("csv", error, file);
+    }
+  } catch (error) {
+    if (error.isImportError) {
+      throw error;
+    }
+    throw makeImportError("read", error, file);
+  }
 }
 
 async function loadRulesFile() {
@@ -265,9 +299,85 @@ async function loadRulesFile() {
     return buildCombinedRuleIndex([]);
   }
 
-  const parsed = JSON.parse(await file.text());
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (error) {
+    throw makeImportError("rules", error, file);
+  }
   const rules = Array.isArray(parsed) ? parsed : parsed.rules;
   return buildCombinedRuleIndex(rules || []);
+}
+
+function getFileSizeProfile(file) {
+  if (file.size >= FILE_SIZE_LARGE_BYTES) {
+    return {
+      level: "warn",
+      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器分析可能會停頓。若是 GUI log 目錄輸出，建議優先使用 external-links.csv；external-links.ndjson 匯入會在 P9b-4 支援。`,
+    };
+  }
+  if (file.size >= FILE_SIZE_WARN_BYTES) {
+    return {
+      level: "warn",
+      message: `${file.name} 大小 ${formatBytes(file.size)}，讀取與分析可能需要一點時間。`,
+    };
+  }
+  return {
+    level: "ok",
+    message: `${file.name} 大小 ${formatBytes(file.size)}，可直接分析。`,
+  };
+}
+
+function makeImportError(kind, error, file) {
+  let message;
+  if (error instanceof RangeError || /allocation|memory|out of memory|maximum/i.test(error.message || "")) {
+    message = `${file.name} 太大，瀏覽器可能無法一次處理。請改用 external-links.csv，或先縮小報告範圍。`;
+  } else if (kind === "json" && error instanceof SyntaxError) {
+    message = `${file.name} 不是可解析的 JSON；請確認檔案是完整 report.json 或含 externalLinks 的 JSON。`;
+  } else if (kind === "csv") {
+    message = `${file.name} 不是可解析的 external-links.csv；請確認第一列欄位與檔案內容完整。`;
+  } else if (kind === "rules" && error instanceof SyntaxError) {
+    message = `${file.name} 不是可解析的分類規則 JSON；請確認規則檔格式完整。`;
+  } else {
+    message = `讀取 ${file.name} 失敗：${error.message}`;
+  }
+  const importError = new Error(message);
+  importError.isImportError = true;
+  return importError;
+}
+
+function setFileStatus(message, level = "ok") {
+  if (!fileStatus) {
+    return;
+  }
+  if (!message) {
+    fileStatus.hidden = true;
+    fileStatus.textContent = "";
+    fileStatus.className = "file-status";
+    return;
+  }
+  fileStatus.hidden = false;
+  fileStatus.textContent = message;
+  fileStatus.className = level === "warn" || level === "error"
+    ? `file-status ${level}`
+    : "file-status";
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) {
+    return "未知大小";
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${bytes} B`;
+}
+
+function yieldToBrowser() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function buildCombinedRuleIndex(rules) {

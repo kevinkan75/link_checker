@@ -164,6 +164,29 @@ label,
   margin-top: 14px;
 }
 
+.file-status {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fbfcfc;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.file-status.warn {
+  border-color: #eed2a5;
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.file-status.error {
+  border-color: #f0b4ad;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 .setup-panel,
 .panel {
   margin-top: 16px;

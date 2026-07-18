@@ -12,9 +12,11 @@ P9 可以開始，但應分階段實作：
 2. P9b：大型 report / NDJSON 輔助輸出。
 3. P9c：Profile、Rules Schema 與 Next.js Payload。
 
-目前狀態：P9a 已於 2026-07-17 驗收通過，P9b-1 已完成第一版；下一個實作起點是 P9b-2 Analyzer 大檔保護。下方 P9a 分析保留作為歷史決策與驗收脈絡，不代表 P9a-1 仍是下一步。
+目前狀態：P9a 已於 2026-07-17 驗收通過，P9b-1 與 P9b-2 已完成第一版；下一個實作起點是 P9b-3 前端列表分頁 / 載入更多。下方 P9a 分析保留作為歷史決策與驗收脈絡，不代表 P9a-1 仍是下一步。
 
 P9b-1 的已落地方向是：GUI log artifacts 新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，並讓 GUI SSE complete event 不再傳完整 report。第一版採完成後從 `report.json` 派生 sidecar，不先重寫掃描核心、不先做完整 streaming parser、不先設計 CLI sidecar。
+
+P9b-2 的已落地方向是：Report Analyzer 與 External Link Analyzer 在匯入大檔時先顯示檔案大小與載入狀態，載入期間暫停相關控制項，並把 JSON / CSV / rules 匯入錯誤轉成可行的使用者訊息。P9b-2 不加入 NDJSON 匯入，也不重做前端資料層；這些留給 P9b-3 / P9b-4。
 
 P9a 當時應先做，因為風險最低、使用者最有感，而且可以只動呈現層。P9b 會牽涉 Analyzer 載入策略與輔助輸出格式；P9c 會牽涉 CLI 參數、規則治理、payload extraction 與 report 欄位追溯，風險最高，應放在後段。
 
@@ -324,7 +326,21 @@ P9b-1 已完成第一版：
 - CLI sidecar 輸出設計。
 - Analyzer NDJSON 匯入與資料層重做。
 
-下一步：P9b-2 Analyzer 大檔保護，包含檔案大小提示、載入中狀態與更清楚的錯誤訊息。
+### 2026-07-18 P9b-2 implementation record
+
+P9b-2 已完成第一版：
+
+- Report Analyzer 選取 `report.json` 後會顯示檔名、檔案大小與大型檔案提示；載入期間會暫停檔案選擇、清除與匯出控制項，避免重複操作造成狀態混亂。
+- Report Analyzer 將 JSON 語法錯誤與記憶體 / 檔案過大類錯誤轉成較清楚的訊息，並建議大型報告優先使用 `broken.csv` 或後續 NDJSON sidecar 流程。
+- External Link Analyzer 選取 JSON / CSV 後會顯示檔名、檔案大小與大型檔案提示；分析期間會先讓瀏覽器更新載入狀態，再進行檔案讀取與解析。
+- External Link Analyzer 將 links JSON、`external-links.csv` 與 rules JSON 的匯入錯誤分開描述，避免所有錯誤都落成不明確的解析失敗。
+- 兩個 Analyzer 都保留現有 `report.json` / CSV 匯入契約；NDJSON 匯入、Web Worker、IndexedDB 與列表分頁不在 P9b-2 範圍。
+
+驗證通過：
+- `node --check public/report-analyzer.js`
+- `node --check public/analyzer.js`
+
+下一步：P9b-3 前端列表分頁 / 載入更多，先處理 Report Analyzer 壞連結清單與 External Link Analyzer 外連明細，降低一次建立大量 DOM 的成本。
 
 ## P9c 邊界
 
@@ -375,20 +391,21 @@ P9a 已完成且仍可視為通過。主 GUI 已改用 URL 檢測進度作為主
 
 P9b-1 已完成第一版。現有 GUI / CLI 仍以完成後一次建立完整 `report.json` 為主契約；GUI log 目錄會寫出 `summary.json`、`report.json`、`broken.csv`、`external-links.csv`、`external-summary.json`、`events.log`、`manifest.json`，並額外產生 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson` 作為大型報告輔助格式。GUI complete event 已改為輕量 payload，不再直接回傳完整 `report`。
 
+P9b-2 已完成第一版。Report Analyzer 與 External Link Analyzer 已加入檔案大小提示、載入狀態、載入期間控制項暫停，以及更清楚的 JSON / CSV / rules 匯入錯誤訊息。此步只保護現有匯入流程，不新增 NDJSON 匯入，也不重做列表渲染。
+
 P9c 部分已有前置能力，但未完整交付。CLI 已支援 `--domain-rules`、`--external-risk-rules`、`--site-link-rules`，掃描報告也會記錄這些 rules source；SPA 偵測可辨識 `__NEXT_DATA__` signal，實際抽取仍主要依 inline script URL/path literal 與 site-link-rules，不是完整的 Next.js payload parser。`schemas/` 目前只有 `report.schema.json` 與 `diff.schema.json`，尚未建立 `domain-rules.schema.json`、`external-risk-rules.schema.json`、`site-link-rules.schema.json`。也尚未看到 `normal`、`government-conservative`、`large-site`、`spa`、`external-governance` 這類 profile 的正式資料模型、CLI 入口或 `profileExpandedOptions` / `rulesVersion` 追溯欄位。
 
 ### 重新排序
 
-1. P9b-2：為大型報告加入前端保護，例如檔案大小提示、載入狀態與更清楚的錯誤訊息。
-2. P9b-3：為 Report Analyzer / External Link Analyzer 加入列表分頁或載入更多，降低一次建立大量 DOM 的成本。
-3. P9b-4：讓 Report Analyzer / External Link Analyzer 可載入 NDJSON sidecar，至少先支援 `broken.ndjson` 與 `external-links.ndjson`。
-4. P9c-1：補 rules schema 檔與驗證測試，先固定 `domain-rules`、`external-risk-rules`、`site-link-rules` 契約。
-5. P9c-2：再做 profiles 與 report 追溯欄位，避免在 schema 還未固定時擴大設定面。
-6. P9c-3：評估 Next.js `__NEXT_DATA__` 專用 parser；若只靠 URL/path literal 已足夠，先不要把它升成 P9c 必做。
+1. P9b-3：為 Report Analyzer / External Link Analyzer 加入列表分頁或載入更多，降低一次建立大量 DOM 的成本。
+2. P9b-4：讓 Report Analyzer / External Link Analyzer 可載入 NDJSON sidecar，至少先支援 `broken.ndjson` 與 `external-links.ndjson`。
+3. P9c-1：補 rules schema 檔與驗證測試，先固定 `domain-rules`、`external-risk-rules`、`site-link-rules` 契約。
+4. P9c-2：再做 profiles 與 report 追溯欄位，避免在 schema 還未固定時擴大設定面。
+5. P9c-3：評估 Next.js `__NEXT_DATA__` 專用 parser；若只靠 URL/path literal 已足夠，先不要把它升成 P9c 必做。
 
 ### 重新結論
 
-P9 的下一個實作點不是繼續修 UI，也不是重做掃描核心，而是 P9b-2。P9b-1 已解除完成瞬間傳送完整 report 的主要卡點；接下來應保護 Analyzer 載入大型檔案時的使用者體驗。
+P9 的下一個實作點不是繼續修 UI，也不是重做掃描核心，而是 P9b-3。P9b-1 已解除完成瞬間傳送完整 report 的主要卡點，P9b-2 已保護 Analyzer 載入大型檔案時的使用者體驗；接下來應降低大量列表一次渲染造成的 DOM 成本。
 
 P9c 應排在 P9b 基礎輸出之後。現有 rules 與 SPA 能力可以支撐目前掃描，但缺少 schema、profile 與追溯欄位，若太早加 GUI profile 設定，容易造成報告契約反覆變動。
 
@@ -403,5 +420,5 @@ codex/p9-gui-analyzer-improvements
 第一個實作項目建議為：
 
 ```text
-P9b-2：Analyzer 大檔保護
+P9b-3：前端列表分頁 / 載入更多
 ```

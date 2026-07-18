@@ -6,6 +6,7 @@ const exportCsvButton = document.querySelector("#export-csv-button");
 const clearButton = document.querySelector("#clear-button");
 const loadState = document.querySelector("#load-state");
 const reportEmptyState = document.querySelector("#report-empty-state");
+const fileStatus = document.querySelector("#file-status");
 const flowSelect = document.querySelector("#flow-select");
 const flowLoad = document.querySelector("#flow-load");
 const flowExport = document.querySelector("#flow-export");
@@ -49,6 +50,9 @@ const ISSUE_LABELS = {
   unknown_error: "未知錯誤",
 };
 
+const FILE_SIZE_WARN_BYTES = 15 * 1024 * 1024;
+const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
+
 let currentAnalysis = null;
 
 function startSessionHeartbeat() {
@@ -89,6 +93,7 @@ clearButton.addEventListener("click", () => {
   resetSelect(statusFilterInput, "全部");
   exportCsvButton.disabled = true;
   clearButton.disabled = true;
+  setFileStatus(null);
   setReportFlow("select", "尚未載入 report.json");
   renderEmpty();
 });
@@ -97,25 +102,105 @@ async function loadReportFile() {
   const file = reportFileInput.files?.[0];
   if (!file) {
     setReportFlow("select", "尚未載入 report.json");
+    setFileStatus(null);
     return;
   }
 
   try {
-    setReportFlow("load", `正在載入 ${file.name}`);
-    const report = JSON.parse(await file.text());
+    const profile = getFileSizeProfile(file);
+    setFileStatus(profile.message, profile.level);
+    setReportFlow("load", `正在載入 ${file.name}（${formatBytes(file.size)}）`);
+    reportFileInput.disabled = true;
+    clearButton.disabled = true;
+    exportCsvButton.disabled = true;
+    await yieldToBrowser();
+    const text = await file.text();
+    let report;
+    try {
+      report = JSON.parse(text);
+    } catch (error) {
+      throw makeImportError("json", error, file);
+    }
     currentAnalysis = analyzeReport(report);
     populateFilters(currentAnalysis);
     renderAnalysis(applyFilters(currentAnalysis));
     exportCsvButton.disabled = false;
     clearButton.disabled = false;
+    setFileStatus(`${file.name} 已載入，大小 ${formatBytes(file.size)}。`, "ok");
     setReportFlow("export", `${file.name} 已載入，${currentAnalysis.broken.length} 筆壞連結${currentAnalysis.runStatus.status === "complete" ? "" : "，報告未完整完成"}；可篩選或匯出`);
   } catch (error) {
     currentAnalysis = null;
     exportCsvButton.disabled = true;
     clearButton.disabled = false;
-    setReportFlow("load", `讀取失敗：${error.message}`);
+    setFileStatus(error.message, "error");
+    setReportFlow("load", "讀取失敗");
     renderEmpty("無法解析 report.json。");
+  } finally {
+    reportFileInput.disabled = false;
   }
+}
+
+function getFileSizeProfile(file) {
+  if (file.size >= FILE_SIZE_LARGE_BYTES) {
+    return {
+      level: "warn",
+      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器載入完整 report 可能會停頓。若只是要處理明細，建議優先使用 GUI log 目錄中的 broken.csv 或 broken.ndjson。`,
+    };
+  }
+  if (file.size >= FILE_SIZE_WARN_BYTES) {
+    return {
+      level: "warn",
+      message: `${file.name} 大小 ${formatBytes(file.size)}，載入與篩選可能需要一點時間。`,
+    };
+  }
+  return {
+    level: "ok",
+    message: `${file.name} 大小 ${formatBytes(file.size)}，可直接載入。`,
+  };
+}
+
+function makeImportError(kind, error, file) {
+  if (kind === "json" && error instanceof SyntaxError) {
+    return new Error(`${file.name} 不是可解析的 report.json；請確認檔案是完整 JSON，或改用 broken.csv / broken.ndjson。`);
+  }
+  if (error instanceof RangeError || /allocation|memory|out of memory|maximum/i.test(error.message || "")) {
+    return new Error(`${file.name} 太大，瀏覽器可能無法一次處理。請改用 broken.csv / broken.ndjson，或先縮小報告範圍。`);
+  }
+  return new Error(`讀取 ${file.name} 失敗：${error.message}`);
+}
+
+function setFileStatus(message, level = "ok") {
+  if (!fileStatus) {
+    return;
+  }
+  if (!message) {
+    fileStatus.hidden = true;
+    fileStatus.textContent = "";
+    fileStatus.className = "file-status";
+    return;
+  }
+  fileStatus.hidden = false;
+  fileStatus.textContent = message;
+  fileStatus.className = level === "warn" || level === "error"
+    ? `file-status ${level}`
+    : "file-status";
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) {
+    return "未知大小";
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${bytes} B`;
+}
+
+function yieldToBrowser() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function analyzeReport(report) {
