@@ -45,3 +45,4 @@
 - 2026-07-19 P10 完整性已驗證；P10d 先不實作且不阻擋 release gate。P11 分階段分析已記錄於根目錄 `ROADMAP.md`，作為後續測試、GUI smoke test、portable package、manifest / checksum、文件與最終 release gate 判定的追查依據。
 - 2026-07-19 P11a 測試與語法 gate 已通過；詳細執行紀錄已記錄於根目錄 `ROADMAP.md`。
 - 2026-07-19 P11b GUI smoke test 已於修正空外連清單匯入相容性後通過；詳細執行紀錄已記錄於根目錄 `ROADMAP.md`。
+- 2026-07-19 P11c portable package 重建已通過；詳細執行紀錄已記錄於根目錄 `ROADMAP.md`。

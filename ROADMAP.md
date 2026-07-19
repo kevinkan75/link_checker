@@ -253,6 +253,21 @@ P11b 執行紀錄（2026-07-19）：
 - 語法 gate：修正後共檢查 29 個檔案，包含根目錄 `.mjs` 與 `public/*.js`，全部通過。
 - 結論：P11b GUI smoke test 可關閉，下一步進入 P11c portable package 重建。
 
+P11c 執行紀錄（2026-07-19）：
+
+- 狀態：通過。
+- 重建方式：執行 `build-portable.ps1`；因本機 PowerShell execution policy 阻擋直接執行，改用單次程序 `ExecutionPolicy Bypass` 執行，未修改系統 policy。
+- 產物：已重建 `dist/LinkChecker-portable`、`dist/LinkChecker-portable.zip`、`dist/LinkChecker-portable.build-manifest.json` 與 `dist/LinkChecker-portable.zip.sha256`。
+- Build metadata：外部 manifest 記錄 commit `f08f417059c1a152cd43359852017a781368af41`、branch `main`、gitStatus 空字串、Node runtime `v24.18.0`。
+- Zip 驗證：zip 大小 34,844,594 bytes；實際 SHA256、外部 manifest 與 `.zip.sha256` 一致，值為 `9594c97164b5c62b09452e9a0984d7693a96dce3c20d176a4d3a60ab5a75e956`。
+- Package manifest：`BUILD-MANIFEST.json` scope 為 `portable-package`，記錄 43 個檔案，包含 `runtime\node.exe`、`Start Link Checker.exe`、`gui.cmd` 與 `PORTABLE-README.txt`。
+- Bundled runtime：`dist\LinkChecker-portable\runtime\node.exe --version` 回傳 `v24.18.0`；外部 manifest 記錄 Node 簽章狀態為 `Valid`。
+- Launcher：`Start Link Checker.exe` 已以 local self-signed certificate 簽章；簽章狀態為未受公開信任 root 終止，符合 self-signed / SmartScreen 限制說明。
+- Localhost-only：portable 內 `gui-server.mjs` 固定 `HOST = "127.0.0.1"`，啟動輸出使用 `http://127.0.0.1:<port>`，`PORTABLE-README.txt` 已說明 GUI server 只 listen localhost、不安裝 service、不寫 registry、不自啟動、不連接遠端控制端。
+- Manual shutdown smoke：以 portable `gui.cmd --port 18927 --no-idle-shutdown` 啟動，主頁回應 200；POST `/api/shutdown` 回應 200；之後服務停止且程序 exit code 為 0。
+- Idle shutdown smoke：以 portable `gui.cmd --port 18928 --idle-shutdown-ms 1000` 啟動，主頁回應 200；閒置後輸出 `idle for ...ms` 並停止，程序 exit code 為 0。
+- 結論：P11c portable package 重建可關閉，下一步進入 P11d manifest / checksum / release metadata 檢查。
+
 ### 3. 頁內連結品質檢查
 
 **狀態：** P10d optional，不阻擋 release gate
