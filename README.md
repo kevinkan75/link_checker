@@ -170,9 +170,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 
 ```text
 dist\LinkChecker-portable.zip
+dist\LinkChecker-portable.build-manifest.json
+dist\LinkChecker-portable.zip.sha256
 ```
 
 可攜版內含 `runtime\node.exe`，使用者解壓縮後不需要另外安裝 Node.js。
+
+發佈前請核對：
+
+- `LinkChecker-portable.zip.sha256` 的 hash 是否等於實際 zip SHA256。
+- `LinkChecker-portable.build-manifest.json` 是否記錄正確來源 commit、Node runtime version、zip hash、launcher hash 與 bundled file 清單。
+- 可攜資料夾內的 `BUILD-MANIFEST.json` 是否可用來追查每個 bundled 檔案的 SHA256。
+- `PORTABLE-README.txt` 是否仍明確說明 localhost-only、不安裝 service、不寫 registry、不自啟動、不連接遠端控制端。
+- `Start Link Checker.exe` 目前使用 local self-signed certificate；這只適合內部信任流程，不是公開信任簽章，也不能期待移除 Windows SmartScreen 警告。若要對外公開發佈，應另行評估公開信任 code signing。
 
 ## 專案文件
 

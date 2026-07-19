@@ -268,6 +268,31 @@ P11c 執行紀錄（2026-07-19）：
 - Idle shutdown smoke：以 portable `gui.cmd --port 18928 --idle-shutdown-ms 1000` 啟動，主頁回應 200；閒置後輸出 `idle for ...ms` 並停止，程序 exit code 為 0。
 - 結論：P11c portable package 重建可關閉，下一步進入 P11d manifest / checksum / release metadata 檢查。
 
+P11d 執行紀錄（2026-07-19）：
+
+- 狀態：通過；release notes 內容更新留給 P11e，最終 P11f 需在文件收尾後再做一次最後 artifact / HEAD 對齊檢查。
+- 初始檢查：P11c 產物的 external manifest 指向 `f08f417059c1a152cd43359852017a781368af41`，但目前 HEAD 是 `dbf6abf92c86f106a6e2167094ce11cdf16a1c42`；因此先在乾淨工作區重建 portable，避免 release metadata 指向舊 commit。
+- Rebuild metadata：重建後 external manifest 與 package manifest 都指向 `dbf6abf92c86f106a6e2167094ce11cdf16a1c42`，branch 為 `main`，gitStatus 空字串，Node runtime `v24.18.0`。
+- Zip metadata：`LinkChecker-portable.zip` 大小 34,845,459 bytes；實際 SHA256、external manifest 與 `.zip.sha256` 一致，值為 `ee135ba56ffef4e4bc868d00ab9732795acb2ae87fcfb925d2c47568e4852336`。
+- Manifest hash：external manifest 記錄的 `BUILD-MANIFEST.json` SHA256 與實際檔案一致。
+- Package manifest：scope 為 `portable-package`，記錄 43 個 bundled 檔案；必要檔案 `runtime\node.exe`、`Start Link Checker.exe`、`gui.cmd`、`check-links.cmd`、`analyzer.cmd`、`PORTABLE-README.txt`、`README.md`、`ROADMAP.md`、`docs\README.md`、`public\analyzer.js`、`gui-server.mjs` 與 `link-checker.mjs` 均存在。
+- Package hash verification：逐一重算 package manifest 內 43 個檔案 SHA256，無缺檔、無 hash mismatch。
+- Zip contents：zip 內共有 44 個 entries；抽查必要檔案均存在。
+- Signature metadata：bundled `runtime\node.exe` Authenticode 狀態為 `Valid`，signer 為 OpenJS Foundation；`Start Link Checker.exe` 為 local self-signed certificate，狀態為未受公開信任 root 終止，符合 SmartScreen / self-signed 限制說明。
+- Portable readme metadata：已包含 BUILD-MANIFEST / SHA256 說明、localhost-only、安全模型、bundled `runtime\node.exe`、self-signed 與 SmartScreen 限制。
+- Release notes follow-up：`dist\v0.12.0-notes.md` 仍是舊版 notes，包含舊 SHA；此項列入 P11e release notes 收尾，不作為 P11d manifest/checksum 阻擋項。
+- 結論：P11d manifest / checksum / release metadata gate 可關閉，下一步進入 P11e 文件與 release notes 收尾。
+
+P11e 執行紀錄（2026-07-19）：
+
+- 狀態：通過；P11f 仍需在 P11e commit 後重建並做最終 artifact / HEAD 對齊檢查。
+- README：補 portable build 產物、manifest / SHA256 核對、portable readme 安全說明與 self-signed / SmartScreen 限制。
+- CLI reference：新增 portable package 與發佈驗證段落，列出 portable zip、external manifest、`.zip.sha256`、package manifest 與必要檔案檢查項目。
+- Technical spec：擴充 Release / Packaging，記錄 build outputs、安全模型、bundled runtime、manifest、checksum、self-signed 與公開 code signing 邊界。
+- Release notes：更新 `dist\v0.12.0-notes.md` 為 P11 release gate notes，移除舊 P6 / P7-era SHA，改列 P11a-P11d 驗證、目前 artifact metadata 與 P11f final rebuild 要求。
+- Docs index：補 P11e 文件與 release notes 收尾狀態。
+- 結論：P11e 文件與 release notes 收尾可關閉，下一步進入 P11f 最終 release gate 判定。
+
 ### 3. 頁內連結品質檢查
 
 **狀態：** P10d optional，不阻擋 release gate

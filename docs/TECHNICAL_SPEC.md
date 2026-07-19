@@ -685,3 +685,21 @@ Package 包含：
 - `ROADMAP.md`
 - `docs/`
 - `Start Link Checker.exe`
+
+Build script 會重建：
+
+- `dist\LinkChecker-portable`
+- `dist\LinkChecker-portable.zip`
+- `dist\LinkChecker-portable.build-manifest.json`
+- `dist\LinkChecker-portable.zip.sha256`
+
+Portable package 的安全與完整性原則：
+
+- GUI server 固定 listen `127.0.0.1`，不對外開放。
+- `.cmd` launcher 只使用同資料夾內的 `runtime\node.exe`，找不到 bundled runtime 時直接停止，不 fallback 到 PATH。
+- package 不安裝 Windows service、不寫 registry startup entries、不設定開機自啟動、不連接遠端控制端。
+- `BUILD-MANIFEST.json` 記錄 portable 資料夾內 bundled file 清單與 SHA256。
+- external build manifest 記錄 zip SHA256、來源 commit、Node runtime version、launcher / Node hash 與 Authenticode 簽章資訊。
+- `LinkChecker-portable.zip.sha256` 是發佈前核對 zip artifact 的簡易入口。
+- `Start Link Checker.exe` 目前採 local self-signed Authenticode 簽章，只適合內部 trust/import 流程；它不是公開信任 code signing，不能期待消除 Windows SmartScreen 警告。
+- 若要正式公開發佈，應在 P11f 或正式 release 流程中評估公開信任 code signing certificate 或可信代管簽章服務。

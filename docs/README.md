@@ -46,3 +46,5 @@
 - 2026-07-19 P11a 測試與語法 gate 已通過；詳細執行紀錄已記錄於根目錄 `ROADMAP.md`。
 - 2026-07-19 P11b GUI smoke test 已於修正空外連清單匯入相容性後通過；詳細執行紀錄已記錄於根目錄 `ROADMAP.md`。
 - 2026-07-19 P11c portable package 重建已通過；詳細執行紀錄已記錄於根目錄 `ROADMAP.md`。
+- 2026-07-19 P11d manifest / checksum / release metadata gate 已通過；release notes 內容更新留給 P11e，詳細執行紀錄已記錄於根目錄 `ROADMAP.md`。
+- 2026-07-19 P11e 文件與 release notes 收尾已完成；P11f 仍需在 P11e commit 後重建並做最終 artifact / HEAD 對齊檢查。

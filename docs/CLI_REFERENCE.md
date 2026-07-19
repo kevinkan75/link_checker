@@ -164,6 +164,32 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
 | `--output <file>` | 把完整結果輸出成 JSON |
 | `--json` | 在畫面上輸出完整 JSON；不會顯示進度或詳細事件，以避免破壞 JSON 輸出 |
 
+## Portable package 與發佈驗證
+
+Windows portable package 由根目錄 `build-portable.ps1` 產生：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
+```
+
+主要產物：
+
+| 產物 | 用途 |
+| --- | --- |
+| `dist\LinkChecker-portable.zip` | 可交付的 portable zip |
+| `dist\LinkChecker-portable.build-manifest.json` | zip 層級 release metadata，包含來源 commit、Node runtime version、zip hash、launcher / Node 簽章資訊 |
+| `dist\LinkChecker-portable.zip.sha256` | zip SHA256 文字檔 |
+| `dist\LinkChecker-portable\BUILD-MANIFEST.json` | portable 資料夾內每個 bundled 檔案的 SHA256 清單 |
+| `dist\LinkChecker-portable\PORTABLE-README.txt` | 使用與安全模型說明 |
+
+驗證重點：
+
+- `LinkChecker-portable.zip.sha256` 必須等於實際 zip SHA256。
+- external manifest 的 `build.gitCommit` 應等於要發佈的來源 commit。
+- external manifest 與 package manifest 的 Node runtime version 應一致。
+- package manifest 內必要檔案應包含 `runtime\node.exe`、`Start Link Checker.exe`、`gui.cmd`、`check-links.cmd`、`analyzer.cmd`、`PORTABLE-README.txt`、`README.md`、`ROADMAP.md`、`docs\README.md`、`public\analyzer.js`、`gui-server.mjs` 與 `link-checker.mjs`。
+- `runtime\node.exe` 應保留有效 Authenticode 簽章；`Start Link Checker.exe` 目前是 local self-signed 簽章，不是公開信任 code signing。
+
 ## 規則檔格式
 
 P9c-1 起，三種規則檔都有對應 schema 作為公開契約與測試依據：
