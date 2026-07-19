@@ -17,6 +17,7 @@
 - P9c-1 / P9c-2 已驗收，包含 rules schema、root `rulesTrace`、rules fingerprint、source metadata、大小限制、redirect 檢查與 URL security policy。
 - 目前主線為 P10：報告判讀與交辦友善強化；P10a / P10b / P10c 已完成。
 - P10 完成並驗收後，可進入正式版 release gate；P11 應定位為發布前 hardening / packaging 檢查，不再新增大型產品功能。
+- 2026-07-19 已確認 P10d 先不實作；P10a / P10b / P10c 已通過 P10 專用測試、全回歸測試與語法檢查。P11 建議拆成 release gate 檢查批次，供後續追查與執行。
 - P9c 的定位是補齊 rules 信任基線：讓報告可追溯、讓 URL rules 載入安全；不是建立複雜規則平台，也不是重構 crawler。
 - 產品定位已校準為本地端、低門檻、輔助型工具，主要提供政府機關承辦人員使用，不取代 CMS、維運流程、稽核系統或正式監控平台。
 
@@ -220,6 +221,16 @@ P10 完成後的正式版 release gate：
 - 產生並檢查 build manifest、SHA256、runtime version、來源 commit 與產物清單。
 - 更新 README、Roadmap、CLI reference、technical spec 與 release notes。
 - 明確標示 self-signed / SmartScreen 限制；若要對外公開發佈，再評估公開信任 code signing。
+
+P11 分階段分析紀錄（2026-07-19）：
+
+- 結論：P11 應分階段執行，但每一階段都屬於 release gate 檢查，不新增產品功能，也不把 P10d 併入阻擋項。
+- P11a：測試與語法 gate。執行全部 `test-*.mjs`，並對主要 `.mjs` 與前端 Analyzer 腳本做語法檢查。
+- P11b：GUI smoke test。驗證 GUI 啟動、掃描、報告下載、Report Analyzer 匯入與 External Link Analyzer 匯入。
+- P11c：Portable package 重建。重建 portable zip，確認 bundled runtime、launcher、localhost-only、manual shutdown 與 idle shutdown。
+- P11d：Manifest / checksum / release metadata。檢查 build manifest、SHA256、Node runtime version、來源 commit、產物清單與簽章狀態。
+- P11e：文件與 release notes 收尾。更新 README、Roadmap、CLI reference、technical spec、release notes，並明確標示 self-signed / SmartScreen 限制。
+- P11f：最終 release gate 判定。彙整測試結果、package smoke test、hash、文件狀態與安全說明，決定是否可標正式版。
 
 ### 3. 頁內連結品質檢查
 

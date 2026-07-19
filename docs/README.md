@@ -42,3 +42,4 @@
 - P9 已於 2026-07-18 整體驗收。P9b 大型 report / NDJSON 輔助輸出已完成並驗收；GUI log artifacts 會新增 `checked.ndjson`、`broken.ndjson`、`external-links.ndjson`，GUI SSE complete event 不再傳完整 report，Analyzer 具備大檔提示、載入狀態、列表「載入更多」，並可匯入 `broken.ndjson` / `external-links.ndjson`。P9c-1 Rules Schema 與 P9c-2 Rules 追溯 / rules URL 載入安全化已完成並驗收。
 - 2026-07-18 完整專案評估已歸檔於 `archive/PROJECT_ASSESSMENT_2026-07-18.md`；結論是專案健康度穩定，P9c-2 已補上 rules 追溯與 rules URL 載入安全基線，P10 報告判讀與交辦友善強化已完成核心收尾，且不擴大成平台化監控或整站治理系統。下一步可進入正式版 release gate。
 - 2026-07-18 Roadmap 已整理為易讀版：主文聚焦目前狀態、產品定位護欄、近期主線、延後項目與索引；已完成階段的細節交由 archive 文件保存。
+- 2026-07-19 P10 完整性已驗證；P10d 先不實作且不阻擋 release gate。P11 分階段分析已記錄於根目錄 `ROADMAP.md`，作為後續測試、GUI smoke test、portable package、manifest / checksum、文件與最終 release gate 判定的追查依據。
