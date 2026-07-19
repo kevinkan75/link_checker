@@ -638,8 +638,11 @@ function normalizeLinksFromJson(value) {
 }
 
 function normalizeLinksFromNdjson(items) {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new Error("NDJSON 沒有資料列");
+  if (!Array.isArray(items)) {
+    throw new Error("NDJSON 格式不正確");
+  }
+  if (items.length === 0) {
+    return [];
   }
   return dedupeLinks(items.map(normalizeLink).filter((item) => item.url));
 }
@@ -649,11 +652,15 @@ function isExternalLinksNdjsonFile(file) {
 }
 
 function normalizeLinksFromCsv(rows) {
-  if (rows.length < 2) {
-    throw new Error("CSV 沒有資料列");
+  if (rows.length < 1) {
+    throw new Error("CSV 沒有表頭列");
   }
 
   const headers = rows[0].map((item) => item.trim());
+  if (rows.length === 1) {
+    return [];
+  }
+
   return dedupeLinks(rows.slice(1)
     .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] || ""])))
     .map(normalizeLink)

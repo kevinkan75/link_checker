@@ -232,6 +232,27 @@ P11 分階段分析紀錄（2026-07-19）：
 - P11e：文件與 release notes 收尾。更新 README、Roadmap、CLI reference、technical spec、release notes，並明確標示 self-signed / SmartScreen 限制。
 - P11f：最終 release gate 判定。彙整測試結果、package smoke test、hash、文件狀態與安全說明，決定是否可標正式版。
 
+P11a 執行紀錄（2026-07-19）：
+
+- 狀態：通過。
+- Node runtime：`v24.18.0`。
+- 全部 `test-*.mjs` 已執行並通過，共 21 個測試檔。
+- 語法 gate 已通過，共檢查 28 個檔案，包含根目錄 `.mjs` 與 `public/*.js`。
+- 結論：P11a 測試與語法 gate 可關閉，下一步進入 P11b GUI smoke test。
+
+P11b 執行紀錄（2026-07-19）：
+
+- 狀態：修正後通過。
+- GUI 啟動：本機 GUI server 可正常啟動並回應主頁；測試期間另啟本機 fixture server，結束後已停止。
+- 掃描流程：以 GUI 主畫面執行最小範圍 smoke scan，目標 `https://example.com/`，設定 1 頁、深度 0、不檢查外部連結；畫面顯示「檢查完成」，下載 JSON 按鈕啟用，並產生完整 GUI log artifacts。
+- 報告產物：`report.json` 為 complete run，包含 `summary.interpretationByCategory`，同批輸出 `broken.csv`、`external-links.csv` 與 NDJSON sidecars。
+- Report Analyzer：可匯入該次 `report.json`，指標、判讀分類與待判讀清單更新，無前端錯誤。
+- External Link Analyzer：初次驗證發現 GUI 在無外連時產生的 header-only `external-links.csv` 會被 Analyzer 誤判為不可解析；已修正為接受空 `external-links.csv` / `external-links.ndjson`，並新增 `test-p11b-empty-external-analyzer.mjs` 防回歸。
+- 修正後驗證：External Link Analyzer 可匯入並分析 header-only `external-links.csv`，呈現 0 筆外連且無前端錯誤。
+- 回歸測試：修正後全部 `test-*.mjs` 已執行並通過，共 22 個測試檔。
+- 語法 gate：修正後共檢查 29 個檔案，包含根目錄 `.mjs` 與 `public/*.js`，全部通過。
+- 結論：P11b GUI smoke test 可關閉，下一步進入 P11c portable package 重建。
+
 ### 3. 頁內連結品質檢查
 
 **狀態：** P10d optional，不阻擋 release gate
