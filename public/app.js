@@ -101,7 +101,7 @@ const defaultSettings = {
   longRedirectThreshold: "3",
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
   userAgent: defaultUserAgent,
-  checkExternal: false,
+  checkExternal: true,
   preferGet: false,
   externalReferer: false,
   confirm404: true,
