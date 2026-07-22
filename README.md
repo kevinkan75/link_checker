@@ -81,17 +81,17 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出：
 
 ## 判讀分類
 
-報告會把技術結果翻譯成較容易交辦的分類：
+報告會把技術結果翻譯成較容易交辦的分類。GUI 與 Report Analyzer 會把需要承辦人處理或確認的項目稱為待判讀結果。
 
-| 分類 | 說明 |
-| --- | --- |
-| `action_required` | 明確需要處理，例如確認不存在的 `404 / 410` 或 redirect 失效 |
-| `needs_review` | 需要人工確認，例如 `403`、`429`、timeout、TLS 或網路錯誤 |
-| `external_limited` | 外部網站可能限制工具請求，建議人工確認 |
-| `likely_problem` | 可能失效但仍需判斷情境 |
-| `redirect_ok` | 已轉址但最終仍可用 |
-| `ok` | 可先忽略或正常 |
-| `page_quality_notice` | 頁內品質提醒，保留給 optional 檢查 |
+| 判讀分類 | 代表意義 | 建議處理 |
+| --- | --- | --- |
+| `action_required` | 明確需要處理，例如確認不存在的 `404 / 410` 或 redirect 失效 | 優先修正、移除或更新來源頁連結 |
+| `needs_review` | 需要人工確認，例如 `403`、`429`、timeout、TLS 或網路錯誤 | 用瀏覽器人工確認，再決定是否交辦 |
+| `external_limited` | 外部網站可能限制工具請求 | 人工確認外站是否可開，必要時與外站窗口確認 |
+| `likely_problem` | 可能失效但仍需判斷情境 | 檢查網址、伺服器狀態或內容是否仍有效 |
+| `redirect_ok` | 已轉址但最終仍可用 | 可視需要更新成 final URL |
+| `ok` | 可先忽略或正常 | 通常不需處理 |
+| `page_quality_notice` | 頁內品質提醒，保留給 optional 檢查 | 視內容維護需求處理 |
 
 這些分類會出現在 `report.json`、GUI、Report Analyzer 與 `broken.csv`，方便篩選、交辦與存查。
 
