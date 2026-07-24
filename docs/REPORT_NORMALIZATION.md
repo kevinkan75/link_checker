@@ -1,6 +1,6 @@
-# P6 Report Normalization
+# Report Diff Normalization
 
-本文件固定 P6 `report-diff.mjs` 讀取兩份既有 `report.json` 時的 normalization 原則。P6 只讀 report 並輸出 diff，不重新掃描、不重新判斷風險、不改既有 scan report 契約。
+本文件固定 `report-diff.mjs` 讀取兩份既有 `report.json` 時的 normalization 原則。此規格源自 P6，但仍是現行 report diff 契約：只讀 report 並輸出 diff，不重新掃描、不重新判斷風險、不改既有 scan report 契約。
 
 ## 目標
 
@@ -21,6 +21,7 @@ P6 實作可先整理成下列內部結構，再產生 `diff.json`：
     startedAt,
     startUrl,
     schemaVersion,
+    runStatus,
     summary
   },
   urlsByKey: Map<string, NormalizedUrl>,
@@ -28,7 +29,8 @@ P6 實作可先整理成下列內部結構，再產生 `diff.json`：
   diagnostics: {
     scanQuality,
     spaDetection,
-    checkedByKind
+    checkedByKind,
+    hostDiagnostics
   },
   warnings: []
 }
@@ -44,9 +46,11 @@ P6 實作可先整理成下列內部結構，再產生 `diff.json`：
 - `startedAt`：若存在則保留。
 - `startUrl`：若存在則保留。
 - `schemaVersion`：若存在則保留；缺少時視為 legacy report。
+- `runStatus`：若存在則保留 `complete`、`partial` 或 `failed` 狀態與相關欄位；缺少時視為 legacy complete。
 - `summary`：保留原始 summary，供 diff summary 與 diagnostics 使用。
 
 缺少 `schemaVersion` 不應造成錯誤；應加入 `legacy_report` warning。
+`runStatus.status` 為 `partial` 或 `failed` 時，應加入 `partial_report` warning，提醒 diff 可能不代表完整掃描。
 
 ## Match Key
 
@@ -125,6 +129,7 @@ P6 只比較 report summary 中已存在的診斷摘要，不重新計算掃描�
 - `summary.scanQuality`
 - `summary.spaDetection`
 - `summary.checkedByKind`
+- `summary.hostDiagnostics`
 
 這些變化輸出到 `diagnosticsChanges`。缺少欄位時以 `null` 比較即可，不要回頭掃描頁面或重算 asset ratio。
 
@@ -202,8 +207,9 @@ P6 normalization 至少支援下列 warnings，並對應 `schemas/diff.schema.js
 - `fallback_to_broken`
 - `duplicate_key`
 - `unsupported_schema`
+- `partial_report`
 
-P6.5b 才會正式導入 partial report 語意；P6 如遇明顯的 partial 訊號，可輸出 `partial_report` warning，但不得自行定義新的 scan report 欄位。
+P6.5b 起正式導入 partial report 語意；現行 diff 讀到 `runStatus.status` 為 `partial` 或 `failed` 時會輸出 `partial_report` warning，但不會自行定義新的 scan report 欄位。
 
 ## Non-goals
 

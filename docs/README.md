@@ -9,15 +9,12 @@
 - [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：report-to-report diff 與 normalization 設計。
 - [rules/cec-site-link-rules.json](rules/cec-site-link-rules.json)：CEC SPA / CMS site link rules 範例。
 
-## 評估與專題紀錄
-
-- [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入與 rules schema / trace 的評估及驗收紀錄。
-
 ## 歸檔入口
 
 - [archive/README.md](archive/README.md)：歸檔文件索引。
 - [archive/ROADMAP_HISTORY.md](archive/ROADMAP_HISTORY.md)：P0-P5.5 已完成里程碑的詳細歷史。
 - [archive/PROJECT_ASSESSMENT_2026-07-18.md](archive/PROJECT_ASSESSMENT_2026-07-18.md)：2026-07-18 完整專案評估。
+- [archive/P9_GUI_ANALYZER_ASSESSMENT.md](archive/P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入與 rules schema / trace 的評估及驗收紀錄。
 - [archive/README_2026-07-22_PRE_DOCS_REFRESH.md](archive/README_2026-07-22_PRE_DOCS_REFRESH.md)：本次整理前的根 README 快照。
 - [archive/ROADMAP_2026-07-22_PRE_DOCS_REFRESH.md](archive/ROADMAP_2026-07-22_PRE_DOCS_REFRESH.md)：本次整理前的根 ROADMAP 快照。
 

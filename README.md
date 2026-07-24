@@ -128,6 +128,6 @@ Portable 版本包含 bundled Node runtime、GUI launcher、CLI scripts、文件
 - [docs/README.md](docs/README.md)：文件總索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：CLI 參數與範例。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：核心流程、report schema、GUI API 與技術契約。
-- [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 評估與驗收紀錄。
+- [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 評估與驗收紀錄。
 - [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)：已完成里程碑的詳細歷史。
 - [docs/archive/README.md](docs/archive/README.md)：歸檔文件索引。

@@ -31,6 +31,7 @@
 | [P7_CACHE_EVALUATION.md](P7_CACHE_EVALUATION.md) | P7 | TTL URL result cache 實作前評估、MVP、風險與驗收建議 |
 | [P7_RELEASE_CLOSURE.md](P7_RELEASE_CLOSURE.md) | P7 | P7 發布收尾、驗收紀錄與 P8 銜接 |
 | [P8_INCREMENTAL_SCAN_ANALYSIS.md](P8_INCREMENTAL_SCAN_ANALYSIS.md) | P8 | incremental scan、state、sitemap、reused result、GUI / Analyzer 呈現 |
+| [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md) | P9 | GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入、rules schema / trace 與驗收紀錄 |
 
 ## GUI、發布與站台案例
 

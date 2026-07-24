@@ -63,7 +63,7 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md) |
 | P7 | 已完成 | TTL URL result cache | [docs/archive/P7_RELEASE_CLOSURE.md](docs/archive/P7_RELEASE_CLOSURE.md) |
 | P8 | 已完成 | incremental scan、sitemap seed、changed-only result reuse | [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md) |
-| P9 | 已驗收 | GUI / Analyzer 改善、NDJSON sidecar、rules schema、rules trace 與 rules URL 安全載入 | [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md) |
+| P9 | 已驗收 | GUI / Analyzer 改善、NDJSON sidecar、rules schema、rules trace 與 rules URL 安全載入 | [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md) |
 | P10 | 已完成核心收尾 | 判讀分類、交辦欄位、GUI / Analyzer 語言同步 | 根 README 與 technical spec |
 | P11a-P11e | 已完成主要檢查 | 測試 gate、GUI smoke、portable build、manifest / checksum、文件與 notes | 舊版 ROADMAP 歸檔快照 |
 
@@ -113,4 +113,4 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | 文件索引 | [docs/README.md](docs/README.md) |
 | 已完成里程碑 | [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) |
 | 2026-07-18 專案評估 | [docs/archive/PROJECT_ASSESSMENT_2026-07-18.md](docs/archive/PROJECT_ASSESSMENT_2026-07-18.md) |
-| P9 GUI / Analyzer 評估 | [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md) |
+| P9 GUI / Analyzer 評估 | [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md) |
