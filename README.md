@@ -1,49 +1,72 @@
 # Local Link Checker
 
-Local Link Checker 是一套本機執行的網站連結檢查工具，主要用來協助承辦人或維護者找出站內壞連結、需要人工確認的外部連結、轉址問題與掃描限制訊號。工具提供 GUI、CLI、Report Analyzer 與 External Link Analyzer；所有掃描與輸出都在本機完成。
+Local Link Checker 是一套本機執行的網站連結檢查工具，協助承辦人、網站維護者與稽核人員找出站內壞連結、需要人工確認的外部連結、轉址問題與掃描限制訊號。
 
-目前主 GUI 的預設行為會檢查外部連結。CLI 仍維持保守預設，需加上 `--external` 才會檢查外部連結。
+工具提供三個 GUI 功能頁：
+
+- 連結檢查：輸入網站 URL，執行即時連結檢查。
+- 外部連結分析：匯入外連清單，做網域彙整、風險分類與治理檢視。
+- 報告分析：匯入 report，整理待判讀結果、來源頁與問題網域排行。
+
+所有掃描與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`。
+
+## 目前版本
+
+最新正式版本：`v1.0.2`
+
+GitHub Release：
+[v1.0.2 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.2)
+
+`v1.0.2` 是 patch release，重點是主導覽繁中化、文件整理，以及 portable build 明確記錄 launcher 簽章狀態。此版本沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
+
+Release artifact：
+
+| 檔案 | 用途 |
+| --- | --- |
+| `LinkChecker-portable.zip` | Windows portable package |
+| `LinkChecker-portable.build-manifest.json` | release metadata、source commit、zip hash、runtime 與簽章狀態 |
+| `LinkChecker-portable.zip.sha256` | zip SHA256 |
+| `v1.0.2-notes.md` | release notes |
+
+`v1.0.2` portable zip SHA256：
+
+```text
+93653d9d879cf423ec8aa9e11f0b1fbe032dfb073ae0ca7ad192efb084fb617e
+```
+
+注意：此 portable build 的 `Start Link Checker.exe` 記錄為 `NotSigned`，因為本機自簽不可用。散布或使用前請核對 zip SHA256 與 build manifest。
 
 ## 快速開始
 
-啟動 GUI：
+### 使用 portable 版本
+
+1. 從 [GitHub Release](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.2) 下載 `LinkChecker-portable.zip`。
+2. 解壓縮整個資料夾。
+3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
 ```powershell
 .\gui.cmd
 ```
 
-開啟瀏覽器：
+瀏覽器會開啟本機 GUI。若沒有自動開啟，可手動前往：
 
 ```text
 http://127.0.0.1:8787
 ```
 
-輸入網站 URL 後按「開始檢查」。完成後，GUI 會在 `logs/` 建立本次掃描資料夾，包含完整 report、CSV、NDJSON sidecar 與執行紀錄。
+### 從原始碼啟動
 
-CLI 基本用法：
+在 repo 根目錄執行：
 
 ```powershell
-.\check-links.cmd https://example.com
-.\check-links.cmd https://example.com --external
-.\check-links.cmd https://example.com --progress --output report.json
+.\gui.cmd
 ```
 
-完整 CLI 參數請看 [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)。
-
-## 主要功能
-
-- 站內頁面爬取與 URL 狀態檢查。
-- 外部連結盤點與風險分類。
-- `404 / 410` 二次確認，降低暫時性誤判。
-- `403 / 429 / WAF / Bot / timeout` 等結果的人讀判讀分類。
-- SPA / Nuxt payload 與 site link rules 抽取。
-- Report diff、TTL cache、incremental scan 與 sitemap seed。
-- GUI 即時進度、掃描佇列、Report Analyzer、External Link Analyzer。
-- CSV / NDJSON / JSON 輸出，方便 Excel、稽核與後續分析。
+輸入網站 URL 後按「開始檢查」。完成後，GUI 會在 `logs/` 建立本次掃描資料夾，包含完整 report、CSV、NDJSON sidecar 與事件紀錄。
 
 ## GUI 預設值
 
-主 GUI 使用較保守的日常掃描設定：
+主 GUI 使用較保守的日常掃描設定，並預設檢查外部連結。
 
 | 設定 | 預設 |
 | --- | --- |
@@ -59,6 +82,38 @@ CLI 基本用法：
 | 使用 Windows 憑證 | 關閉 |
 
 若網站容易出現 `403`、`429` 或 timeout，可切換到「更保守」掃描模式，或降低單一 host 併發並增加隨機延遲。
+
+## CLI 基本用法
+
+CLI 預設較保守，只檢查站內連結；若要檢查外部連結，需加上 `--external`。
+
+```powershell
+.\check-links.cmd https://example.com
+.\check-links.cmd https://example.com --external
+.\check-links.cmd https://example.com --progress --output report.json
+```
+
+常見進階用法：
+
+```powershell
+.\check-links.cmd https://example.com --conservative
+.\check-links.cmd https://example.com --system-ca
+.\check-links.cmd https://example.com --cache --cache-ttl-hours 24
+.\check-links.cmd https://example.com --sitemap https://example.com/sitemap.xml --incremental
+```
+
+完整 CLI 參數請看 [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)。
+
+## 主要功能
+
+- 站內頁面爬取與 URL 狀態檢查。
+- 外部連結盤點與風險分類。
+- `404 / 410` 二次確認，降低暫時性誤判。
+- `403 / 429 / WAF / Bot / timeout` 等結果的人讀判讀分類。
+- SPA / Nuxt payload 與 site link rules 抽取。
+- Report diff、TTL cache、incremental scan 與 sitemap seed。
+- GUI 即時進度、掃描佇列、Report Analyzer、External Link Analyzer。
+- CSV / NDJSON / JSON 輸出，方便 Excel、稽核與後續分析。
 
 ## 輸出檔案
 
@@ -81,7 +136,7 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出：
 
 ## 判讀分類
 
-報告會把技術結果翻譯成較容易交辦的分類。GUI 與 Report Analyzer 會把需要承辦人處理或確認的項目稱為待判讀結果。
+報告會把技術結果翻譯成較容易交辦的分類。GUI 與 Report Analyzer 會把需要承辦人處理或確認的項目稱為「待判讀結果」。
 
 | 判讀分類 | 代表意義 | 建議處理 |
 | --- | --- | --- |
@@ -103,10 +158,11 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出：
 - `robots.txt` 與掃描授權資訊會寫入 report 的 compliance metadata。
 - 工具不會繞過 WAF、Bot challenge 或 CAPTCHA；這類結果會標成需要人工確認。
 - GUI server 綁定 `127.0.0.1`，不是公開網路服務。
+- Portable package 不安裝 service、不寫入開機啟動、不連接遠端控制伺服器。
 
-## Portable Build
+## 建立 portable package
 
-建立 Windows portable zip：
+從原始碼建立 Windows portable zip：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
@@ -118,16 +174,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 dist\LinkChecker-portable.zip
 dist\LinkChecker-portable.build-manifest.json
 dist\LinkChecker-portable.zip.sha256
+dist\LinkChecker-portable\BUILD-MANIFEST.json
+dist\LinkChecker-portable\PORTABLE-README.txt
 ```
 
-Portable 版本包含 bundled Node runtime、GUI launcher、CLI scripts、文件與 public assets。`Start Link Checker.exe` 目前使用 local self-signed certificate，Windows SmartScreen 可能提示未知發行者；正式散布前若需要更順暢的使用者體驗，應評估公開 code signing。
+Release 前至少確認：
+
+- external manifest 的 `build.gitCommit` 等於要發佈的 source commit。
+- zip 實際 SHA256、`.zip.sha256` 與 manifest 內的 zip SHA256 一致。
+- package manifest 內每個 bundled file 的 SHA256 都能驗證。
+- `runtime\node.exe` Authenticode 狀態為 `Valid`。
+- `Start Link Checker.exe` 的簽章狀態已清楚記錄；若為 `NotSigned`，release notes 與 portable README 必須明確提示。
 
 ## 文件索引
 
-- [ROADMAP.md](ROADMAP.md)：目前狀態、近期主線、release gate 與延後項目。
+- [ROADMAP.md](ROADMAP.md)：目前狀態、近期維護主線、下一階段候選與延後項目。
 - [docs/README.md](docs/README.md)：文件總索引。
 - [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)：CLI 參數與範例。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：核心流程、report schema、GUI API 與技術契約。
+- [docs/REPORT_NORMALIZATION.md](docs/REPORT_NORMALIZATION.md)：report-to-report diff 與 normalization 設計。
 - [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 評估與驗收紀錄。
 - [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)：已完成里程碑的詳細歷史。
 - [docs/archive/README.md](docs/archive/README.md)：歸檔文件索引。
