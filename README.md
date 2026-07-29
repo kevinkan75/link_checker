@@ -12,12 +12,12 @@ Local Link Checker 是一套本機執行的網站連結檢查工具，協助承�
 
 ## 目前版本
 
-最新正式版本：`v1.0.2`
+最新正式版本：`v1.0.3`
 
 GitHub Release：
-[v1.0.2 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.2)
+[v1.0.3 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.3)
 
-`v1.0.2` 是 patch release，重點是主導覽繁中化、文件整理，以及 portable build 明確記錄 launcher 簽章狀態。此版本沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
+`v1.0.3` 是 patch release，重點是同步 portable package 內的文件、將 `PORTABLE-README.txt` 改為繁中，並延續 launcher 簽章狀態的明確記錄。此版本沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
 
 Release artifact：
 
@@ -26,13 +26,9 @@ Release artifact：
 | `LinkChecker-portable.zip` | Windows portable package |
 | `LinkChecker-portable.build-manifest.json` | release metadata、source commit、zip hash、runtime 與簽章狀態 |
 | `LinkChecker-portable.zip.sha256` | zip SHA256 |
-| `v1.0.2-notes.md` | release notes |
+| `v1.0.3-notes.md` | release notes |
 
-`v1.0.2` portable zip SHA256：
-
-```text
-93653d9d879cf423ec8aa9e11f0b1fbe032dfb073ae0ca7ad192efb084fb617e
-```
+Portable zip SHA256 以 GitHub Release 上傳的 `LinkChecker-portable.zip.sha256` 與 `LinkChecker-portable.build-manifest.json` 為準。
 
 注意：此 portable build 的 `Start Link Checker.exe` 記錄為 `NotSigned`，因為本機自簽不可用。散布或使用前請核對 zip SHA256 與 build manifest。
 
@@ -40,7 +36,7 @@ Release artifact：
 
 ### 使用 portable 版本
 
-1. 從 [GitHub Release](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.2) 下載 `LinkChecker-portable.zip`。
+1. 從 [GitHub Release](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.3) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
