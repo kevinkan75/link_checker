@@ -4,11 +4,6 @@
 
 本文件記錄 README 與 ROADMAP 易讀性、一致性改善建議的採納狀態。
 
-## 來源
-
-- `C:\Users\kevin\Desktop\README_易讀性與一致性改善建議.md`
-- `C:\Users\kevin\Desktop\ROADMAP_易讀性與一致性改善建議.md`
-
 ## 採納日期
 
 2026-06-29
@@ -138,3 +133,22 @@
 - 將 `ROADMAP_HISTORY.md` 的現行 Roadmap 連結修正為 [../../ROADMAP.md](../../ROADMAP.md)。
 - 保留歷史內容原文，不改變當時分析結論。
 - 讓每份 archive 文件一開頭就能辨識它是歷史分析、近期評估、發布收尾或索引文件。
+
+## 2026-07-29 Archive 文件收斂
+
+本次更新將階段評估與站台案例文件合併，降低 `docs/archive` 入口數量，同時保留原始評估脈絡與驗收紀錄。
+
+| 項目 | 狀態 | 紀錄 |
+| --- | --- | --- |
+| P6 / P6.5 系列合併 | 已採納 | `P6_PREFLIGHT_ASSESSMENT.md`、`P6_IMPLEMENTATION_ANALYSIS.md`、`P6_5A_ASSESSMENT.md`、`P6_5B_ASSESSMENT.md` 合併為 `docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md`。 |
+| P7 系列合併 | 已採納 | `P7_CACHE_EVALUATION.md` 與 `P7_RELEASE_CLOSURE.md` 合併為 `docs/archive/P7_CACHE_ASSESSMENT_AND_RELEASE.md`。 |
+| P5.5 SPA 系列合併 | 已採納 | CEC / Nuxt 掃描改善報告與 SPA link extraction 實作筆記合併為 `docs/archive/P5_5_SPA_LINK_EXTRACTION_RECORD.md`。 |
+| GUI usability 併入 P9 | 已採納 | `GUI_USABILITY_ASSESSMENT.md` 併入 `docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md`，作為 P9 GUI usability preflight 章節。 |
+| Archive index 更新 | 已採納 | `docs/archive/README.md` 改以合併後文件作為主入口；`ROADMAP.md` 與歷史 roadmap snapshot 的 P6/P7 連結同步更新。 |
+| 檔案數量收斂 | 已採納 | `docs/archive` 由 18 份收斂為 12 份。 |
+
+驗證紀錄：
+
+- 舊 P5.5 / P6 / P7 / GUI usability 分散檔名已無 active 文件引用。
+- active 文件本機連結檢查通過。
+- 合併 commit：`af6bed0 Consolidate archive documentation`。
