@@ -57,7 +57,7 @@
 | 將一致性結論改名 | 已採納 | 改以 `目前狀態摘要` 與 `採納決策摘要` 分流 |
 | 將階段總覽提前 | 已採納 | ROADMAP 前段 |
 | 已完成基線摘要化 | 已採納 | ROADMAP `已完成工作摘要` |
-| P6 章節保留摘要、細節分流 | 已採納 | P6 細節連到 `docs/archive/P6_IMPLEMENTATION_ANALYSIS.md` |
+| P6 章節保留摘要、細節分流 | 已採納 | P6 細節連到 `docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md` |
 | P6.5a / P6.5b 簡化為穩定性與稽查修補摘要 | 部分採納 | 主文摘要化，但保留 a/b 分段語意與 archive 連結 |
 | P7-P11 統一呈現格式 | 已採納 | ROADMAP `近期工作` 與 `後續階段規劃` |
 | 階段總覽增加下一步欄位 | 已採納 | ROADMAP `階段總覽` |

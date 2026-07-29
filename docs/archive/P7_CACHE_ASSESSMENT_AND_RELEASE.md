@@ -1,10 +1,21 @@
-# P7 TTL URL Result Cache Evaluation
+# P7 Cache Assessment and Release
+
+This merged archive document consolidates the P7 TTL URL result cache evaluation and release closure notes. The original standalone files were merged to keep archive navigation smaller while preserving the implementation and validation record.
+
+Merged source scope:
+
+- P7 TTL URL result cache evaluation
+- P7 release closure, validation record, and P8 handoff notes
+
+---
+
+## P7 TTL URL Result Cache Evaluation
 
 狀態：歷史實作前評估。P7 已完成並合併主線；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，技術規格請看 [../TECHNICAL_SPEC.md](../TECHNICAL_SPEC.md)。
 
 本文件記錄 P7：TTL URL result cache 的實作前評估。P7 目標是降低重複 URL 狀態檢查成本，但不改變頁面發現、HTML 抽取與 report 主契約的基本語意。
 
-## 結論
+### 結論
 
 P7 可以進入實作，但第一版應採保守 MVP：
 
@@ -16,7 +27,7 @@ P7 可以進入實作，但第一版應採保守 MVP：
 
 主要理由是目前 `LinkChecker` 已有單次執行內的 `statusCache` 與 `bodyCache`，P7 可以沿用這個切點擴成 persistent TTL cache；但若把 page body 也納入第一版，會碰到 URL discovery、SPA payload extraction、source tracking 與 P8 incremental scan 的邊界，風險明顯升高。
 
-## 現有基線
+### 現有基線
 
 評估時現有測試全數通過：
 
@@ -33,7 +44,7 @@ P7 可以進入實作，但第一版應採保守 MVP：
 
 這表示 P7 可建立在 P6/P6.5a/P6.5b 已穩定的輸出契約、安全策略、robots / compliance、Retry-After 與 WAF diagnostics 上。
 
-## MVP 範圍
+### MVP 範圍
 
 第一版建議交付：
 
@@ -58,7 +69,7 @@ P7 可以進入實作，但第一版應採保守 MVP：
 - cache value 保存 status check result，不保存完整 response body。
 - `requireBody: true` 的頁面 fetch 不使用 persistent status hit 取代 request。
 
-## 不納入 P7 第一版
+### 不納入 P7 第一版
 
 - page HTML cache。
 - incremental scan / changed-only。
@@ -68,7 +79,7 @@ P7 可以進入實作，但第一版應採保守 MVP：
 - cache 資料庫或多檔 shard。
 - full response body 保存。
 
-## 實作切點
+### 實作切點
 
 目前最自然的實作位置在 `link-checker.mjs`：
 
@@ -80,7 +91,7 @@ P7 可以進入實作，但第一版應採保守 MVP：
 
 不要把 persistent cache 放到 `fetchUrl()` 內部，因為 `fetchUrl()` 是較底層 request wrapper，缺少 inventory、report summary、cache policy 與 source 語意。
 
-## Cache Key
+### Cache Key
 
 cache key 不應只用 URL。至少應包含：
 
@@ -104,7 +115,7 @@ cache key 不應只用 URL。至少應包含：
 
 `timeoutMs` 與 `retryCount` 是否納入 key 可在實作時決定。若不納入，需在文件中說明 cache result 代表「最近一次結果」，不保證相同 retry policy。
 
-## Redaction 與敏感資料
+### Redaction 與敏感資料
 
 P6.5a 已將 redaction 定位在輸出層；實際 request URL 與 canonical key 不使用遮罩後 URL。P7 需補一個明確決策：
 
@@ -113,7 +124,7 @@ P6.5a 已將 redaction 定位在輸出層；實際 request URL 與 canonical key
 - 若 cache 需要保存 original URL，應保存 hash 或經 redaction 的 display value。
 - cache entry 可保存 `canonicalUrlHash` 與 `displayUrl`，避免把敏感 query value 當作可讀資料落盤。
 
-## TTL 策略
+### TTL 策略
 
 建議第一版採分級 TTL，而不是只有單一 TTL：
 
@@ -129,9 +140,9 @@ P6.5a 已將 redaction 定位在輸出層；實際 request URL 與 canonical key
 
 `--refresh-cache` 應忽略既有 cache entry，實際 request 後回寫新結果。
 
-## 主要風險
+### 主要風險
 
-### 1. Cache 命中造成 URL discovery 減少
+#### 1. Cache 命中造成 URL discovery 減少
 
 若 `requireBody: true` 的頁面 fetch 被 persistent status cache 命中取代，掃描器會拿不到 HTML body，導致 `extractLinks()`、SPA payload extraction、site link rules 與 inventory 都少資料。
 
@@ -141,7 +152,7 @@ P6.5a 已將 redaction 定位在輸出層；實際 request URL 與 canonical key
 - 頁面 crawl 仍需實際 GET body。
 - 若同一 URL 先有 status cache hit，後續需要 body 時仍必須補抓 body。
 
-### 2. Cache key 太粗造成誤命中
+#### 2. Cache key 太粗造成誤命中
 
 不同 User-Agent、Accept-Language、referer mode、security policy 或 robots policy 可能得到不同結果。
 
@@ -151,7 +162,7 @@ P6.5a 已將 redaction 定位在輸出層；實際 request URL 與 canonical key
 - report summary 顯示 cache policy version。
 - cache file 保存 `cacheSchemaVersion`。
 
-### 3. 暫時性失敗被保存太久
+#### 3. 暫時性失敗被保存太久
 
 `429`、timeout、`5xx` 與 WAF/Bot challenge 不應和穩定成功結果同 TTL。
 
@@ -160,7 +171,7 @@ P6.5a 已將 redaction 定位在輸出層；實際 request URL 與 canonical key
 - 依 result classification / issueType / status 決定 TTL。
 - 暫時性失敗短 TTL 或不快取。
 
-### 4. Redaction 與落盤資料界線
+#### 4. Redaction 與落盤資料界線
 
 cache 是本機落盤資料，不能因為不是 report 就忽略敏感 query value。
 
@@ -170,7 +181,7 @@ cache 是本機落盤資料，不能因為不是 report 就忽略敏感 query va
 - key 使用 hash 或結構化 fingerprint。
 - cache file schema 明確標示不屬於正式 report，但仍遵守敏感資料最小化。
 
-## 驗收測試
+### 驗收測試
 
 建議新增 `test-p7-cache.mjs`，至少覆蓋：
 
@@ -187,11 +198,11 @@ cache 是本機落盤資料，不能因為不是 report 就忽略敏感 query va
 - report `summary.cache` 統計正確。
 - cache file 不保存敏感 query value 明文展示欄位。
 
-## 建議分階段
+### 建議分階段
 
 P7 建議分成三個小階段推進，避免一次實作時把 page HTML cache、GUI 控制或 P8 incremental scan 一起拉進範圍。
 
-### P7a：規格與測試骨架
+#### P7a：規格與測試骨架
 
 目標是先固定 cache 行為與防回歸網，不先改掃描主流程。
 
@@ -207,7 +218,7 @@ P7 建議分成三個小階段推進，避免一次實作時把 page HTML cache�
 - 新測試可以先以 pending / fixture shape 或最小可執行案例建立，但不得破壞現有 P6/P6.5 測試。
 - P7a 完成後，實作範圍仍不包含 cache store 寫入正式流程。
 
-### P7b：CLI 與核心 cache
+#### P7b：CLI 與核心 cache
 
 目標是完成真正可用的 persistent URL result cache，但只服務 `requireBody: false` 的 status check。
 
@@ -226,7 +237,7 @@ P7 建議分成三個小階段推進，避免一次實作時把 page HTML cache�
 - expired entry 不命中。
 - `--refresh-cache` 會略過舊 entry 並回寫新結果。
 
-### P7c：report、文件與收斂
+#### P7c：report、文件與收斂
 
 目標是讓 cache 行為可追溯，並完成使用者可見契約。
 
@@ -244,7 +255,7 @@ P7 建議分成三個小階段推進，避免一次實作時把 page HTML cache�
 - 現有 P6/P6.5 測試與 P7 cache 測試全數通過。
 - GUI 不需要新增 cache 表單；若讀到 report summary，可自然保存於 job report。
 
-## 建議實作順序
+### 建議實作順序
 
 1. 補 `docs/TECHNICAL_SPEC.md` 的 P7 cache schema 與 key policy。
 2. 新增 cache options normalization 與 CLI parsing。
@@ -255,9 +266,82 @@ P7 建議分成三個小階段推進，避免一次實作時把 page HTML cache�
 7. 新增 `test-p7-cache.mjs`。
 8. 跑完整現有測試與 P7 新測試。
 
-## 開放決策
+### 開放決策
 
 - `--cache` 預設是否開啟：建議第一版預設關閉，避免改變使用者對「每次掃描都重新確認」的直覺。
 - 預設 TTL：建議成功結果 24 小時，暫時性失敗短 TTL。
 - cache file 是否納入 GUI job log：建議不納入每次 log 目錄，使用全域 `.cache/link-check-cache.json`。
 - GUI 是否顯示 cache hit / miss：建議延後到 P9，只先在 report summary 保留資料。
+
+---
+
+## P7 Release Closure
+
+狀態：歷史發布收尾紀錄。P7 已完成並合併主線；現行開發主線請看 [../../ROADMAP.md](../../ROADMAP.md)，技術規格請看 [../TECHNICAL_SPEC.md](../TECHNICAL_SPEC.md)。
+
+本文件記錄 P7：persistent TTL URL result cache 的發布收尾狀態。P7 第一版已完成並可作為 P8 incremental scan 的基線。
+
+### 發布狀態
+
+- 狀態：已完成第一版並完成發布收尾。
+- 分支：`codex/release-v0.14.0-p7`
+- 發布日期：2026-07-15
+- 主要交付：跨執行的 URL status-result TTL cache、CLI 參數、report cache summary、技術規格與回歸測試。
+
+### 使用者可見變更
+
+- 新增 `--cache`，啟用 persistent TTL URL status-result cache。
+- 新增 `--cache-file <file>`，可指定 cache 檔案路徑，預設 `.cache/link-check-cache.json`。
+- 新增 `--cache-ttl-hours <n>`，設定成功結果的 TTL，預設 `24` 小時。
+- 新增 `--refresh-cache`，忽略既有 cache entry，重新檢查並回寫新結果。
+- 新增 `--no-cache`，停用 persistent cache。
+- `report.json` 會在 `options` 與 `summary.cache` 中記錄 cache 設定、命中、miss、expired、refreshed、written、bypassed 與 errors。
+
+### 發布邊界
+
+P7 cache 是本機效能最佳化資料，不是正式 report，也不改變掃描語意。
+
+- `--cache` 預設關閉，使用者需明確啟用。
+- cache 只服務不需要 HTML body 的 URL status check。
+- 頁面爬行需要 `requireBody: true` 時仍會實際抓取 HTML body。
+- cache 命中不得跳過 HTML link extraction、SPA payload extraction、site link rules 或 inventory 建立。
+- cache file 不保存完整 response body。
+- cache file 的展示 URL 會強制遮罩敏感 query value，即使 report redaction 被停用也一樣。
+- GUI 第一版不新增 cache 控制表單；GUI 保存的 report 會自然包含 `summary.cache`。
+
+### 驗收結果
+
+發布收尾時已執行完整本機測試，全部通過：
+
+- `test-p65a-limits.mjs`
+- `test-p65a-network.mjs`
+- `test-p65a-output-contract.mjs`
+- `test-p65a-redaction.mjs`
+- `test-p65b-retry-after.mjs`
+- `test-p65b-robots-compliance.mjs`
+- `test-p65b-run-status.mjs`
+- `test-p65b-security-policy.mjs`
+- `test-p65b-waf-signature.mjs`
+- `test-p7-cache.mjs`
+- `test-report-diff.mjs`
+
+P7 cache 測試覆蓋：
+
+- 第二次 status check 命中 cache 並避免重複 request。
+- `--refresh-cache` 會略過舊 entry 並回寫新結果。
+- expired entry 不命中。
+- User-Agent、Accept-Language、security policy 與 robots policy 改變時不誤命中。
+- `requireBody: true` 不因 status cache 命中而跳過 HTML body fetch。
+- `summary.cache` 統計與 cache file redaction 行為符合契約。
+
+### P8 交接條件
+
+P8 可在此基線上設計 incremental scan，但不得假設 P7 已保存 page HTML body 或完整 URL discovery state。
+
+P8 第一個建議切入點：
+
+1. 定義 scan state 檔案格式。
+2. 設計 `--incremental`、`--state-file <file>`、`--changed-only` 與 `--sitemap <url-or-file>`。
+3. 先以 report diff、scan state 與 P7 status cache 建立優先檢查策略。
+4. changed-only 模式仍需保留完整 summary，不只輸出 delta。
+5. 不得因 sitemap 或 state 跳過本次 HTML inventory 發現的新 URL。

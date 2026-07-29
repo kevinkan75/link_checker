@@ -88,10 +88,8 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | 階段 | 狀態 | 重點 | 主要紀錄 |
 | --- | --- | --- | --- |
 | P0-P5.5 | 已完成 | 基礎掃描、URL inventory、404 / 410 二次確認、外連風險、SPA / Nuxt 抽取 | [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) |
-| P6 | 已完成 | report-to-report diff | [docs/archive/P6_IMPLEMENTATION_ANALYSIS.md](docs/archive/P6_IMPLEMENTATION_ANALYSIS.md) |
-| P6.5a | 已完成 | 輸出契約、manifest、redaction、body/source limit、Header / Keep-Alive | [docs/archive/P6_5A_ASSESSMENT.md](docs/archive/P6_5A_ASSESSMENT.md) |
-| P6.5b | 已完成 | SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md) |
-| P7 | 已完成 | TTL URL result cache | [docs/archive/P7_RELEASE_CLOSURE.md](docs/archive/P7_RELEASE_CLOSURE.md) |
+| P6 / P6.5 | 已完成 | report-to-report diff、輸出契約、redaction、body/source limit、SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | [docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md](docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md) |
+| P7 | 已完成 | TTL URL result cache、驗收紀錄與 P8 銜接 | [docs/archive/P7_CACHE_ASSESSMENT_AND_RELEASE.md](docs/archive/P7_CACHE_ASSESSMENT_AND_RELEASE.md) |
 | P8 | 已完成 | incremental scan、sitemap seed、changed-only result reuse | [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md) |
 | P9 | 已驗收 | GUI / Analyzer 改善、NDJSON sidecar、rules schema、rules trace 與 rules URL 安全載入 | [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md) |
 | P10 | 已完成 | 判讀分類、交辦欄位、GUI / Analyzer 語言同步 | [README.md](README.md)、[docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) |

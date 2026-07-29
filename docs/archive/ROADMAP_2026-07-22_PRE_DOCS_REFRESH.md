@@ -357,10 +357,10 @@ P11e 執行紀錄（2026-07-19）：
 | 階段 | 完成摘要 | 詳細紀錄 |
 | --- | --- | --- |
 | P0-P5.5 | 本機工具、URL inventory、`404 / 410` 二次確認、外部連結治理、SPA / Nuxt 抽取改善 | [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) |
-| P6 | report diff 第一版，支援 URL、external risk 與 summary diagnostics 比對 | [docs/archive/P6_IMPLEMENTATION_ANALYSIS.md](docs/archive/P6_IMPLEMENTATION_ANALYSIS.md) |
-| P6.5a | 輸出契約、manifest、redaction、sources/body limit、Header / Keep-Alive | [docs/archive/P6_5A_ASSESSMENT.md](docs/archive/P6_5A_ASSESSMENT.md) |
-| P6.5b | SSRF、partial report、robots / compliance、Retry-After / host diagnostics、WAF signature schema | [docs/archive/P6_5B_ASSESSMENT.md](docs/archive/P6_5B_ASSESSMENT.md) |
-| P7 | TTL URL result cache、CLI 參數、report `summary.cache`、回歸測試與發布收尾 | [docs/archive/P7_RELEASE_CLOSURE.md](docs/archive/P7_RELEASE_CLOSURE.md) |
+| P6 | report diff 第一版，支援 URL、external risk 與 summary diagnostics 比對 | [docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md](docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md) |
+| P6.5a | 輸出契約、manifest、redaction、sources/body limit、Header / Keep-Alive | [docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md](docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md) |
+| P6.5b | SSRF、partial report、robots / compliance、Retry-After / host diagnostics、WAF signature schema | [docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md](docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md) |
+| P7 | TTL URL result cache、CLI 參數、report `summary.cache`、回歸測試與發布收尾 | [docs/archive/P7_CACHE_ASSESSMENT_AND_RELEASE.md](docs/archive/P7_CACHE_ASSESSMENT_AND_RELEASE.md) |
 | P8 | incremental scan、sitemap 保守 seed、changed-only result reuse、GUI / Analyzer 呈現 | [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md) |
 | P9 | GUI 易用性、大型報告處理、NDJSON 輔助輸出、Analyzer 匯入與分批載入、rules schema、rules trace 與 rules URL 安全載入；已於 2026-07-18 整體驗收 | [docs/P9_GUI_ANALYZER_ASSESSMENT.md](docs/P9_GUI_ANALYZER_ASSESSMENT.md) |
 | 2026-07-18 評估 | 專案健康度、產品定位、P9c-2 建議、延後項目重新排序 | [docs/archive/PROJECT_ASSESSMENT_2026-07-18.md](docs/archive/PROJECT_ASSESSMENT_2026-07-18.md) |

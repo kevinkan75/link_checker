@@ -24,23 +24,17 @@
 
 | 文件 | 階段 | 說明 |
 | --- | --- | --- |
-| [P6_PREFLIGHT_ASSESSMENT.md](P6_PREFLIGHT_ASSESSMENT.md) | P6 前置 | report diff 前置完成度、測試補強與風險評估 |
-| [P6_IMPLEMENTATION_ANALYSIS.md](P6_IMPLEMENTATION_ANALYSIS.md) | P6 | report-to-report diff 實作範圍、切分、驗收與風險 |
-| [P6_5A_ASSESSMENT.md](P6_5A_ASSESSMENT.md) | P6.5a | 輸出契約、manifest、redaction、body/source limit、Header / Keep-Alive |
-| [P6_5B_ASSESSMENT.md](P6_5B_ASSESSMENT.md) | P6.5b | SSRF、partial report、robots / compliance、Retry-After、WAF schema |
-| [P7_CACHE_EVALUATION.md](P7_CACHE_EVALUATION.md) | P7 | TTL URL result cache 實作前評估、MVP、風險與驗收建議 |
-| [P7_RELEASE_CLOSURE.md](P7_RELEASE_CLOSURE.md) | P7 | P7 發布收尾、驗收紀錄與 P8 銜接 |
+| [P5_5_SPA_LINK_EXTRACTION_RECORD.md](P5_5_SPA_LINK_EXTRACTION_RECORD.md) | P5.5 | CEC / Nuxt 站台掃描問題、SPA payload extraction、site link rules 與 priority queue 設計筆記 |
+| [P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md](P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md) | P6 / P6.5 | report diff 前置與實作分析、輸出契約、redaction、body/source limit、SSRF、partial report、robots / compliance、Retry-After、WAF schema |
+| [P7_CACHE_ASSESSMENT_AND_RELEASE.md](P7_CACHE_ASSESSMENT_AND_RELEASE.md) | P7 | TTL URL result cache 實作前評估、MVP、發布收尾、驗收紀錄與 P8 銜接 |
 | [P8_INCREMENTAL_SCAN_ANALYSIS.md](P8_INCREMENTAL_SCAN_ANALYSIS.md) | P8 | incremental scan、state、sitemap、reused result、GUI / Analyzer 呈現 |
-| [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md) | P9 | GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入、rules schema / trace 與驗收紀錄 |
+| [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md) | P9 | GUI usability 前置評估、GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入、rules schema / trace 與驗收紀錄 |
 
 ## GUI、發布與站台案例
 
 | 文件 | 說明 |
 | --- | --- |
-| [GUI_USABILITY_ASSESSMENT.md](GUI_USABILITY_ASSESSMENT.md) | GUI 易用性第一輪評估與改善方向 |
 | [RELEASE_SECURITY_ASSESSMENT.md](RELEASE_SECURITY_ASSESSMENT.md) | portable `.cmd` / `.exe`、bundled runtime、SmartScreen 與 release security 評估 |
-| [CEC_SPA_SCAN_IMPROVEMENT_REPORT.md](CEC_SPA_SCAN_IMPROVEMENT_REPORT.md) | CEC / Nuxt 站台掃描問題與 P5.5 改善背景 |
-| [SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md](SPA_LINK_EXTRACTION_IMPLEMENTATION_NOTES.md) | SPA payload extraction、site link rules 與 priority queue 設計筆記 |
 
 ## 維護提醒
 
