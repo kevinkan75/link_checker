@@ -1,29 +1,30 @@
 # 開發路線圖
 
-更新日期：2026-07-29
+更新日期：2026-08-03
 
 本文件只保留目前狀態、近期方向、延後項目與決策邊界。已完成里程碑的詳細紀錄請看 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)，歷史版 README / ROADMAP 快照請看 `docs/archive/*_2026-07-22_PRE_DOCS_REFRESH.md`。
 
 ## 目前狀態
 
-- 最新正式版本：`v1.0.3`。
-- GitHub Release：已建立 `v1.0.3 Portable`，並上傳 portable zip、build manifest、zip SHA256 與 release notes。
+- 最新正式版本：`v1.0.4`。
+- GitHub Release：`v1.0.4 Portable` 本機 release gate 已通過；發布時需上傳 portable zip、build manifest、zip SHA256 與 release notes。
 - Source commit 與 portable zip SHA256 以 GitHub Release 上傳的 build manifest 與 `.sha256` 檔為準。
 - P0-P11 release gate 已完成；目前沒有阻擋正式版使用的已知 release gate 項目。
 - 主 GUI 預設會檢查外部連結；CLI 仍維持保守預設，需要 `--external` 才檢查外部連結。
 - 主 GUI 三個功能頁切換按鈕已改為繁中：「連結檢查」、「外部連結分析」、「報告分析」。
 - Portable launcher 目前在本機 build 中記錄為 `NotSigned`；release notes、portable README 與 manifest 已明確標示，散布前應以 SHA256 / manifest 驗證 zip。
 
-## v1.0.3 Release 摘要
+## v1.0.4 Release 摘要
 
-`v1.0.3` 是 patch release，沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
+`v1.0.4` 是 patch release，沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
 
 本次 release 重點：
 
-- 同步 portable package 內的 README / ROADMAP 到最新文件狀態。
-- 將 `PORTABLE-README.txt` 改為繁中，降低中文使用者解壓縮後的理解成本。
-- 延續 portable build 對 launcher 簽章狀態的明確記錄；若本機自簽不可用，會以 unsigned launcher 完成 build 並寫入 README / manifest。
-- 完成 portable manifest、zip SHA256、package file hash 與 GUI smoke 檢查。
+- 改善 Report Analyzer 的人工檢視工作流，讓待判讀清單優先於追查摘要與掃描概況。
+- 將狀態碼改為「技術狀態」人讀文字，並把匯出動作放入目前清單工具列。
+- 調整本機檔案語意為「匯入」，避免誤解為上傳到遠端服務。
+- 隱藏非候選二次確認狀態，並移除清單中缺少脈絡的高 / 中 / 低優先度徽章。
+- 整理 archive 文件，保留歷史紀錄但降低根文件噪音。
 
 ## 產品定位
 
@@ -93,7 +94,7 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | P8 | 已完成 | incremental scan、sitemap seed、changed-only result reuse | [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md) |
 | P9 | 已驗收 | GUI / Analyzer 改善、NDJSON sidecar、rules schema、rules trace 與 rules URL 安全載入 | [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md) |
 | P10 | 已完成 | 判讀分類、交辦欄位、GUI / Analyzer 語言同步 | [README.md](README.md)、[docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) |
-| P11 | 已完成 | release gate、portable build、manifest / checksum、GUI smoke、release notes | `dist/v1.0.3-notes.md` |
+| P11 | 已完成 | release gate、portable build、manifest / checksum、GUI smoke、release notes | `dist/v1.0.4-notes.md` |
 
 ## 延後項目
 

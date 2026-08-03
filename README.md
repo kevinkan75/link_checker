@@ -6,18 +6,18 @@ Local Link Checker 是一套本機執行的網站連結檢查工具，協助承�
 
 - 連結檢查：輸入網站 URL，執行即時連結檢查。
 - 外部連結分析：匯入外連清單，做網域彙整、風險分類與治理檢視。
-- 報告分析：匯入 report，整理待判讀結果、來源頁與問題網域排行。
+- 報告分析：匯入 report 或 broken.ndjson，整理待判讀清單、處理建議、來源頁與問題網域排行。
 
 所有掃描與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`。
 
 ## 目前版本
 
-最新正式版本：`v1.0.3`
+最新正式版本：`v1.0.4`
 
-GitHub Release：
-[v1.0.3 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.3)
+GitHub Release（發布時建立）：
+[v1.0.4 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.4)
 
-`v1.0.3` 是 patch release，重點是同步 portable package 內的文件、將 `PORTABLE-README.txt` 改為繁中，並延續 launcher 簽章狀態的明確記錄。此版本沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
+`v1.0.4` 是 patch release，重點是改善 Report Analyzer 的人工檢視流程與承辦人友善文案，並整理文件歸檔。此版本沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
 
 Release artifact：
 
@@ -26,7 +26,7 @@ Release artifact：
 | `LinkChecker-portable.zip` | Windows portable package |
 | `LinkChecker-portable.build-manifest.json` | release metadata、source commit、zip hash、runtime 與簽章狀態 |
 | `LinkChecker-portable.zip.sha256` | zip SHA256 |
-| `v1.0.3-notes.md` | release notes |
+| `v1.0.4-notes.md` | release notes |
 
 Portable zip SHA256 以 GitHub Release 上傳的 `LinkChecker-portable.zip.sha256` 與 `LinkChecker-portable.build-manifest.json` 為準。
 
@@ -36,7 +36,7 @@ Portable zip SHA256 以 GitHub Release 上傳的 `LinkChecker-portable.zip.sha25
 
 ### 使用 portable 版本
 
-1. 從 [GitHub Release](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.3) 下載 `LinkChecker-portable.zip`。
+1. 從 [GitHub Release](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.4) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
