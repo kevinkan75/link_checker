@@ -2,5 +2,6 @@ dist/
 logs/
 report.json
 .cache/
+.codex-local-notes.md
 
 *.log
