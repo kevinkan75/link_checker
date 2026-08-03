@@ -8,6 +8,7 @@
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)：核心流程、URL inventory、request policy、report schema、GUI API、Analyzer 契約與 release / packaging 技術細節。
 - [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：report-to-report diff 與 normalization 設計。
 - [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)：新流程開始前可回顧的共享維護脈絡、UX 原則、驗證慣例與 release gate 原則。
+- [rules/basic-domain-rules.template.json](rules/basic-domain-rules.template.json)：外連分類規則入門範本，需複製後替換成自己的網域，不會自動套用。
 - [rules/cec-site-link-rules.json](rules/cec-site-link-rules.json)：CEC SPA / CMS site link rules 範例。
 
 ## 歸檔入口

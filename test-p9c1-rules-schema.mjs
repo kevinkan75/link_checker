@@ -157,6 +157,7 @@ function expectInvalid(schema, value, label) {
 const domainRulesSchema = readJson("schemas/domain-rules.schema.json");
 const externalRiskRulesSchema = readJson("schemas/external-risk-rules.schema.json");
 const siteLinkRulesSchema = readJson("schemas/site-link-rules.schema.json");
+const basicDomainRulesTemplate = readJson("docs/rules/basic-domain-rules.template.json");
 const cecSiteLinkRules = readJson("docs/rules/cec-site-link-rules.json");
 
 expectValid(domainRulesSchema, [
@@ -166,6 +167,7 @@ expectValid(domainRulesSchema, {
   schemaVersion: "domain-rules.p9c1",
   rules: [{ category: "partner", domains: ["partner.example.com"], source: "fixture" }],
 }, "domain rules object");
+expectValid(domainRulesSchema, basicDomainRulesTemplate, "basic domain rules template");
 expectInvalid(domainRulesSchema, [{ category: "empty", domains: [] }], "empty domain rules");
 
 expectValid(externalRiskRulesSchema, {

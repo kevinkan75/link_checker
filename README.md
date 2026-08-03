@@ -81,6 +81,8 @@ http://127.0.0.1:8787
 
 預設外連分類只提供基本提示，例如短網址、追蹤分析、社群、CDN、地圖與 webmail。它不是完整惡意網站資料庫；若要判讀 malware、phishing、blocklist、watchlist 或機關自訂白名單，請載入分類規則或外部風險規則。
 
+不知道分類規則檔格式時，可從 [docs/rules/basic-domain-rules.template.json](docs/rules/basic-domain-rules.template.json) 複製一份後替換成自己的網域。
+
 外部表單、嵌入內容、短網址、追蹤分析與異常轉址會優先提示人工檢視；若某個網域在白名單內但本次檢查仍出現錯誤或防護限制，畫面會顯示「白名單需檢視」。
 
 分析頁會把風險原因分成治理規則、內容分類、HTTP 狀態、轉址與防護限制，協助 TA 先看規則命中，再看網址用途與本次檢查狀態。

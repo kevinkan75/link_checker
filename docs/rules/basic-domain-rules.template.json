@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "domain-rules.template.v1",
+  "description": "Basic domain category rules template. Copy this file and replace placeholder domains before use. This is not a malware, phishing, blocklist, or official allowlist database.",
+  "rules": [
+    {
+      "category": "government",
+      "domains": [
+        "gov.tw",
+        "example.gov.tw"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "school_or_org",
+      "domains": [
+        "example.edu.tw",
+        "example.org.tw"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "partner",
+      "domains": [
+        "partner.example.com"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "official_social",
+      "domains": [
+        "facebook.com",
+        "instagram.com",
+        "line.me",
+        "youtube.com"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "cdn",
+      "domains": [
+        "cdnjs.com",
+        "jsdelivr.net",
+        "gstatic.com"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "tracking_or_analytics",
+      "domains": [
+        "googletagmanager.com",
+        "google-analytics.com",
+        "doubleclick.net",
+        "clarity.ms"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "shortener",
+      "domains": [
+        "bit.ly",
+        "tinyurl.com",
+        "reurl.cc",
+        "t.co"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "filehosting",
+      "domains": [
+        "drive.google.com",
+        "dropbox.com",
+        "box.com"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "form_provider",
+      "domains": [
+        "forms.gle",
+        "docs.google.com",
+        "forms.office.com"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "webmail",
+      "domains": [
+        "gmail.com",
+        "outlook.com",
+        "yahoo.com"
+      ],
+      "source": "template"
+    },
+    {
+      "category": "maps",
+      "domains": [
+        "maps.googleapis.com",
+        "maps.gstatic.com",
+        "openstreetmap.org"
+      ],
+      "source": "template"
+    }
+  ]
+}

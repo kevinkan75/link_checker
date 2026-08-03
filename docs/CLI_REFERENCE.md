@@ -223,6 +223,14 @@ CLI 載入仍依既有 normalization 流程執行；schema 用來固定可支援
 
 Schema: `schemas/domain-rules.schema.json`。
 
+若只是要建立第一份分類規則，可先複製 `docs/rules/basic-domain-rules.template.json`，替換 placeholder 網域後再載入：
+
+```powershell
+.\check-links.cmd https://example.com --external --domain-rules docs\rules\my-domain-rules.json
+```
+
+這份範本只提供常見用途分類起點，不是惡意網站、釣魚網站、封鎖名單或官方白名單資料庫。
+
 ### External risk rules
 
 `--external-risk-rules` 的 JSON 格式：
