@@ -572,6 +572,11 @@ tr:last-child td {
   color: var(--ok);
 }
 
+.governance.allowed.needs-review {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
 .governance.blocked {
   background: var(--danger-bg);
   color: var(--danger);
@@ -703,6 +708,48 @@ tr:last-child td {
   overflow-wrap: anywhere;
 }
 
+.reason-groups {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.reason-group {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.reason-group-label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.reason-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.reason-chip {
+  display: inline-flex;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.reason-empty {
+  color: var(--muted);
+}
+
 .link-empty,
 .list-limit-note {
   margin: 0;
@@ -809,6 +856,11 @@ tr:last-child td {
   }
 
   .link-detail-line {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .reason-group {
     grid-template-columns: 1fr;
     gap: 3px;
   }

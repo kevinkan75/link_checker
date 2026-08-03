@@ -59,14 +59,14 @@
         <div class="advanced-panel-body">
           <div class="advanced-intro">
             <strong>一般分析可以略過這裡。</strong>
-            <p>新版報告會優先使用掃描時產生的外連風險；這裡只用來補充舊資料、未分類外連，或把已知可信任網域排除。</p>
+            <p>新版報告會優先使用掃描時產生的外連風險；這裡只用來補充舊資料、未分類外連，或把已知可信任網域排除。預設分類只做基本提示，不等於完整惡意網站或黑名單偵測。</p>
           </div>
 
           <section class="advanced-subsection first" aria-labelledby="rules-source-title">
             <div class="section-heading">
               <div>
                 <h2 id="rules-source-title">1. 補充分類規則</h2>
-                <p class="advanced-note">有網域分類規則檔時才選；沒有規則檔也可以直接分析。</p>
+                <p class="advanced-note">有網域分類規則檔時才選；沒有規則檔也可以直接分析。若要讓 malware、phishing 等高風險分類更容易命中，請載入規則檔或使用下方 UT1 工具產生分類規則。</p>
               </div>
             </div>
             <div class="rules-grid single">
@@ -89,7 +89,7 @@
               <label>
                 <span>列為高風險的分類</span>
                 <input id="high-risk-categories" type="text" value="malware,phishing,cryptojacking,ddos,hacking,stalkerware,dialer">
-                <small class="file-hint">命中後會排在最前面，通常代表要優先處理或確認。</small>
+                <small class="file-hint">命中後會排在最前面；這些分類通常需要外部規則檔或 UT1 分類補充才會出現。</small>
               </label>
 
               <label>

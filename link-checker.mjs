@@ -228,6 +228,7 @@ const EXTERNAL_RISK_CATEGORY_LEVELS = new Map([
   ["shortener", "medium"],
   ["tracking_or_analytics", "medium"],
   ["download", "medium"],
+  ["form", "medium"],
   ["embedded_content", "medium"],
   ["social", "low"],
   ["cdn", "low"],

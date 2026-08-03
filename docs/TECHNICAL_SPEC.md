@@ -207,6 +207,8 @@ P9c-1 起，site link rules 公開契約記錄於 `schemas/site-link-rules.schem
 
 `--domain-rules <file-or-url>` 載入分類規則，例如政府、合作單位、社群、CDN、tracking、shortener 等。
 
+掃描器內建少量基礎分類，主要涵蓋 `social`、`cdn`、`tracking_or_analytics`、`shortener`、`maps` 與 `webmail`。連結結構也會補充分類，例如外部 `form`、`embedded_content`、`download`、`asset` 與 `media`。這些預設規則只提供初步提示，不是完整惡意網站資料庫或黑名單。若需要 malware、phishing、機關自訂分類或更完整外連治理，應透過 `--domain-rules` 或 `--external-risk-rules` 載入外部規則。
+
 P9c-1 起，domain rules 公開契約記錄於 `schemas/domain-rules.schema.json`。
 
 ### 6.2 External risk rules
@@ -227,6 +229,18 @@ P9c-1 起，external risk rules 公開契約記錄於 `schemas/external-risk-rul
 - `governanceStatus`: `allowed | blocked | watchlisted | unknown | needs_review`
 - `matchedRules`
 - `needsReview`
+
+`externalRisk` 是外連判讀提示，不是不可逆裁決。若外連命中 `form`、`shortener`、`tracking_or_analytics`、`embedded_content`、異常 redirect、WAF / Bot 限制、`403`、`429` 或外部 HTTP 錯誤，通常會標示 `needsReview=true`。若網域已由外部規則標示為 `allowed`，但本次檢查仍命中上述狀態訊號，`governanceStatus` 可維持 `allowed`，同時 `needsReview=true`，表示「網域可信任，但本次檢查狀態仍需人工確認」。
+
+Analyzer 呈現 `riskReasons` 時，保留原始陣列與匯出欄位，但會在畫面上依 TA 判讀順序分組：
+
+| 分組 | 用途 | 目前原因代碼 |
+| --- | --- | --- |
+| 治理規則 | 判斷網域是否命中白名單、觀察名單或封鎖名單 | `blocked_domain`, `watchlisted_domain`, `allowed_domain`, `trusted_domain` |
+| 內容分類 | 說明外連本身的用途或型態 | `shortener`, `tracking_or_analytics`, `tracking_query`, `form`, `embedded_content`, `download`, `social`, `cdn`, `maps`, `webmail`, `asset`, `media`, `repeated_reference` |
+| HTTP 狀態 | 說明本次檢查拿到的 HTTP 結果或錯誤 | `external_http_error`, `access_denied`, `rate_limited` |
+| 轉址 | 說明跳轉過程是否需要人工確認 | `cross_host_redirect`, `long_redirect_chain`, `redirect_to_error`, `too_many_redirects`, `redirect_loop` |
+| 防護限制 | 說明對方網站可能阻擋自動檢查，不一定代表連結壞掉 | `blocked_waf`, `blocked_bot`, `suspected_false_positive` |
 
 ## 7. Report JSON 契約
 

@@ -83,6 +83,89 @@ const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
 const LINK_LIST_INITIAL_COUNT = 200;
 const LINK_LIST_INCREMENT = 200;
 
+const RISK_REASON_GROUPS = [
+  {
+    id: "governance",
+    label: "治理規則",
+    reasons: ["blocked_domain", "watchlisted_domain", "allowed_domain", "trusted_domain"],
+  },
+  {
+    id: "content",
+    label: "內容分類",
+    reasons: [
+      "shortener",
+      "tracking_or_analytics",
+      "tracking_query",
+      "form",
+      "embedded_content",
+      "download",
+      "social",
+      "cdn",
+      "maps",
+      "webmail",
+      "asset",
+      "media",
+      "repeated_reference",
+    ],
+  },
+  {
+    id: "http",
+    label: "HTTP 狀態",
+    reasons: ["external_http_error", "access_denied", "rate_limited"],
+  },
+  {
+    id: "redirect",
+    label: "轉址",
+    reasons: [
+      "cross_host_redirect",
+      "long_redirect_chain",
+      "redirect_to_error",
+      "too_many_redirects",
+      "redirect_loop",
+    ],
+  },
+  {
+    id: "protection",
+    label: "防護限制",
+    reasons: ["blocked_waf", "blocked_bot", "suspected_false_positive"],
+  },
+];
+
+const RISK_REASON_GROUP_BY_REASON = new Map(
+  RISK_REASON_GROUPS.flatMap((group) => group.reasons.map((reason) => [reason, group.id])),
+);
+
+const RISK_REASON_LABELS = new Map([
+  ["blocked_domain", "封鎖名單"],
+  ["watchlisted_domain", "觀察名單"],
+  ["allowed_domain", "白名單"],
+  ["trusted_domain", "可信任網域"],
+  ["shortener", "短網址"],
+  ["tracking_or_analytics", "追蹤/分析服務"],
+  ["tracking_query", "追蹤參數"],
+  ["form", "外部表單"],
+  ["embedded_content", "外部嵌入內容"],
+  ["download", "下載連結"],
+  ["social", "社群平台"],
+  ["cdn", "CDN / 外部資源"],
+  ["maps", "地圖服務"],
+  ["webmail", "Webmail"],
+  ["asset", "外部素材/程式資源"],
+  ["media", "媒體連結"],
+  ["repeated_reference", "多處引用"],
+  ["external_http_error", "外部 HTTP 錯誤"],
+  ["access_denied", "拒絕存取"],
+  ["rate_limited", "請求頻率限制"],
+  ["cross_host_redirect", "跨網域轉址"],
+  ["long_redirect_chain", "轉址鏈過長"],
+  ["redirect_to_error", "轉址後錯誤"],
+  ["too_many_redirects", "轉址次數過多"],
+  ["redirect_loop", "轉址循環"],
+  ["blocked_waf", "WAF / 網站防護阻擋"],
+  ["blocked_bot", "Bot challenge / 自動檢查阻擋"],
+  ["suspected_false_positive", "疑似防護頁或誤判"],
+]);
+
 let currentAnalysis = null;
 let ut1Categories = [];
 let appliedUt1Rules = [];
@@ -1057,7 +1140,7 @@ function renderDomainTable(domains) {
     const row = document.createElement("tr");
     row.append(
       cell(riskBadge(item.risk)),
-      cell(governanceBadge(highestGovernanceStatus(item.governanceStatuses))),
+      cell(governanceBadge(highestGovernanceStatus(item.governanceStatuses), { needsReview: item.needsReview })),
       textCell(item.domain),
       textCell(item.linkCount),
       textCell(item.types.join(", ")),
@@ -1158,7 +1241,7 @@ function renderLinkItem(item) {
   domain.textContent = item.registrableDomain || item.hostname || "unknown domain";
   header.append(
     riskBadge(item.risk),
-    governanceBadge(item.governanceStatus),
+    governanceBadge(item.governanceStatus, { needsReview: item.needsReview }),
     linkStatusBadge(item),
     domain,
     metaBadge(item.type || "unknown"),
@@ -1168,7 +1251,7 @@ function renderLinkItem(item) {
   row.append(
     header,
     detailLine("URL", item.url),
-    detailLine("風險原因", item.riskReasons.join(", ") || "無"),
+    detailLineNode("風險原因", renderRiskReasonGroups(item.riskReasons)),
     detailLine("來源頁", item.sourcePage || "無來源頁"),
   );
   if (item.sourceCount > 1) {
@@ -1223,6 +1306,84 @@ function detailLine(label, value) {
   return row;
 }
 
+function detailLineNode(label, valueNode) {
+  const row = document.createElement("div");
+  row.className = "link-detail-line";
+  const labelElement = document.createElement("span");
+  labelElement.className = "detail-label";
+  labelElement.textContent = label;
+  const valueElement = document.createElement("span");
+  valueElement.className = "detail-value";
+  valueElement.append(valueNode);
+  row.append(labelElement, valueElement);
+  return row;
+}
+
+function renderRiskReasonGroups(reasons = []) {
+  const groups = groupRiskReasons(reasons);
+  if (groups.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "reason-empty";
+    empty.textContent = "無";
+    return empty;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "reason-groups";
+  for (const group of groups) {
+    const section = document.createElement("div");
+    section.className = "reason-group";
+
+    const label = document.createElement("span");
+    label.className = "reason-group-label";
+    label.textContent = group.label;
+
+    const chips = document.createElement("span");
+    chips.className = "reason-chip-list";
+    for (const reason of group.reasons) {
+      chips.append(reasonChip(reason));
+    }
+
+    section.append(label, chips);
+    wrapper.append(section);
+  }
+  return wrapper;
+}
+
+function groupRiskReasons(reasons = []) {
+  const uniqueReasons = [...new Set(reasons.filter(Boolean))];
+  const groupsById = new Map(RISK_REASON_GROUPS.map((group) => [
+    group.id,
+    { id: group.id, label: group.label, reasons: [] },
+  ]));
+  const otherGroup = { id: "other", label: "其他原因", reasons: [] };
+
+  for (const reason of uniqueReasons) {
+    const groupId = RISK_REASON_GROUP_BY_REASON.get(reason);
+    if (groupId && groupsById.has(groupId)) {
+      groupsById.get(groupId).reasons.push(reason);
+    } else {
+      otherGroup.reasons.push(reason);
+    }
+  }
+
+  const orderedGroups = RISK_REASON_GROUPS
+    .map((group) => groupsById.get(group.id))
+    .filter((group) => group.reasons.length > 0);
+  if (otherGroup.reasons.length > 0) {
+    orderedGroups.push(otherGroup);
+  }
+  return orderedGroups;
+}
+
+function reasonChip(reason) {
+  const span = document.createElement("span");
+  span.className = "reason-chip";
+  span.textContent = RISK_REASON_LABELS.get(reason) || reason;
+  span.title = reason;
+  return span;
+}
+
 function metaBadge(value) {
   const span = document.createElement("span");
   span.className = "meta-badge";
@@ -1243,7 +1404,7 @@ function riskBadge(risk) {
   return span;
 }
 
-function governanceBadge(status) {
+function governanceBadge(status, { needsReview = false } = {}) {
   const labels = {
     allowed: "白名單",
     blocked: "黑名單",
@@ -1251,9 +1412,10 @@ function governanceBadge(status) {
     needs_review: "需確認",
     unknown: "未知",
   };
+  const isAllowedNeedsReview = status === "allowed" && needsReview;
   const span = document.createElement("span");
-  span.className = `governance ${status || "unknown"}`;
-  span.textContent = labels[status] || status || "未知";
+  span.className = `governance ${status || "unknown"}${isAllowedNeedsReview ? " needs-review" : ""}`;
+  span.textContent = isAllowedNeedsReview ? "白名單需檢視" : labels[status] || status || "未知";
   return span;
 }
 
