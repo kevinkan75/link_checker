@@ -41,11 +41,11 @@ assert(
 
 assert(
   externalAnalyzer.includes("name.endsWith(\".ndjson\")"),
-  "External Link Analyzer should detect external-links.ndjson by extension.",
+  "External Link Analyzer should detect NDJSON by extension.",
 );
 assert(
-  externalAnalyzer.includes("isExternalLinksNdjsonFile(file)") && externalAnalyzer.includes("只支援 external-links.ndjson"),
-  "External Link Analyzer should reject unsupported NDJSON sidecars.",
+  !externalAnalyzer.includes("isExternalLinksNdjsonFile(file)") && externalAnalyzer.includes("沒有讀到外部連結資料"),
+  "External Link Analyzer should accept renamed NDJSON files but reject content without external links.",
 );
 assert(
   externalAnalyzer.includes("normalizeLinksFromNdjson"),

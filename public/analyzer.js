@@ -264,7 +264,7 @@ exportJsonButton.addEventListener("click", () => {
   if (!currentAnalysis) {
     return;
   }
-  downloadText("external-analysis.json", `${JSON.stringify(currentAnalysis.exportable, null, 2)}\n`, "application/json");
+  downloadText("external-analysis.json", `${JSON.stringify(makeFilteredExport(currentAnalysis), null, 2)}\n`, "application/json");
 });
 
 exportCsvButton.addEventListener("click", () => {
@@ -285,10 +285,7 @@ async function loadLinksFile() {
     const name = file.name.toLowerCase();
     if (name.endsWith(".ndjson")) {
       try {
-        if (!isExternalLinksNdjsonFile(file)) {
-          throw new Error("External Link Analyzer 第一版只支援 external-links.ndjson，不支援 checked.ndjson 或 broken.ndjson。");
-        }
-        return normalizeLinksFromNdjson(parseNdjsonContent(text));
+        return normalizeLinksFromNdjson(parseNdjsonContent(text), file);
       } catch (error) {
         throw makeImportError("ndjson", error, file);
       }
@@ -637,18 +634,19 @@ function normalizeLinksFromJson(value) {
   return dedupeLinks(items.map(normalizeLink).filter((item) => item.url));
 }
 
-function normalizeLinksFromNdjson(items) {
+function normalizeLinksFromNdjson(items, file = null) {
   if (!Array.isArray(items)) {
     throw new Error("NDJSON 格式不正確");
   }
   if (items.length === 0) {
     return [];
   }
-  return dedupeLinks(items.map(normalizeLink).filter((item) => item.url));
-}
-
-function isExternalLinksNdjsonFile(file) {
-  return file.name.toLowerCase() === "external-links.ndjson";
+  const links = dedupeLinks(items.map(normalizeLink).filter((item) => item.url));
+  if (links.length === 0) {
+    const fileName = file?.name ? `${file.name} ` : "";
+    throw new Error(`${fileName}沒有讀到外部連結資料；請確認來源是 GUI log 目錄的 external-links.ndjson。`);
+  }
+  return links;
 }
 
 function normalizeLinksFromCsv(rows) {
@@ -1033,6 +1031,20 @@ function getAnalysisStatusText(analysis) {
     return `${total} 筆外連已分析；目前多數外連未分類，載入分類規則可改善風險判斷`;
   }
   return `${total} 筆外連已分析`;
+}
+
+function makeFilteredExport(analysis) {
+  return {
+    generatedAt: new Date().toISOString(),
+    metrics: {
+      ...analysis.metrics,
+      filteredLinks: analysis.filteredLinks.length,
+      filteredDomains: analysis.domains.length,
+      filteredCategories: analysis.categories.length,
+    },
+    domains: analysis.domains,
+    links: analysis.filteredLinks,
+  };
 }
 
 function renderDomainTable(domains) {
