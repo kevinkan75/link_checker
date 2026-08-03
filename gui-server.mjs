@@ -1307,7 +1307,7 @@ function beginShutdown(reason) {
     idleShutdownTimer = null;
   }
 
-  console.log(`Link Checker GUI is shutting down: ${reason}`);
+  console.log(`Link Checker 正在停止：${formatShutdownReason(reason)}`);
   const forceExitTimer = setTimeout(() => process.exit(0), SHUTDOWN_FORCE_EXIT_MS);
   forceExitTimer.unref?.();
 
@@ -1653,14 +1653,30 @@ function formatStartupError(error, options) {
 
 function printStartupSuccess(port, fallbackUsed) {
   if (fallbackUsed) {
-    console.log(`Default port ${DEFAULT_PORT} was busy; using http://${HOST}:${port} instead.`);
+    console.log(`預設連接埠 ${DEFAULT_PORT} 已被使用，已改用：http://${HOST}:${port}`);
   }
-  console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);
-  console.log(`External Link Analyzer is running at http://127.0.0.1:${port}/analyzer.html`);
-  console.log(`System CA startup mode: ${isSystemCaEnabled() ? "enabled" : "disabled"}; GUI checkbox can enable it per job.`);
+  console.log("Link Checker 已啟動，請在瀏覽器開啟下列頁面：");
+  console.log("");
+  console.log(`連結檢查主頁：http://127.0.0.1:${port}`);
+  console.log(`外部連結分析頁：http://127.0.0.1:${port}/analyzer.html`);
+  console.log(`報告分析頁：http://127.0.0.1:${port}/report-analyzer.html`);
+  console.log("");
+  console.log("提醒：此命令視窗需保持開啟；關閉後 Link Checker 會停止。");
+  console.log(`系統憑證模式：${isSystemCaEnabled() ? "已啟用" : "未啟用"}，可在 GUI 的掃描設定中勾選。`);
   if (idleShutdownMs) {
-    console.log(`Idle shutdown: enabled after ${idleShutdownMs}ms without an open GUI page or running work.`);
+    console.log(`閒置自動關閉：已啟用；沒有開啟 GUI 頁面且沒有執行工作時，會在 ${idleShutdownMs}ms 後停止。`);
   }
+}
+
+function formatShutdownReason(reason) {
+  const idleMatch = /^idle for (\d+)ms$/.exec(reason || "");
+  if (idleMatch) {
+    return `閒置 ${idleMatch[1]}ms`;
+  }
+  if (reason === "manual shutdown requested") {
+    return "使用者手動關閉";
+  }
+  return reason || "未指定原因";
 }
 
 async function main() {
