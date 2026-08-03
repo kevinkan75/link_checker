@@ -568,7 +568,7 @@ function populateFilters(analysis) {
     statusFilterInput,
     Object.entries(analysis.statusCounts)
       .sort((a, b) => sortStatus(a[0], b[0])),
-    (status, count) => `${status} (${count})`,
+    (status, count) => `${formatStatusFilterLabel(status)} (${count})`,
   );
 }
 
@@ -714,7 +714,7 @@ function renderLoadMoreControl({ shown, total, onLoadMore }) {
   return wrapper;
 }
 
-function renderEmpty(message = "請先上傳 report.json。") {
+function renderEmpty(message = "請先匯入 report.json 或 broken.ndjson。") {
   setReportEmptyStateVisible(true);
   renderRunStatus(null);
   renderIncrementalSummary(null);
@@ -729,7 +729,7 @@ function renderEmpty(message = "請先上傳 report.json。") {
   sourceSummaryCount.textContent = "0 頁";
   domainSummaryCount.textContent = "0 個";
   linksSummary.textContent = "0 筆";
-  issueList.innerHTML = '<p class="empty-note">載入報告後顯示判讀分類。</p>';
+  issueList.innerHTML = '<p class="empty-note">載入報告後顯示處理建議分類。</p>';
   sourceList.innerHTML = '<p class="empty-note">載入報告後顯示來源頁。</p>';
   domainList.innerHTML = '<p class="empty-note">載入報告後顯示網域排行。</p>';
   linksTable.innerHTML = `<p class="empty-note issue-empty">${escapeHtml(message)}</p>`;
@@ -823,9 +823,9 @@ function renderIssueItem(item) {
   const header = document.createElement("div");
   header.className = "issue-item-header";
   header.append(
-    interpretationBadge(item.interpretation.category, formatInterpretationBadgeText(item)),
+    interpretationBadge(item.interpretation.category),
+    metaBadge(formatStatusSummary(item), "status"),
     metaBadge(formatSourceElement(source) || "無元素"),
-    metaBadge(formatIssueBadgeText(item)),
   );
   if (hasIssueStatusMismatch(item)) {
     header.append(metaBadge("分類與狀態需確認", "impact"));
@@ -841,14 +841,22 @@ function renderIssueItem(item) {
     header.append(metaBadge(`${formatNumber(sourceCount)} 個來源`, "impact"));
   }
 
+  const summary = document.createElement("div");
+  summary.className = "issue-decision-summary";
+  const action = document.createElement("strong");
+  action.textContent = item.interpretation.action;
+  const technical = document.createElement("span");
+  technical.textContent = `${getIssueLabel(item.issueType)}${item.status ? `，HTTP ${item.status}` : "，未取得 HTTP 狀態"}`;
+  summary.append(action, technical);
+
   row.append(
     header,
+    summary,
     detailLine("URL", item.url),
     detailLine("檢查時間", item.checkedAt || "未記錄"),
     detailLine("Canonical URL", item.canonicalUrl || item.url),
     detailLine("來源頁", formatSources(item.sources)),
-    detailLine("建議處理", item.interpretation.action),
-    detailLine("技術原因", `${getIssueLabel(item.issueType)}${item.status ? ` / HTTP ${item.status}` : ""}`),
+    detailLine("技術狀態", `${getIssueLabel(item.issueType)}${item.status ? ` / HTTP ${item.status}` : " / 無狀態"}`),
     detailLine("診斷", item.diagnosis || item.error || "無診斷資訊"),
   );
   if (item.contentLength !== "") {
@@ -860,8 +868,8 @@ function renderIssueItem(item) {
   if (item.blockedReason || item.suspectedWaf || item.suspectedBot) {
     row.append(detailLine("防護診斷", formatProtectionDiagnostics(item)));
   }
-  if (item.confirmation.enabled) {
-    row.append(detailLine("二次確認", formatConfirmationStatus(item.confirmation)));
+  if (shouldShowConfirmationStatus(item.confirmation)) {
+    row.append(detailLine("二次確認結果", formatConfirmationStatus(item.confirmation)));
   }
   if (item.incremental.reused) {
     row.append(detailLine("增量來源", formatIncrementalProvenance(item.incremental)));
@@ -936,6 +944,16 @@ function formatConfirmationStatus(confirmation) {
   const status = confirmation.status ? `HTTP ${confirmation.status}` : "未取得 HTTP 狀態";
   const checkedAt = confirmation.checkedAt ? `，${confirmation.checkedAt}` : "";
   return `${getConfirmationLabel(confirmation)}（${status}${checkedAt}）`;
+}
+
+function shouldShowConfirmationStatus(confirmation) {
+  if (!confirmation?.enabled) {
+    return false;
+  }
+  if (confirmation.candidate || confirmation.checked || confirmation.outcome) {
+    return true;
+  }
+  return confirmation.reason && confirmation.reason !== "not_candidate";
 }
 
 function formatConfirmationReason(reason) {
@@ -1064,14 +1082,57 @@ function normalizeStatus(value) {
   return String(value);
 }
 
-function formatIssueBadgeText(item) {
-  const status = item.status ? `HTTP ${item.status}` : "無狀態";
-  return `${getIssueLabel(item.issueType)} · ${status}`;
+function formatStatusFilterLabel(statusKey) {
+  if (statusKey === "(無狀態)") {
+    return "未取得 HTTP 狀態";
+  }
+  const status = Number.parseInt(statusKey, 10);
+  if (!Number.isFinite(status)) {
+    return statusKey;
+  }
+  return `HTTP ${status} ${getHttpStatusHint(status)}`;
 }
 
-function formatInterpretationBadgeText(item) {
-  const status = item.status ? `HTTP ${item.status}` : "無狀態";
-  return `${item.interpretation.label} · ${status}`;
+function formatStatusSummary(item) {
+  if (!item.status) {
+    return "未取得 HTTP 狀態";
+  }
+  const status = Number.parseInt(item.status, 10);
+  if (!Number.isFinite(status)) {
+    return `狀態 ${item.status}`;
+  }
+  return `HTTP ${status} ${getHttpStatusHint(status)}`;
+}
+
+function getHttpStatusHint(status) {
+  if (status === 401 || status === 403) {
+    return "拒絕或限制檢查";
+  }
+  if (status === 404) {
+    return "找不到頁面";
+  }
+  if (status === 410) {
+    return "內容已不存在";
+  }
+  if (status === 408 || status === 504) {
+    return "逾時";
+  }
+  if (status === 429) {
+    return "請求過多 / 被限流";
+  }
+  if (status >= 500) {
+    return "網站伺服器錯誤";
+  }
+  if (status >= 400) {
+    return "網站回報錯誤";
+  }
+  if (status >= 300) {
+    return "轉址";
+  }
+  if (status >= 200) {
+    return "可連線";
+  }
+  return "狀態需確認";
 }
 
 function hasIssueStatusMismatch(item) {

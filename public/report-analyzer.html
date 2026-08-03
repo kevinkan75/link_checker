@@ -11,7 +11,7 @@
       <header class="app-header">
         <div>
           <h1>Report Analyzer</h1>
-          <p>上傳單一 report.json，快速整理待判讀結果、判讀分類、來源頁與網域排行。</p>
+          <p>匯入單一 report.json 或 broken.ndjson，快速整理待判讀清單、處理建議分類、來源頁與網域排行。</p>
         </div>
         <nav class="header-nav" aria-label="主要導覽">
           <a class="header-link" href="/" aria-label="連結檢查 Link Checker" title="Link Checker">連結檢查</a>
@@ -48,45 +48,56 @@
 
         <div id="report-empty-state" class="empty-state import-empty-state">
           <strong>等待 report.json</strong>
-          <p>載入報告後，判讀分類、來源頁排行、問題網域與待判讀清單會更新。</p>
+          <p>載入報告後，處理建議分類、來源頁排行、問題網域與待判讀清單會更新。</p>
         </div>
       </section>
 
       <section id="run-status-banner" class="run-status-banner" hidden></section>
 
-      <section class="metric-grid" aria-label="報告總覽">
-        <div><span>檢查頁數</span><strong id="metric-pages">0</strong></div>
-        <div><span>檢查 URL</span><strong id="metric-checked">0</strong></div>
-        <div class="metric-card-danger"><span>需判讀結果</span><strong id="metric-broken">0</strong></div>
-        <div id="broken-rate-card"><span>需判讀比例</span><strong id="metric-broken-rate">0%</strong></div>
-        <div><span>Redirect</span><strong id="metric-redirects">0</strong></div>
-        <div><span>略過外連</span><strong id="metric-skipped">0</strong></div>
-      </section>
-
-      <section id="incremental-summary-panel" class="panel incremental-summary-panel" aria-labelledby="incremental-summary-title" hidden>
+      <section class="panel links-panel">
         <div class="section-heading">
-          <h2 id="incremental-summary-title">增量掃描</h2>
-          <span id="incremental-summary-state">未啟用</span>
+          <h2>待判讀清單</h2>
+          <span id="links-summary">0 筆</span>
         </div>
-        <div class="incremental-grid">
-          <div><span>模式</span><strong id="incremental-mode">-</strong></div>
-          <div><span>新增 URL</span><strong id="incremental-new">0</strong></div>
-          <div><span>已知 URL</span><strong id="incremental-known">0</strong></div>
-          <div><span>復用結果</span><strong id="incremental-reused">0</strong></div>
-          <div><span>上次存在本次未發現</span><strong id="incremental-disappeared">0</strong></div>
-          <div><span>優先 / 延後</span><strong id="incremental-priority">0 / 0</strong></div>
+        <div class="result-toolbar" aria-label="待判讀結果篩選">
+          <label>
+            <span>搜尋</span>
+            <input id="search" type="search" placeholder="URL、來源頁、診斷、網域">
+          </label>
+
+          <label>
+            <span>處理建議</span>
+            <select id="issue-filter">
+              <option value="all">全部</option>
+            </select>
+          </label>
+
+          <label>
+            <span>技術狀態</span>
+            <select id="status-filter">
+              <option value="all">全部</option>
+            </select>
+          </label>
+
+          <div class="toolbar-action">
+            <span>匯出</span>
+            <button id="export-csv-button" type="button" disabled>匯出目前清單 CSV</button>
+          </div>
+        </div>
+        <div id="links-table" class="issue-list-wrap">
+          <p class="empty-note issue-empty">請先匯入 report.json 或 broken.ndjson。</p>
         </div>
       </section>
 
-      <section class="summary-layout">
+      <section class="summary-layout" aria-label="追查摘要">
         <section class="panel">
           <div class="section-heading">
-            <h2>判讀分類</h2>
+            <h2>處理建議分類</h2>
             <span id="issue-summary-count">0 種</span>
           </div>
-          <p class="panel-note">用來判斷哪些要處理、哪些要人工確認。</p>
+          <p class="panel-note">先看是否需處理，再看技術狀態。</p>
           <div id="issue-list" class="rank-list">
-            <p class="empty-note">載入報告後顯示判讀分類。</p>
+            <p class="empty-note">載入報告後顯示處理建議分類。</p>
           </div>
         </section>
 
@@ -113,36 +124,27 @@
         </section>
       </section>
 
-      <section class="panel links-panel">
+      <section class="metric-grid" aria-label="掃描概況">
+        <div><span>檢查頁數</span><strong id="metric-pages">0</strong></div>
+        <div><span>檢查 URL</span><strong id="metric-checked">0</strong></div>
+        <div class="metric-card-danger"><span>需判讀結果</span><strong id="metric-broken">0</strong></div>
+        <div id="broken-rate-card"><span>需判讀比例</span><strong id="metric-broken-rate">0%</strong></div>
+        <div><span>Redirect</span><strong id="metric-redirects">0</strong></div>
+        <div><span>略過外連</span><strong id="metric-skipped">0</strong></div>
+      </section>
+
+      <section id="incremental-summary-panel" class="panel incremental-summary-panel" aria-labelledby="incremental-summary-title" hidden>
         <div class="section-heading">
-            <h2>待判讀結果</h2>
-          <span id="links-summary">0 筆</span>
+          <h2 id="incremental-summary-title">增量掃描</h2>
+          <span id="incremental-summary-state">未啟用</span>
         </div>
-        <div class="result-toolbar" aria-label="待判讀結果篩選">
-          <label>
-            <span>搜尋</span>
-            <input id="search" type="search" placeholder="URL、來源頁、診斷、網域">
-          </label>
-
-          <label>
-            <span>判讀分類</span>
-            <select id="issue-filter">
-              <option value="all">全部</option>
-            </select>
-          </label>
-
-          <label>
-            <span>狀態碼</span>
-            <select id="status-filter">
-              <option value="all">全部</option>
-            </select>
-          </label>
-        </div>
-        <div class="result-actions" aria-label="匯出目前篩選結果">
-          <button id="export-csv-button" type="button" disabled>匯出目前篩選 CSV</button>
-        </div>
-        <div id="links-table" class="issue-list-wrap">
-          <p class="empty-note issue-empty">請先上傳 report.json。</p>
+        <div class="incremental-grid">
+          <div><span>模式</span><strong id="incremental-mode">-</strong></div>
+          <div><span>新增 URL</span><strong id="incremental-new">0</strong></div>
+          <div><span>已知 URL</span><strong id="incremental-known">0</strong></div>
+          <div><span>復用結果</span><strong id="incremental-reused">0</strong></div>
+          <div><span>上次存在本次未發現</span><strong id="incremental-disappeared">0</strong></div>
+          <div><span>優先 / 延後</span><strong id="incremental-priority">0 / 0</strong></div>
         </div>
       </section>
     </main>
