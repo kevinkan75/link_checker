@@ -4,7 +4,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.0.4`
+目前正式版本：`v1.0.5`
 
 ## 適用情境
 
@@ -20,7 +20,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 ### 使用 portable 版本
 
-1. 從 [v1.0.4 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.4) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.0.5 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.0.5) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
