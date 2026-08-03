@@ -13,6 +13,7 @@
 ## 歸檔入口
 
 - [archive/README.md](archive/README.md)：歸檔文件索引。
+- [archive/CURRENT_STATE_2026-08-03.md](archive/CURRENT_STATE_2026-08-03.md)：2026-08-03 根 ROADMAP 收斂前的目前狀態、v1.0.4 摘要與已完成階段總覽。
 - [archive/ROADMAP_HISTORY.md](archive/ROADMAP_HISTORY.md)：P0-P5.5 已完成里程碑的詳細歷史。
 - [archive/PROJECT_ASSESSMENT_2026-07-18.md](archive/PROJECT_ASSESSMENT_2026-07-18.md)：2026-07-18 完整專案評估。
 - [archive/P9_GUI_ANALYZER_ASSESSMENT.md](archive/P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入與 rules schema / trace 的評估及驗收紀錄。

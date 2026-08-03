@@ -2,48 +2,32 @@
 
 更新日期：2026-08-03
 
-本文件只保留目前狀態、近期方向、延後項目與決策邊界。已完成里程碑的詳細紀錄請看 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)，歷史版 README / ROADMAP 快照請看 `docs/archive/*_2026-07-22_PRE_DOCS_REFRESH.md`。
+本文件只保留目前狀態、近期維護主線、下一步候選與決策邊界。已完成階段與 `v1.0.4` 詳細狀態請看 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md)，更早期里程碑請看 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
 
 ## 目前狀態
 
 - 最新正式版本：`v1.0.4`。
-- GitHub Release：`v1.0.4 Portable` 本機 release gate 已通過；發布時需上傳 portable zip、build manifest、zip SHA256 與 release notes。
-- Source commit 與 portable zip SHA256 以 GitHub Release 上傳的 build manifest 與 `.sha256` 檔為準。
-- P0-P11 release gate 已完成；目前沒有阻擋正式版使用的已知 release gate 項目。
-- 主 GUI 預設會檢查外部連結；CLI 仍維持保守預設，需要 `--external` 才檢查外部連結。
-- 主 GUI 三個功能頁切換按鈕已改為繁中：「連結檢查」、「外部連結分析」、「報告分析」。
-- Portable launcher 目前在本機 build 中記錄為 `NotSigned`；release notes、portable README 與 manifest 已明確標示，散布前應以 SHA256 / manifest 驗證 zip。
+- 目前沒有阻擋正式版使用的已知 release gate 項目。
+- 主 GUI 預設檢查外部連結；CLI 仍維持保守預設，需要 `--external` 才檢查外部連結。
+- 三個 GUI 功能頁是「連結檢查」、「外部連結分析」、「報告分析」。
+- Portable launcher 目前記錄為 `NotSigned`；散布前仍需以 SHA256 / manifest 驗證 zip。
 
-## v1.0.4 Release 摘要
-
-`v1.0.4` 是 patch release，沒有改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約。
-
-本次 release 重點：
-
-- 改善 Report Analyzer 的人工檢視工作流，讓待判讀清單優先於追查摘要與掃描概況。
-- 將狀態碼改為「技術狀態」人讀文字，並把匯出動作放入目前清單工具列。
-- 調整本機檔案語意為「匯入」，避免誤解為上傳到遠端服務。
-- 隱藏非候選二次確認狀態，並移除清單中缺少脈絡的高 / 中 / 低優先度徽章。
-- 整理 archive 文件，保留歷史紀錄但降低根文件噪音。
-
-## 產品定位
+## 產品邊界
 
 Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、排程系統、WAF 繞過工具或完整治理平台。
 
-目前最重要的產品目標：
+目前要守住的方向：
 
-- 讓承辦人快速知道哪些連結需要處理、哪些需要人工確認、哪些可先忽略。
-- 讓掃描結果可用 Excel / CSV / JSON / NDJSON 交辦、存查與分析。
-- 讓外部連結治理有基礎 inventory、risk rules 與可追溯規則來源。
+- 協助承辦人判讀與交辦，不替使用者做不可逆決策。
 - 保持本機執行、localhost-only、可攜式散布與清楚安全邊界。
+- 讓掃描結果可用 Excel / CSV / JSON / NDJSON 交辦、存查與分析。
+- 外部連結治理只做基礎 inventory、risk rules 與可追溯規則來源，不擴張成完整治理平台。
 
 ## 近期維護主線
 
 ### Release 維護
 
 狀態：持續維護。
-
-原則：
 
 - 每次正式 release 都要重新產生 portable package。
 - `LinkChecker-portable.zip`、external manifest、package manifest 與 `.sha256` 必須對齊同一個 source commit。
@@ -54,23 +38,19 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 
 狀態：持續維護。
 
-原則：
-
 - 根 README 面向使用者，保留快速開始、預設值、輸出、判讀與安全邊界。
-- 根 ROADMAP 面向維護者，保留目前狀態、下一步與延後項目。
+- 根 ROADMAP 面向維護者，只保留目前狀態、下一步與延後項目。
 - 詳細設計、驗收紀錄與歷史討論放入 `docs/archive/`。
-- `docs/README.md` 作為文件入口，新增文件時同步更新索引。
+- 新增或移動文件時，同步更新 [docs/README.md](docs/README.md) 與 [docs/archive/README.md](docs/archive/README.md)。
 
 ### 使用者體驗小修
 
 狀態：候選。
 
-可優先考慮：
-
-- 檢查三個 GUI 頁面的中文用語是否一致。
 - 檢查 README、GUI 與 Analyzer 對「待判讀結果」的說法是否一致。
-- 補強錯誤訊息的承辦人友善程度，尤其是 `403`、`429`、timeout、TLS 與 WAF 類結果。
+- 補強 `403`、`429`、timeout、TLS 與 WAF 類結果的承辦人友善錯誤訊息。
 - 改善 release page 說明，讓使用者更容易知道要下載 zip 並核對 SHA256。
+- 持續檢查三個 GUI 頁面的繁中用語與進階設定說明是否一致。
 
 ## 下一階段候選
 
@@ -79,26 +59,14 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | 項目 | 價值 | 注意事項 |
 | --- | --- | --- |
 | GUI rules URL 輸入欄位 | 讓使用者不必切 CLI 就能載入 site-specific rules | 需設計安全提示、錯誤呈現與權限邊界 |
-| Fragment / duplicate anchor 檢查 | 可補足頁內品質提醒 | 屬 optional 品質檢查，不應影響壞連結主判讀 |
+| Fragment / duplicate anchor 檢查 | 補足頁內品質提醒 | 屬 optional 品質檢查，不應影響壞連結主判讀 |
 | 更完整的 release page template | 降低每次發版人工漏項 | 應包含 artifact、SHA256、簽章狀態與 smoke 結果 |
 | Report Analyzer 大型檔案體驗改善 | 讓大型 report 的人工檢視更順 | 優先沿用 NDJSON sidecar，不急著改主契約 |
 | 更細的 external risk governance 欄位 | 方便外連治理與交辦 | 需避免把工具膨脹成完整治理平台 |
 
-## 已完成階段總覽
-
-| 階段 | 狀態 | 重點 | 主要紀錄 |
-| --- | --- | --- | --- |
-| P0-P5.5 | 已完成 | 基礎掃描、URL inventory、404 / 410 二次確認、外連風險、SPA / Nuxt 抽取 | [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) |
-| P6 / P6.5 | 已完成 | report-to-report diff、輸出契約、redaction、body/source limit、SSRF、partial report、robots / compliance、Retry-After、WAF signature schema | [docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md](docs/archive/P6_REPORT_DIFF_AND_CONTRACT_ASSESSMENT.md) |
-| P7 | 已完成 | TTL URL result cache、驗收紀錄與 P8 銜接 | [docs/archive/P7_CACHE_ASSESSMENT_AND_RELEASE.md](docs/archive/P7_CACHE_ASSESSMENT_AND_RELEASE.md) |
-| P8 | 已完成 | incremental scan、sitemap seed、changed-only result reuse | [docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md](docs/archive/P8_INCREMENTAL_SCAN_ANALYSIS.md) |
-| P9 | 已驗收 | GUI / Analyzer 改善、NDJSON sidecar、rules schema、rules trace 與 rules URL 安全載入 | [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md) |
-| P10 | 已完成 | 判讀分類、交辦欄位、GUI / Analyzer 語言同步 | [README.md](README.md)、[docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) |
-| P11 | 已完成 | release gate、portable build、manifest / checksum、GUI smoke、release notes | `dist/v1.0.4-notes.md` |
-
 ## 延後項目
 
-這些項目有價值，但目前不應插入 patch release 或阻擋既有正式版維護：
+這些項目有價值，但目前不應插入 patch release 或阻擋既有正式版維護。
 
 | 項目 | 延後理由 |
 | --- | --- |
@@ -106,42 +74,28 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | 複雜 suppress rules | 需要更完整治理流程，暫不納入近期版本 |
 | 多種技術型 profile presets | 目前保留簡化掃描模式，避免增加操作負擔 |
 | Headless render 預設化 | 容易引入速度、資源與 bot protection 問題，需另開設計 |
-| `report.json` streaming parser | P9b 已先用 NDJSON sidecar 和「載入更多」降低大型 report 痛點 |
-| 集中式規則平台 | P9c 只補 schema、trace 與安全載入，不建立多人審核或發布流程 |
+| `report.json` streaming parser | 已先用 NDJSON sidecar 和「載入更多」降低大型 report 痛點 |
+| 集中式規則平台 | 目前只補 schema、trace 與安全載入，不建立多人審核或發布流程 |
 | 公開信任 code signing | 對正式對外散布有價值，但需另行評估憑證成本、流程與維護責任 |
 
 ## 全域原則
 
-### 掃描邊界
+- 掃描邊界：先維持 DOM / HTML / SPA payload / site rules 抽取，不預設引入 headless browser。
+- 規則邊界：site-specific 邏輯應放在 rules 檔，不要硬寫進 crawler。
+- 外連邊界：保守處理 rate limit、WAF、Bot challenge 與 timeout，並明確標示需要人工確認。
+- 安全邊界：預設阻擋 private / localhost / metadata / reserved IP；內部掃描需明確開啟。
+- 合規邊界：不偽裝 Googlebot，不繞過 CAPTCHA，不把工具定位成 WAF bypass。
+- 輸出邊界：`report.json` 是主契約；NDJSON sidecar 是大型資料的輔助入口。
+- 版本邊界：patch release 只應包含修正、文件、文案與 release packaging 小修；若改 report schema、CLI 契約或掃描策略，應評估 minor 版本。
 
-- 先維持 DOM / HTML / SPA payload / site rules 抽取，不預設引入 headless browser。
-- Site-specific 邏輯應放在 rules 檔，不要硬寫進 crawler。
-- 外部連結檢查要保守處理 rate limit、WAF、Bot challenge 與 timeout，並明確標示需要人工確認。
-
-### 安全與合規
-
-- 預設阻擋 private / localhost / metadata / reserved IP；內部掃描需明確開啟。
-- rules URL 載入需沿用主掃描同等安全邊界。
-- 不偽裝 Googlebot，不繞過 CAPTCHA，不把工具定位成 WAF bypass。
-- Report、CSV、events log 與 manifest 應持續遮罩敏感 query value。
-
-### 輸出與版本
-
-- `report.json` 是主契約；NDJSON sidecar 是大型資料的輔助入口。
-- CSV 欄位優先服務 Excel 篩選、交辦與人工複核。
-- 每次 GUI 輸出應保留 `manifest.json`，記錄工具版本、schema、runtime 與輸出檔清單。
-- Portable release 必須檢查 manifest、checksum、bundled runtime 與來源 commit 是否對齊。
-- Patch release 只應包含修正、文件、文案與 release packaging 小修；若改 report schema、CLI 契約或掃描策略，應評估 minor 版本。
-
-## 細部規格索引
+## 文件入口
 
 | 主題 | 文件 |
 | --- | --- |
 | 使用者入口 | [README.md](README.md) |
-| CLI 參數 | [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) |
+| CLI 參數與進階用法 | [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) |
 | 技術流程與 report schema | [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) |
 | Report normalization / diff | [docs/REPORT_NORMALIZATION.md](docs/REPORT_NORMALIZATION.md) |
 | 文件索引 | [docs/README.md](docs/README.md) |
-| 已完成里程碑 | [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) |
-| 2026-07-18 專案評估 | [docs/archive/PROJECT_ASSESSMENT_2026-07-18.md](docs/archive/PROJECT_ASSESSMENT_2026-07-18.md) |
-| P9 GUI / Analyzer 評估 | [docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md](docs/archive/P9_GUI_ANALYZER_ASSESSMENT.md) |
+| 目前狀態歷史快照 | [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) |
+| 已完成里程碑 | [docs/archive/README.md](docs/archive/README.md) |
