@@ -188,7 +188,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 - external manifest 的 `build.gitCommit` 應等於要發佈的來源 commit。
 - external manifest 與 package manifest 的 Node runtime version 應一致。
 - package manifest 內必要檔案應包含 `runtime\node.exe`、`Start Link Checker.exe`、`gui.cmd`、`check-links.cmd`、`analyzer.cmd`、`PORTABLE-README.txt`、`README.md`、`ROADMAP.md`、`docs\README.md`、`public\analyzer.js`、`gui-server.mjs` 與 `link-checker.mjs`。
-- `runtime\node.exe` 應保留有效 Authenticode 簽章；`Start Link Checker.exe` 目前是 local self-signed 簽章，不是公開信任 code signing。
+- `runtime\node.exe` 應保留有效 Authenticode 簽章；`Start Link Checker.exe` 的簽章狀態以 manifest 為準，可能是 `NotSigned`，也可能是 local self-signed。local self-signed 不是公開信任 code signing。
+- 若 package 內有 `LinkChecker-local-code-signing.cer`，它只應出現在 launcher 已成功 local self-signed 的 build，供內部手動信任或匯入流程使用；一般使用者不需要安裝，也不能用來取代 zip SHA256 / manifest 驗證。
 
 ## 規則檔格式
 
