@@ -59,6 +59,7 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | 項目 | 價值 | 注意事項 |
 | --- | --- | --- |
 | GUI rules URL 輸入欄位 | 讓使用者不必切 CLI 就能載入 site-specific rules | 需設計安全提示、錯誤呈現與權限邊界 |
+| 404 / 410 錯誤頁 client-side redirect evidence | 降低「瀏覽器看似可用、HTTP 狀態仍是錯誤」的判讀落差 | 只新增 additive evidence，不覆蓋原始狀態；target 驗證需遵守既有安全邊界，避免外部連結複查成本暴增 |
 | Fragment / duplicate anchor 檢查 | 補足頁內品質提醒 | 屬 optional 品質檢查，不應影響壞連結主判讀 |
 | 更完整的 release page template | 降低每次發版人工漏項 | 應包含 artifact、SHA256、簽章狀態與 smoke 結果 |
 | Report Analyzer 大型檔案體驗改善 | 讓大型 report 的人工檢視更順 | 優先沿用 NDJSON sidecar，不急著改主契約 |
