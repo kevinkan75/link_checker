@@ -732,6 +732,7 @@ body.scan-idle .status-panel .progress-track,
 body.scan-idle .status-panel .scan-phase-note,
 body.scan-idle .status-panel .pending-url-note,
 body.scan-idle .status-panel .page-discovery-note,
+body.scan-idle .status-panel .url-pattern-note,
 body.scan-idle .status-panel .scan-advice-note,
 body.scan-idle .status-panel .current-url,
 body.scan-idle .status-panel .metric-grid,
@@ -773,6 +774,17 @@ body.scan-idle .results-layout {
   padding: 9px 10px;
   background: #fff8e8;
   color: #7a4b0b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.url-pattern-note {
+  margin: 10px 0 8px;
+  border: 1px solid #9fc2b8;
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: #eef8f5;
+  color: #1f5f55;
   font-size: 13px;
   font-weight: 700;
 }

@@ -49,6 +49,7 @@ const progressPercent = document.querySelector("#progress-percent");
 const scanPhaseNote = document.querySelector("#scan-phase-note");
 const pendingUrlNote = document.querySelector("#pending-url-note");
 const pageDiscoveryNote = document.querySelector("#page-discovery-note");
+const urlPatternNote = document.querySelector("#url-pattern-note");
 const scanAdviceNote = document.querySelector("#scan-advice-note");
 const pages = document.querySelector("#pages");
 const checked = document.querySelector("#checked");
@@ -576,6 +577,7 @@ async function startCheck() {
   updateScanPhaseDisplay({ state: "running" });
   updatePendingUrlDisplay(0, 0, 0);
   updatePageDiscoveryDisplay(0, maxPagesInput.value, 0);
+  updateUrlPatternDisplay(null);
   updateScanAdvice(null);
   updateActiveFilter();
   setProgressValue(0);
@@ -979,6 +981,7 @@ function updateStatus(status) {
   updateScanPhaseDisplay(status);
   updatePendingUrlDisplay(pendingUrlCount, urlsChecked, activeRequests);
   updatePageDiscoveryDisplay(pagesCrawled, maxPages || maxPagesInput.value, queuedPages);
+  updateUrlPatternDisplay(status.urlPatternSummary || null);
   updateScanAdvice(buildScanAdvice(status));
   active.textContent = activeRequests;
   queue.textContent = queuedPages;
@@ -1101,6 +1104,11 @@ function buildScanAdvice(status) {
     return null;
   }
 
+  const patternSummary = status.urlPatternSummary;
+  if (patternSummary?.warning && patternSummary.dominantPattern) {
+    return "此網站像清單型網站，掃描器會持續驗證大量相似頁面；若只是初步盤點，可先降低最多頁面或最大深度。";
+  }
+
   const pendingUrlCount = getPendingUrlCount(status);
   const urlsChecked = Number(status.urlsChecked || 0);
   const queuedPages = Number(status.queuedPages || 0);
@@ -1134,6 +1142,33 @@ function updateScanAdvice(message) {
   }
   scanAdviceNote.hidden = false;
   scanAdviceNote.textContent = message;
+}
+
+function updateUrlPatternDisplay(summary) {
+  if (!urlPatternNote) {
+    return;
+  }
+  if (!summary?.warning || !summary.dominantPattern) {
+    urlPatternNote.hidden = true;
+    urlPatternNote.textContent = "";
+    return;
+  }
+
+  const dominant = summary.dominantPattern;
+  const topPatterns = Array.isArray(summary.topPatterns)
+    ? summary.topPatterns
+      .filter((item) => item && item.count > 0)
+      .map((item) => `${item.pattern} ${item.count} 個`)
+      .join("、")
+    : "";
+  const ratio = formatRatioPercent(dominant.ratio);
+  urlPatternNote.hidden = false;
+  urlPatternNote.textContent = `大量相似 URL：${dominant.pattern} 佔 ${dominant.count} / ${summary.totalKnownUrls}（${ratio}）。${topPatterns ? `主要型態：${topPatterns}` : ""}`;
+}
+
+function formatRatioPercent(value) {
+  const ratio = Math.max(0, Math.min(1, Number(value) || 0));
+  return `${Math.round(ratio * 100)}%`;
 }
 
 function updatePageDiscoveryDisplay(crawledCount, maxPagesCount, queuedCount) {
@@ -1230,6 +1265,7 @@ function renderReport(report) {
     maxPages: reportMaxPages || options.maxPages || 0,
   });
   updatePageDiscoveryDisplay(reportPagesCrawled, reportMaxPages || options.maxPages || 0, report.runStatus?.pendingPages || 0);
+  updateUrlPatternDisplay(null);
   updateScanAdvice(null);
   skipped.textContent = summary.skippedExternal || 0;
   setProgressValue(getReportUrlValidationProgress(report));

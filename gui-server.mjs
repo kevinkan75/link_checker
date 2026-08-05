@@ -130,6 +130,7 @@ class GuiReporter {
       redirects: countRedirected(results),
       redirectByType: countRedirectByType(results),
       skippedExternal: checker?.skippedExternal || 0,
+      urlPatternSummary: buildUrlPatternSummary(checker, this.job.startUrl),
       currentUrl: this.currentUrl,
     };
   }
@@ -436,6 +437,73 @@ function countQueueItems() {
   }
   totals.total = queue.items.length;
   return totals;
+}
+
+function buildUrlPatternSummary(checker, startUrl) {
+  if (!checker?.inventory || checker.inventory.size === 0) {
+    return {
+      totalKnownUrls: 0,
+      warning: false,
+      topPatterns: [],
+      dominantPattern: null,
+    };
+  }
+
+  const startHost = getUrlHost(startUrl);
+  const counts = new Map();
+  for (const item of checker.inventory.values()) {
+    const label = getUrlPatternLabel(item.representativeUrl || item.canonicalUrl, startHost);
+    if (!label) {
+      continue;
+    }
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+
+  const totalKnownUrls = [...counts.values()].reduce((total, count) => total + count, 0);
+  const topPatterns = [...counts.entries()]
+    .map(([pattern, count]) => ({
+      pattern,
+      count,
+      ratio: totalKnownUrls > 0 ? Number((count / totalKnownUrls).toFixed(4)) : 0,
+    }))
+    .sort((left, right) => right.count - left.count || left.pattern.localeCompare(right.pattern))
+    .slice(0, 3);
+
+  const dominantPattern = topPatterns[0] || null;
+  const warning = Boolean(
+    dominantPattern
+      && totalKnownUrls >= 100
+      && dominantPattern.count >= 50
+      && dominantPattern.ratio >= 0.4
+  );
+
+  return {
+    totalKnownUrls,
+    warning,
+    topPatterns,
+    dominantPattern,
+  };
+}
+
+function getUrlHost(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return "";
+  }
+}
+
+function getUrlPatternLabel(value, startHost = "") {
+  try {
+    const parsed = new URL(value);
+    const pathname = parsed.pathname || "/";
+    if (!startHost || parsed.host === startHost) {
+      return pathname;
+    }
+    return `${parsed.host}${pathname}`;
+  } catch {
+    return "";
+  }
 }
 
 function buildCompletePayload(job) {
@@ -1694,6 +1762,7 @@ async function main() {
 export {
   buildCompletePayload,
   buildLogSummary,
+  buildUrlPatternSummary,
   makeBrokenCsv,
   makeEventsLog,
   makeExternalLinksCsv,

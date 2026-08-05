@@ -3,6 +3,7 @@
 import {
   buildCompletePayload,
   buildLogSummary,
+  buildUrlPatternSummary,
   makeNdjson,
 } from "./gui-server.mjs";
 
@@ -89,5 +90,33 @@ assert(checkedRows.length === report.checked.length, "checked.ndjson row count s
 assert(brokenRows.length === report.broken.length, "broken.ndjson row count should match broken[].");
 assert(externalRows.length === report.externalLinks.length, "external-links.ndjson row count should match externalLinks[].");
 assert(makeNdjson([]) === "", "Empty NDJSON sidecar should be an empty file.");
+
+function makeCheckerWithInventory(urls) {
+  return {
+    inventory: new Map(urls.map((url) => [
+      url,
+      {
+        canonicalUrl: url,
+        representativeUrl: url,
+      },
+    ])),
+  };
+}
+
+const repeatedUrls = Array.from({ length: 80 }, (_, index) => `https://archives.cisanet.org.tw/verification_pass.php?id=${index + 1}`);
+const mixedUrls = Array.from({ length: 20 }, (_, index) => `https://archives.cisanet.org.tw/download.php?id=${index + 1}`);
+const patternSummary = buildUrlPatternSummary(
+  makeCheckerWithInventory([...repeatedUrls, ...mixedUrls]),
+  "https://archives.cisanet.org.tw/verification_pass.php?id=85",
+);
+assert(patternSummary.warning === true, "Repeated path pattern should trigger GUI warning.");
+assert(patternSummary.dominantPattern?.pattern === "/verification_pass.php", "Dominant pattern should ignore query values.");
+assert(patternSummary.dominantPattern.count === 80, "Dominant pattern count should match repeated URLs.");
+
+const smallPatternSummary = buildUrlPatternSummary(
+  makeCheckerWithInventory(repeatedUrls.slice(0, 20)),
+  "https://archives.cisanet.org.tw/verification_pass.php?id=85",
+);
+assert(smallPatternSummary.warning === false, "Small repeated set should not trigger GUI warning.");
 
 console.log("ok p9b gui artifacts");
