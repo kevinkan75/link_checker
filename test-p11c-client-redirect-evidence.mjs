@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 
 import http from "node:http";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { LinkChecker, REPORT_SCHEMA_VERSION } from "./link-checker.mjs";
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+const fixturePath = path.join(rootDir, "fixtures", "reports", "client-redirect-evidence.v1.3.json");
 
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+async function readJson(filePath) {
+  const text = await readFile(filePath, "utf8");
+  return JSON.parse(text.replace(/^\uFEFF/, ""));
 }
 
 async function createServer(handler) {
@@ -35,7 +46,39 @@ function findByPath(report, path) {
   return item;
 }
 
+function assertClientRedirectFixture(report) {
+  assert(report.schemaVersion === "1.3.0", "Fixture should use schemaVersion 1.3.0.");
+  assert(report.generator?.name === "link-checker.mjs", "Fixture should preserve generator name.");
+  assert(report.summary?.confirmation?.confirmed_missing === 3, "Fixture should summarize confirmed missing results.");
+
+  const sameOrigin = findByPath(report, "/missing-with-client-redirect");
+  const sameOriginEvidence = sameOrigin.confirmation?.clientRedirectEvidence;
+  assert(sameOrigin.confirmation?.outcome === "confirmed_missing", "Fixture same-origin item should stay confirmed_missing.");
+  assert(sameOriginEvidence?.detected === true, "Fixture same-origin evidence should be detected.");
+  assert(sameOriginEvidence.source === "script_literal", "Fixture same-origin evidence source mismatch.");
+  assert(sameOriginEvidence.attribute === "location.replace", "Fixture same-origin attribute mismatch.");
+  assert(sameOriginEvidence.targetUrl === "https://example.test/replacement", "Fixture same-origin target URL mismatch.");
+  assert(sameOriginEvidence.targetChecked === true, "Fixture same-origin target should be checked.");
+  assert(sameOriginEvidence.targetOk === true, "Fixture same-origin target should be reachable.");
+  assert(sameOriginEvidence.reason === "target_reachable", "Fixture same-origin reason mismatch.");
+
+  const external = findByPath(report, "/missing-with-external-client-redirect");
+  const externalEvidence = external.confirmation?.clientRedirectEvidence;
+  assert(externalEvidence?.detected === true, "Fixture external evidence should be detected.");
+  assert(externalEvidence.targetUrl === "https://external.example/external-target", "Fixture external target URL mismatch.");
+  assert(externalEvidence.targetChecked === false, "Fixture external target should not be checked.");
+  assert(externalEvidence.reason === "target_not_checked_external", "Fixture external reason mismatch.");
+
+  const plain = findByPath(report, "/plain-missing");
+  const plainEvidence = plain.confirmation?.clientRedirectEvidence;
+  assert(plainEvidence?.detected === false, "Fixture plain 404 should not have client redirect.");
+  assert(plainEvidence.reason === "no_client_redirect", "Fixture plain 404 reason mismatch.");
+}
+
 async function main() {
+  const fixtureReport = await readJson(fixturePath);
+  assertClientRedirectFixture(fixtureReport);
+
   let externalServer;
   let server;
   let externalRequests = 0;

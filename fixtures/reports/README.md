@@ -15,3 +15,11 @@ They intentionally avoid `schemaVersion` and `generator` because P6 must read ol
 | `diagnostics-suspicious-to-ok` | Summary diagnostics change from suspicious scan quality to OK. | `diagnosticsChanged` |
 
 P6 should prefer `checked[].canonicalUrl` for checked URL matching, fall back to `url` for legacy reports, and compare `externalLinks[]` independently from `checked[]`.
+
+## Contract Fixtures
+
+These fixtures are versioned scan report samples used by focused contract tests. They are not part of the P6 report-diff pair index.
+
+| Fixture | Purpose |
+| --- | --- |
+| `client-redirect-evidence.v1.3.json` | Locks the `schemaVersion: "1.3.0"` `confirmation.clientRedirectEvidence` shape for same-origin target validation, external target skip, and plain 404 no-redirect cases. |

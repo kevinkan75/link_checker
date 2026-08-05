@@ -1,0 +1,329 @@
+{
+  "schemaVersion": "1.3.0",
+  "generator": {
+    "name": "link-checker.mjs",
+    "version": "0.1.0"
+  },
+  "startedAt": "2026-08-05T00:00:00.000Z",
+  "completedAt": "2026-08-05T00:00:01.000Z",
+  "runStatus": {
+    "status": "complete",
+    "startedAt": "2026-08-05T00:00:00.000Z",
+    "completedAt": "2026-08-05T00:00:01.000Z",
+    "stoppedByUser": false,
+    "pendingPages": 0,
+    "pendingValidations": 0,
+    "activeValidationTasks": 0
+  },
+  "startUrl": "https://example.test/",
+  "options": {
+    "maxPages": 1,
+    "maxDepth": 0,
+    "concurrency": 4,
+    "perHostConcurrency": 2,
+    "timeoutMs": 5000,
+    "retryCount": 0,
+    "checkExternal": false,
+    "canonicalStrategy": "safe",
+    "confirm404": true
+  },
+  "securityPolicy": {
+    "blockPrivateIp": true,
+    "allowLocalhost": false,
+    "allowPrivateIp": false,
+    "metadataIpBlocked": true,
+    "allowedProtocols": ["http:", "https:"]
+  },
+  "scanPolicy": {
+    "robotsTxt": {
+      "status": "robots_compliant",
+      "mode": "record_only",
+      "pathEnforcement": false
+    }
+  },
+  "compliance": {
+    "purpose": "Local link checking report fixture.",
+    "scope": "same_origin",
+    "authorizedScanDeclared": false,
+    "authorizationNote": null,
+    "robotsTxtPolicy": "record_only",
+    "robotsTxtEnforced": false,
+    "responseBodyStored": false,
+    "bodyHashEnabled": false
+  },
+  "summary": {
+    "pagesCrawled": 1,
+    "urlsChecked": 3,
+    "brokenLinks": 3,
+    "brokenByType": {
+      "not_found": 3
+    },
+    "skippedExternal": 0,
+    "externalLinks": 0,
+    "externalDomains": 0,
+    "confirmation": {
+      "enabled": true,
+      "candidates": 3,
+      "checked": 3,
+      "recovered": 0,
+      "confirmed_missing": 3,
+      "needs_review": 0,
+      "skipped": 0
+    },
+    "robotsTxt": {
+      "enabled": true,
+      "url": "https://example.test/robots.txt",
+      "status": "ok",
+      "appliesTo": "https://example.test/",
+      "pathEnforcement": false
+    }
+  },
+  "broken": [
+    {
+      "url": "https://example.test/missing-with-client-redirect",
+      "canonicalUrl": "https://example.test/missing-with-client-redirect",
+      "ok": false,
+      "status": 404,
+      "issueType": "not_found",
+      "classification": "http_error",
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 404,
+        "ok": false,
+        "finalUrl": "https://example.test/missing-with-client-redirect",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 12,
+        "outcome": "confirmed_missing",
+        "clientRedirectEvidence": {
+          "detected": true,
+          "source": "script_literal",
+          "attribute": "location.replace",
+          "targetUrl": "https://example.test/replacement",
+          "targetChecked": true,
+          "targetStatus": 200,
+          "targetOk": true,
+          "targetFinalUrl": "https://example.test/replacement",
+          "targetIssueType": "ok",
+          "targetCheckedAt": "2026-08-05T00:00:00.500Z",
+          "targetElapsedMs": 8,
+          "reason": "target_reachable"
+        },
+        "reason": "still_not_found"
+      },
+      "sources": [
+        {
+          "page": "https://example.test/",
+          "tag": "a",
+          "attribute": "href",
+          "text": "Missing with client redirect",
+          "rawValue": "/missing-with-client-redirect",
+          "resolvedUrl": "https://example.test/missing-with-client-redirect",
+          "sourceType": "html_attribute"
+        }
+      ]
+    },
+    {
+      "url": "https://example.test/missing-with-external-client-redirect",
+      "canonicalUrl": "https://example.test/missing-with-external-client-redirect",
+      "ok": false,
+      "status": 404,
+      "issueType": "not_found",
+      "classification": "http_error",
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 404,
+        "ok": false,
+        "finalUrl": "https://example.test/missing-with-external-client-redirect",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 13,
+        "outcome": "confirmed_missing",
+        "clientRedirectEvidence": {
+          "detected": true,
+          "source": "script_literal",
+          "attribute": "window.location.href",
+          "targetUrl": "https://external.example/external-target",
+          "targetChecked": false,
+          "targetStatus": null,
+          "targetOk": null,
+          "targetFinalUrl": null,
+          "targetIssueType": null,
+          "targetCheckedAt": null,
+          "targetElapsedMs": null,
+          "reason": "target_not_checked_external"
+        },
+        "reason": "still_not_found"
+      },
+      "sources": [
+        {
+          "page": "https://example.test/",
+          "tag": "a",
+          "attribute": "href",
+          "text": "Missing with external client redirect",
+          "rawValue": "/missing-with-external-client-redirect",
+          "resolvedUrl": "https://example.test/missing-with-external-client-redirect",
+          "sourceType": "html_attribute"
+        }
+      ]
+    },
+    {
+      "url": "https://example.test/plain-missing",
+      "canonicalUrl": "https://example.test/plain-missing",
+      "ok": false,
+      "status": 404,
+      "issueType": "not_found",
+      "classification": "http_error",
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 404,
+        "ok": false,
+        "finalUrl": "https://example.test/plain-missing",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 11,
+        "outcome": "confirmed_missing",
+        "clientRedirectEvidence": {
+          "detected": false,
+          "source": null,
+          "attribute": null,
+          "targetUrl": null,
+          "targetChecked": false,
+          "targetStatus": null,
+          "targetOk": null,
+          "targetFinalUrl": null,
+          "targetIssueType": null,
+          "targetCheckedAt": null,
+          "targetElapsedMs": null,
+          "reason": "no_client_redirect"
+        },
+        "reason": "still_not_found"
+      },
+      "sources": [
+        {
+          "page": "https://example.test/",
+          "tag": "a",
+          "attribute": "href",
+          "text": "Plain missing",
+          "rawValue": "/plain-missing",
+          "resolvedUrl": "https://example.test/plain-missing",
+          "sourceType": "html_attribute"
+        }
+      ]
+    }
+  ],
+  "checked": [
+    {
+      "url": "https://example.test/missing-with-client-redirect",
+      "canonicalUrl": "https://example.test/missing-with-client-redirect",
+      "ok": false,
+      "status": 404,
+      "issueType": "not_found",
+      "classification": "http_error",
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 404,
+        "ok": false,
+        "finalUrl": "https://example.test/missing-with-client-redirect",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 12,
+        "outcome": "confirmed_missing",
+        "clientRedirectEvidence": {
+          "detected": true,
+          "source": "script_literal",
+          "attribute": "location.replace",
+          "targetUrl": "https://example.test/replacement",
+          "targetChecked": true,
+          "targetStatus": 200,
+          "targetOk": true,
+          "targetFinalUrl": "https://example.test/replacement",
+          "targetIssueType": "ok",
+          "targetCheckedAt": "2026-08-05T00:00:00.500Z",
+          "targetElapsedMs": 8,
+          "reason": "target_reachable"
+        },
+        "reason": "still_not_found"
+      }
+    },
+    {
+      "url": "https://example.test/missing-with-external-client-redirect",
+      "canonicalUrl": "https://example.test/missing-with-external-client-redirect",
+      "ok": false,
+      "status": 404,
+      "issueType": "not_found",
+      "classification": "http_error",
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 404,
+        "ok": false,
+        "finalUrl": "https://example.test/missing-with-external-client-redirect",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 13,
+        "outcome": "confirmed_missing",
+        "clientRedirectEvidence": {
+          "detected": true,
+          "source": "script_literal",
+          "attribute": "window.location.href",
+          "targetUrl": "https://external.example/external-target",
+          "targetChecked": false,
+          "targetStatus": null,
+          "targetOk": null,
+          "targetFinalUrl": null,
+          "targetIssueType": null,
+          "targetCheckedAt": null,
+          "targetElapsedMs": null,
+          "reason": "target_not_checked_external"
+        },
+        "reason": "still_not_found"
+      }
+    },
+    {
+      "url": "https://example.test/plain-missing",
+      "canonicalUrl": "https://example.test/plain-missing",
+      "ok": false,
+      "status": 404,
+      "issueType": "not_found",
+      "classification": "http_error",
+      "confirmation": {
+        "enabled": true,
+        "candidate": true,
+        "checked": true,
+        "status": 404,
+        "ok": false,
+        "finalUrl": "https://example.test/plain-missing",
+        "method": "GET",
+        "referer": "https://example.test/",
+        "elapsedMs": 11,
+        "outcome": "confirmed_missing",
+        "clientRedirectEvidence": {
+          "detected": false,
+          "source": null,
+          "attribute": null,
+          "targetUrl": null,
+          "targetChecked": false,
+          "targetStatus": null,
+          "targetOk": null,
+          "targetFinalUrl": null,
+          "targetIssueType": null,
+          "targetCheckedAt": null,
+          "targetElapsedMs": null,
+          "reason": "no_client_redirect"
+        },
+        "reason": "still_not_found"
+      }
+    }
+  ],
+  "externalLinks": []
+}
