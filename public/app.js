@@ -1253,6 +1253,9 @@ function renderBrokenItem(item) {
   if (incrementalBadge) {
     header.append(metaBadge(incrementalBadge.text, incrementalBadge.modifier));
   }
+  if (shouldShowClientRedirectEvidence(item.confirmation?.clientRedirectEvidence)) {
+    header.append(metaBadge("瀏覽器端導向", "impact"));
+  }
 
   row.append(header, detailLine("URL", item.url));
   row.append(detailLine("建議處理", interpretation.action));
@@ -1275,6 +1278,9 @@ function renderBrokenItem(item) {
   }
   if (item.confirmation?.enabled) {
     row.append(detailLine("二次確認", formatConfirmationStatus(item.confirmation)));
+  }
+  if (shouldShowClientRedirectEvidence(item.confirmation?.clientRedirectEvidence)) {
+    row.append(detailLine("瀏覽器端導向", formatClientRedirectEvidence(item.confirmation.clientRedirectEvidence)));
   }
   if (item.incremental?.reused) {
     row.append(detailLine("增量來源", formatIncrementalProvenance(item.incremental)));
@@ -1814,4 +1820,58 @@ function formatConfirmationReason(reason) {
     unknown: "結果不明",
   };
   return labels[reason] || reason;
+}
+
+function shouldShowClientRedirectEvidence(evidence) {
+  return Boolean(evidence?.detected);
+}
+
+function formatClientRedirectEvidence(evidence) {
+  if (!evidence?.detected) {
+    return "未偵測到瀏覽器端導向";
+  }
+
+  const parts = [formatClientRedirectSource(evidence)];
+  if (evidence.targetUrl) {
+    parts.push(`導向目標：${evidence.targetUrl}`);
+  }
+
+  if (evidence.targetChecked) {
+    const status = evidence.targetStatus ? `HTTP ${evidence.targetStatus}` : "未取得 HTTP 狀態";
+    parts.push(`${formatClientRedirectReason(evidence.reason)}（${status}）`);
+  } else {
+    parts.push(formatClientRedirectReason(evidence.reason));
+  }
+
+  if (evidence.targetFinalUrl && evidence.targetFinalUrl !== evidence.targetUrl) {
+    parts.push(`最終網址：${evidence.targetFinalUrl}`);
+  }
+
+  return parts.filter(Boolean).join("；");
+}
+
+function formatClientRedirectSource(evidence) {
+  const sourceLabels = {
+    meta_refresh: "錯誤頁包含 meta refresh",
+    script_literal: "錯誤頁包含 JavaScript 導向",
+  };
+  const source = sourceLabels[evidence.source] || "錯誤頁包含瀏覽器端導向";
+  return evidence.attribute ? `${source}（${evidence.attribute}）` : source;
+}
+
+function formatClientRedirectReason(reason) {
+  const labels = {
+    target_reachable: "導向目標可開啟，建議確認原連結是否應更新",
+    target_not_checked_external: "導向目標是外部網站，請人工確認是否可開啟",
+    target_still_not_found: "導向目標仍是 404 / 410，建議人工確認",
+    target_blocked_waf: "導向目標疑似被 WAF 阻擋，建議人工確認",
+    target_blocked_bot: "導向目標疑似遇到 Bot challenge，建議人工確認",
+    target_blocked_by_security_policy: "導向目標被安全政策阻擋，建議人工確認",
+    target_timeout: "導向目標檢查逾時，建議人工確認",
+    target_network_error: "導向目標發生網路錯誤，建議人工確認",
+    target_unknown: "導向目標結果不明，建議人工確認",
+    target_not_http_or_invalid: "導向目標不是可檢查的 HTTP(S) 網址",
+    target_queued: "導向目標尚未完成檢查",
+  };
+  return labels[reason] || reason || "導向目標結果不明，建議人工確認";
 }
