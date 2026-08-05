@@ -50,6 +50,10 @@ for (const column of [
 
 assert(readme.includes("| 判讀分類 | 代表意義 | 建議處理 |"), "README should document interpretation categories.");
 assert(readme.includes("待判讀結果"), "README should use handoff-oriented wording.");
+assert(readme.includes("404 / 410 與瀏覽器端導向"), "README should explain client-side redirect evidence for 404/410 results.");
+assert(readme.includes("這個提示是輔助證據，不會覆蓋 `404 / 410` 的原始判讀。"), "README should explain that client redirect evidence does not override the original status.");
 assert(technicalSpec.includes("GUI 與 Report Analyzer 應優先顯示 `interpretation.label`"), "Technical spec should define interpretation-first display.");
+assert(technicalSpec.includes("`clientRedirectEvidence` 是 `404 / 410` 錯誤頁的輔助證據"), "Technical spec should define client redirect evidence as additive evidence.");
+assert(technicalSpec.includes("主 GUI 與 Report Analyzer 會在待判讀項目中顯示 `瀏覽器端導向` badge"), "Technical spec should document GUI and Report Analyzer display behavior.");
 
 console.log("ok p10c report analyzer language");
