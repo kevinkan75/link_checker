@@ -1,6 +1,7 @@
 dist/
 logs/
 report.json
+manifest.json
 .cache/
 .codex-local-notes.md
 
