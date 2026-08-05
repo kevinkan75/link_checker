@@ -11,7 +11,7 @@
       <header class="app-header">
         <div>
           <h1>外部連結分析</h1>
-          <p>匯入 Link Checker 產出的外連清單，整理外部網域、風險分類與治理狀態。</p>
+          <p>匯入 Link Checker 產出的外部連結清單，整理外部網域、風險分類與治理狀態。</p>
         </div>
         <nav class="header-nav" aria-label="主要導覽">
           <a class="header-link" href="/" aria-label="連結檢查 Link Checker" title="Link Checker">連結檢查</a>
@@ -23,12 +23,12 @@
       <section class="setup-panel" aria-labelledby="setup-title">
         <div class="section-heading">
           <h2 id="setup-title">資料來源</h2>
-          <span id="load-state">尚未匯入資料</span>
+          <span id="load-state">尚未載入外部連結清單</span>
         </div>
 
         <div class="setup-grid">
           <label class="file-field">
-            <span>外連清單</span>
+            <span>外部連結清單</span>
             <input id="links-file" type="file" accept=".csv,.json,.ndjson,application/json,application/x-ndjson,text/csv">
             <small id="links-file-hint" class="file-hint">建議選 GUI 輸出資料夾內的 external-links.csv；大型資料請選 external-links.ndjson；也可選完整 report.json。</small>
           </label>
@@ -36,21 +36,21 @@
         </div>
 
         <div class="actions">
-          <button id="pick-links-button" type="button">讀取外連清單</button>
-          <button id="analyze-button" type="button" disabled>分析</button>
+          <button id="pick-links-button" type="button">選擇外部連結清單</button>
+          <button id="analyze-button" type="button" disabled>載入並分析</button>
         </div>
 
         <div id="file-status" class="file-status" hidden></div>
 
-        <div class="import-flow" aria-label="外連分析流程">
+        <div class="import-flow" aria-label="外部連結分析流程">
           <span id="flow-select" class="active">1 選檔</span>
-          <span id="flow-analyze">2 分析</span>
+          <span id="flow-analyze">2 載入 / 分析</span>
           <span id="flow-export">3 匯出</span>
         </div>
 
         <div id="import-empty-state" class="empty-state import-empty-state">
-          <strong>等待外連清單</strong>
-          <p>載入 external-links.csv、external-links.ndjson 或 report.json 後，摘要、網域彙整與外連明細會更新。</p>
+          <strong>等待外部連結清單</strong>
+          <p>載入 external-links.csv、external-links.ndjson 或 report.json 後，摘要、網域彙整與外部連結明細會更新。</p>
         </div>
       </section>
 
@@ -59,7 +59,7 @@
         <div class="advanced-panel-body">
           <div class="advanced-intro">
             <strong>一般分析可以略過這裡。</strong>
-            <p>新版報告會優先使用掃描時產生的外連風險；這裡只用來補充舊資料、未分類外連，或把已知可信任網域排除。預設分類只做基本提示，不等於完整惡意網站或黑名單偵測。</p>
+            <p>新版報告會優先使用掃描時產生的外部連結風險；這裡只用來補充舊資料、未分類外部連結，或把已知可信任網域排除。預設分類只做基本提示，不等於完整惡意網站或黑名單偵測。</p>
           </div>
 
           <section class="advanced-subsection first" aria-labelledby="rules-source-title">
@@ -174,8 +174,8 @@
         </div>
       </details>
 
-      <section class="metric-grid" aria-label="外連分析摘要">
-        <div><span>外連筆數</span><strong id="metric-links">0</strong></div>
+      <section class="metric-grid" aria-label="外部連結分析摘要">
+        <div><span>外部連結筆數</span><strong id="metric-links">0</strong></div>
         <div><span>外部網域</span><strong id="metric-domains">0</strong></div>
         <div class="metric-card-danger"><span>高風險</span><strong id="metric-high">0</strong></div>
         <div class="metric-card-warn"><span>需檢視</span><strong id="metric-medium">0</strong></div>
@@ -186,7 +186,7 @@
       <section class="panel result-filter-panel">
         <div class="section-heading">
           <h2>結果篩選</h2>
-          <span>套用於網域彙整、分類統計與外連明細</span>
+          <span>套用於網域彙整、分類統計與外部連結明細</span>
         </div>
         <div class="result-toolbar">
           <label>
@@ -262,11 +262,11 @@
 
       <section class="panel links-panel">
         <div class="section-heading">
-          <h2>外連明細</h2>
+          <h2>外部連結明細</h2>
           <span id="links-summary">0 筆</span>
         </div>
         <div id="links-table" class="link-list-wrap">
-          <p class="empty-note link-empty">匯入資料後會顯示外連明細。</p>
+          <p class="empty-note link-empty">載入資料後會顯示外部連結明細。</p>
         </div>
       </section>
     </main>

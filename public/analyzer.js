@@ -199,7 +199,7 @@ linksFileInput.addEventListener("change", () => {
     exportCsvButton.disabled = true;
     analyzeButton.disabled = true;
     setFileStatus(null);
-    setImportFlow("select", "尚未載入外連清單");
+    setImportFlow("select", "尚未載入外部連結清單");
     setImportEmptyStateVisible(true);
     return;
   }
@@ -211,7 +211,7 @@ linksFileInput.addEventListener("change", () => {
   setImportEmptyStateVisible(true);
   const profile = getFileSizeProfile(file);
   setFileStatus(profile.message, profile.level);
-  setImportFlow("analyze", `已選擇 ${file.name}（${formatBytes(file.size)}），下一步按「分析」`);
+  setImportFlow("analyze", `已選擇 ${file.name}（${formatBytes(file.size)}），下一步按「載入並分析」`);
 });
 
 for (const input of [searchInput, riskFilterInput, governanceFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
@@ -315,9 +315,9 @@ analyzeButton.addEventListener("click", async () => {
     if (file) {
       const profile = getFileSizeProfile(file);
       setFileStatus(profile.message, profile.level);
-      setImportFlow("analyze", `讀取與分析 ${file.name}（${formatBytes(file.size)}）`);
+      setImportFlow("analyze", `正在載入並分析 ${file.name}（${formatBytes(file.size)}）`);
     } else {
-      setImportFlow("analyze", "讀取與分析中");
+      setImportFlow("analyze", "正在載入並分析");
     }
     await yieldToBrowser();
     const links = await loadLinksFile();
@@ -339,7 +339,7 @@ analyzeButton.addEventListener("click", async () => {
     exportCsvButton.disabled = true;
     setFileStatus(error.message, "error");
     setImportEmptyStateVisible(true);
-    setImportFlow("analyze", "分析失敗");
+    setImportFlow("analyze", "載入或分析失敗");
   }
 });
 
@@ -414,18 +414,18 @@ function getFileSizeProfile(file) {
   if (file.size >= FILE_SIZE_LARGE_BYTES) {
     return {
       level: "warn",
-      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器分析可能會停頓。若是 GUI log 目錄輸出，建議優先使用 external-links.csv 或 external-links.ndjson。`,
+      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器載入與分析可能會停頓。若是 GUI log 目錄輸出，建議優先使用 external-links.csv 或 external-links.ndjson。`,
     };
   }
   if (file.size >= FILE_SIZE_WARN_BYTES) {
     return {
       level: "warn",
-      message: `${file.name} 大小 ${formatBytes(file.size)}，讀取與分析可能需要一點時間。`,
+      message: `${file.name} 大小 ${formatBytes(file.size)}，載入與分析可能需要一點時間。`,
     };
   }
   return {
     level: "ok",
-    message: `${file.name} 大小 ${formatBytes(file.size)}，可直接分析。`,
+    message: `${file.name} 大小 ${formatBytes(file.size)}，可直接載入並分析。`,
   };
 }
 
@@ -1111,9 +1111,9 @@ function getAnalysisStatusText(analysis) {
   const total = analysis.enriched.length;
   const uncategorized = analysis.metrics.uncategorized;
   if (total > 0 && uncategorized / total >= 0.5) {
-    return `${total} 筆外連已分析；目前多數外連未分類，載入分類規則可改善風險判斷`;
+    return `${total} 筆外部連結已分析；目前多數外部連結未分類，載入分類規則可改善風險判斷`;
   }
-  return `${total} 筆外連已分析`;
+  return `${total} 筆外部連結已分析`;
 }
 
 function makeFilteredExport(analysis) {
@@ -1170,7 +1170,7 @@ function renderCategoryList(categories) {
 
 function renderLinksTable(links) {
   if (links.length === 0) {
-    linksTable.innerHTML = '<p class="empty-note link-empty">沒有符合條件的外連。</p>';
+    linksTable.innerHTML = '<p class="empty-note link-empty">沒有符合條件的外部連結。</p>';
     return;
   }
 

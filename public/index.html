@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Link Checker</title>
+    <title>連結檢查</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <main class="app-shell">
       <section class="control-panel" aria-labelledby="title">
         <div class="title-block">
-          <h1 id="title">Link Checker</h1>
+          <h1 id="title">連結檢查</h1>
           <nav class="header-nav" aria-label="主要導覽">
             <a class="header-link" href="/" aria-current="page" aria-label="連結檢查 Link Checker" title="Link Checker">連結檢查</a>
             <a class="header-link" href="/analyzer.html" aria-label="外部連結分析 External Link Analyzer" title="External Link Analyzer">外部連結分析</a>
@@ -35,7 +35,7 @@
             <div class="actions">
               <button id="start-button" type="submit">開始檢查</button>
               <button id="stop-button" type="button" disabled>停止</button>
-              <button id="download-button" type="button" disabled>下載 JSON</button>
+              <button id="download-button" type="button" disabled>匯出 JSON</button>
             </div>
           </div>
 
@@ -254,10 +254,10 @@
         <div id="scan-empty-state" class="empty-state scan-empty-state">
           <strong>準備開始檢查</strong>
           <p>輸入網站 URL 後，這裡會顯示即時檢測進度、目前處理中的 URL 與問題摘要。</p>
-          <div class="empty-state-steps" aria-label="開始前狀態">
-            <span>等待 URL</span>
-            <span>尚未建立 report</span>
-            <span>事件紀錄待命</span>
+          <div class="empty-state-steps" aria-label="連結檢查流程">
+            <span>1 輸入 URL</span>
+            <span>2 開始檢查</span>
+            <span>3 查看待判讀結果 / 匯出</span>
           </div>
         </div>
         <div class="progress-summary">

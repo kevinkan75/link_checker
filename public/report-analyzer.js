@@ -131,14 +131,14 @@ clearButton.addEventListener("click", () => {
   exportCsvButton.disabled = true;
   clearButton.disabled = true;
   setFileStatus(null);
-  setReportFlow("select", "尚未載入 report.json");
+  setReportFlow("select", "尚未載入報告");
   renderEmpty();
 });
 
 async function loadReportFile() {
   const file = reportFileInput.files?.[0];
   if (!file) {
-    setReportFlow("select", "尚未載入 report.json");
+    setReportFlow("select", "尚未載入報告");
     setFileStatus(null);
     return;
   }
@@ -177,7 +177,7 @@ function loadReportContent(text, file) {
   if (isNdjsonFile(file)) {
     try {
       if (!isBrokenNdjsonFile(file)) {
-        throw new Error("Report Analyzer 第一版只支援 broken.ndjson，不支援 checked.ndjson 或 external-links.ndjson。");
+        throw new Error("報告分析目前只支援 broken.ndjson，不支援 checked.ndjson 或 external-links.ndjson。");
       }
       return makeBrokenSidecarReport(parseNdjsonContent(text), file.name);
     } catch (error) {
