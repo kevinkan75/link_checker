@@ -23,7 +23,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "1.2.0"
+      "const": "1.3.0"
     },
     "generator": {
       "type": "object",
@@ -475,6 +475,9 @@
         "bodySignature": {
           "$ref": "#/$defs/bodySignature"
         },
+        "confirmation": {
+          "$ref": "#/$defs/confirmation"
+        },
         "interpretation": {
           "$ref": "#/$defs/interpretation"
         },
@@ -505,6 +508,9 @@
         },
         "bodySignature": {
           "$ref": "#/$defs/bodySignature"
+        },
+        "confirmation": {
+          "$ref": "#/$defs/confirmation"
         },
         "interpretation": {
           "$ref": "#/$defs/interpretation"
@@ -551,6 +557,48 @@
         },
         "action": { "type": "string" },
         "needsManualReview": { "type": "boolean" }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "candidate": { "type": "boolean" },
+        "checked": { "type": "boolean" },
+        "status": { "type": ["integer", "null"] },
+        "ok": { "type": ["boolean", "null"] },
+        "finalUrl": { "type": ["string", "null"] },
+        "method": { "type": ["string", "null"] },
+        "referer": { "type": ["string", "null"] },
+        "elapsedMs": { "type": ["integer", "null"], "minimum": 0 },
+        "outcome": {
+          "type": ["string", "null"],
+          "enum": ["recovered", "confirmed_missing", "needs_review", null]
+        },
+        "reason": { "type": ["string", "null"] },
+        "clientRedirectEvidence": {
+          "$ref": "#/$defs/clientRedirectEvidence"
+        }
+      }
+    },
+    "clientRedirectEvidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["detected", "reason"],
+      "properties": {
+        "detected": { "type": "boolean" },
+        "source": { "type": ["string", "null"] },
+        "attribute": { "type": ["string", "null"] },
+        "targetUrl": { "type": ["string", "null"] },
+        "targetChecked": { "type": "boolean" },
+        "targetStatus": { "type": ["integer", "null"] },
+        "targetOk": { "type": ["boolean", "null"] },
+        "targetFinalUrl": { "type": ["string", "null"] },
+        "targetIssueType": { "type": ["string", "null"] },
+        "targetCheckedAt": { "type": ["string", "null"], "format": "date-time" },
+        "targetElapsedMs": { "type": ["integer", "null"], "minimum": 0 },
+        "reason": { "type": "string" }
       }
     },
     "bodySignature": {

@@ -132,6 +132,7 @@ Priority 原則：
 - `referer`
 - `elapsedMs`
 - `outcome`: `recovered | confirmed_missing | needs_review`
+- `clientRedirectEvidence`
 - `reason`
 
 衍生欄位：
@@ -265,7 +266,9 @@ Report root：
 }
 ```
 
-P6.5b-1 起，scan report 使用 `schemaVersion: "1.2.0"`，`generator.name` 為 `link-checker.mjs`。`1.1.0` 代表 P6.5a 輸出契約、redaction 與 body/source limit 基線；`1.2.0` 起加入 URL security policy、P6.5b-2 `runStatus`、P6.5b-3 robots / compliance 記錄、P6.5b-4 host diagnostics 與 P6.5b-5 protection signature schema。最低契約草案位於 `schemas/report.schema.json`。
+P11c-1 起，scan report 使用 `schemaVersion: "1.3.0"`，`generator.name` 為 `link-checker.mjs`。`1.1.0` 代表 P6.5a 輸出契約、redaction 與 body/source limit 基線；`1.2.0` 起加入 URL security policy、P6.5b-2 `runStatus`、P6.5b-3 robots / compliance 記錄、P6.5b-4 host diagnostics 與 P6.5b-5 protection signature schema；`1.3.0` 起在 `confirmation.clientRedirectEvidence` 保存 `404 / 410` 錯誤頁的 client-side redirect 證據。最低契約草案位於 `schemas/report.schema.json`。
+
+P11c-1 起，`404 / 410` confirmation 會對二次確認取得的 HTML diagnostic body 做靜態偵測，若發現 `<meta http-equiv="refresh">`、`window.location`、`window.location.href`、`location.assign()` 或 `location.replace()` 等簡單 client-side redirect，會在 `confirmation.clientRedirectEvidence` 記錄 `detected`、`source`、`attribute`、`targetUrl`、`targetChecked`、`targetStatus`、`targetOk`、`targetFinalUrl`、`targetIssueType`、`targetCheckedAt`、`targetElapsedMs` 與 `reason`。第一版只驗證同站 target，外部 target 只記錄不額外檢查；target 驗證仍套用既有 URL security policy、timeout、redirect limit 與 SSRF 防護。此欄位只提供 additive evidence，不覆蓋原始 `status`、`ok`、`issueType` 或 `confirmation.outcome`。
 
 P6.5b-2 起，report root 會輸出 `completedAt` 與 `runStatus`。`runStatus.status` 只允許 `complete`、`partial`、`failed`：正常結束為 `complete`，GUI stop / queue stop 為 `partial` 並標記 `stoppedByUser` 與 `stopReason`，runtime / validation error 為 `failed` 並記錄 `failureReason`。Analyzer 與 `report-diff.mjs` 讀到 `partial` 或 `failed` 時必須顯示 warning；舊 report 沒有 `runStatus` 時視為 legacy complete。
 

@@ -14,7 +14,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const TOOL_VERSION = "0.1.0";
-const REPORT_SCHEMA_VERSION = "1.2.0";
+const REPORT_SCHEMA_VERSION = "1.3.0";
 const DEFAULT_MAX_HTML_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_BODY_PREVIEW_BYTES = 4096;
 const DEFAULT_MAX_DOWNLOAD_PROBE_BYTES = 64 * 1024;
@@ -2070,6 +2070,7 @@ class LinkChecker {
         referer: null,
         elapsedMs: null,
         outcome: null,
+        clientRedirectEvidence: createClientRedirectEvidence(enabled ? "not_candidate" : "disabled"),
         reason: enabled ? "not_candidate" : "disabled",
       };
       result.transientFailure = false;
@@ -2092,6 +2093,7 @@ class LinkChecker {
         result.confirmation = {
           ...result.confirmation,
           candidate: true,
+          clientRedirectEvidence: createClientRedirectEvidence("not_checked"),
           reason: "per_host_limit",
         };
         result.needsReview = true;
@@ -2101,6 +2103,7 @@ class LinkChecker {
         result.confirmation = {
           ...result.confirmation,
           candidate: true,
+          clientRedirectEvidence: createClientRedirectEvidence("not_checked"),
           reason: "global_limit",
         };
         result.needsReview = true;
@@ -2111,6 +2114,7 @@ class LinkChecker {
       result.confirmation = {
         ...result.confirmation,
         candidate: true,
+        clientRedirectEvidence: createClientRedirectEvidence("not_checked"),
         reason: "queued",
       };
       candidates.push(result);
@@ -2136,6 +2140,7 @@ class LinkChecker {
         ...result.confirmation,
         checked: false,
         outcome: "needs_review",
+        clientRedirectEvidence: createClientRedirectEvidence("stopped"),
         reason: "stopped",
       };
       result.needsReview = true;
@@ -2169,6 +2174,7 @@ class LinkChecker {
     });
 
     const outcome = getConfirmationOutcome(confirmed);
+    const clientRedirectEvidence = await this.buildClientRedirectEvidence(result, confirmed, referer);
     result.confirmation = {
       enabled: true,
       candidate: true,
@@ -2181,10 +2187,62 @@ class LinkChecker {
       referer,
       elapsedMs: confirmed.elapsedMs ?? null,
       outcome,
+      clientRedirectEvidence,
       reason: getConfirmationReason(confirmed),
     };
     result.transientFailure = outcome === "needs_review" && isTransientConfirmationResult(confirmed);
     result.needsReview = outcome === "needs_review";
+  }
+
+  async buildClientRedirectEvidence(result, confirmed, referer) {
+    const evidence = detectClientRedirectEvidence(confirmed, confirmed.finalUrl || result.url);
+    if (!evidence.detected || !evidence.targetUrl) {
+      return evidence;
+    }
+    if (!this.isCrawlOrigin(evidence.targetUrl)) {
+      return {
+        ...evidence,
+        targetChecked: false,
+        reason: "target_not_checked_external",
+      };
+    }
+
+    const target = await fetchUrl(evidence.targetUrl, {
+      requireBody: false,
+      forceGet: true,
+      timeoutMs: this.options.timeoutMs,
+      retryCount: 0,
+      maxRedirects: this.options.maxRedirects,
+      longRedirectThreshold: this.options.longRedirectThreshold,
+      userAgent: BROWSER_USER_AGENT,
+      acceptLanguage: this.options.acceptLanguage,
+      referer: confirmed.finalUrl || result.url || referer,
+      preferGet: true,
+      canonicalStrategy: this.options.canonicalStrategy,
+      legacyTls: this.options.legacyTls,
+      maxHtmlBytes: this.options.maxHtmlBytes,
+      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+      connectionOptions: this.connectionOptions,
+      agents: this.agents,
+      securityPolicy: this.securityPolicy,
+      retryAfterMaxMs: this.options.retryAfterMaxMs,
+      protectionBodyHash: this.options.protectionBodyHash,
+      scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
+      onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result, this.confirmationScheduler),
+    });
+
+    return {
+      ...evidence,
+      targetChecked: true,
+      targetStatus: target.status ?? null,
+      targetOk: target.ok ?? null,
+      targetFinalUrl: target.finalUrl || null,
+      targetIssueType: target.issueType || null,
+      targetCheckedAt: target.checkedAt || null,
+      targetElapsedMs: target.elapsedMs ?? null,
+      reason: getClientRedirectEvidenceReason(target),
+    };
   }
 
   getConfirmationReferer(url) {
@@ -7190,6 +7248,103 @@ function getConfirmationReason(result) {
     return "network_error";
   }
   return result.status ? `http_${result.status}` : "unknown";
+}
+
+function createClientRedirectEvidence(reason, overrides = {}) {
+  return {
+    detected: false,
+    source: null,
+    attribute: null,
+    targetUrl: null,
+    targetChecked: false,
+    targetStatus: null,
+    targetOk: null,
+    targetFinalUrl: null,
+    targetIssueType: null,
+    targetCheckedAt: null,
+    targetElapsedMs: null,
+    reason,
+    ...overrides,
+  };
+}
+
+function detectClientRedirectEvidence(result, baseUrl) {
+  if (!result || result.ok) {
+    return createClientRedirectEvidence("not_applicable");
+  }
+  if (result.status !== 404 && result.status !== 410) {
+    return createClientRedirectEvidence("not_not_found_response");
+  }
+  if (!isHtml(result.contentType)) {
+    return createClientRedirectEvidence("non_html_response");
+  }
+
+  const html = result.diagnosticBody || result.body || "";
+  if (!html) {
+    return createClientRedirectEvidence("no_diagnostic_body");
+  }
+
+  const metaRefresh = extractMetaRefresh(html);
+  if (metaRefresh) {
+    return buildDetectedClientRedirectEvidence({
+      source: "meta_refresh",
+      attribute: "http-equiv=refresh",
+      rawTarget: metaRefresh,
+      baseUrl,
+    });
+  }
+
+  const scriptRedirect = extractJavaScriptRedirects(html)[0];
+  if (scriptRedirect) {
+    return buildDetectedClientRedirectEvidence({
+      source: "script_literal",
+      attribute: scriptRedirect.attribute,
+      rawTarget: scriptRedirect.value,
+      baseUrl,
+    });
+  }
+
+  return createClientRedirectEvidence("no_client_redirect");
+}
+
+function buildDetectedClientRedirectEvidence({ source, attribute, rawTarget, baseUrl }) {
+  const targetUrl = resolveHttpUrl(rawTarget, baseUrl);
+  if (!targetUrl) {
+    return createClientRedirectEvidence("target_not_http_or_invalid", {
+      detected: true,
+      source,
+      attribute,
+    });
+  }
+
+  return createClientRedirectEvidence("target_queued", {
+    detected: true,
+    source,
+    attribute,
+    targetUrl,
+  });
+}
+
+function getClientRedirectEvidenceReason(result) {
+  if (result.ok) {
+    return "target_reachable";
+  }
+  if (result.classification === "protected" || result.suspectedWaf || result.suspectedBot) {
+    return result.suspectedBot ? "target_blocked_bot" : "target_blocked_waf";
+  }
+  if (result.issueType === "timeout") {
+    return "target_timeout";
+  }
+  if (result.classification === "security_blocked" || result.issueType?.includes("blocked")) {
+    return "target_blocked_by_security_policy";
+  }
+  if (result.classification === "network_error" || result.issueType === "network_error") {
+    return "target_network_error";
+  }
+  if (result.status === 404 || result.status === 410) {
+    return "target_still_not_found";
+  }
+  return result.status ? `target_http_${result.status}` : "target_unknown";
 }
 
 function isTransientConfirmationResult(result) {
