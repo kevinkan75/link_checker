@@ -715,5 +715,6 @@ Portable package 的安全與完整性原則：
 - `BUILD-MANIFEST.json` 記錄 portable 資料夾內 bundled file 清單與 SHA256。
 - external build manifest 記錄 zip SHA256、來源 commit、Node runtime version、launcher / Node hash 與 Authenticode 簽章資訊。
 - `LinkChecker-portable.zip.sha256` 是發佈前核對 zip artifact 的簡易入口。
-- `Start Link Checker.exe` 目前採 local self-signed Authenticode 簽章，只適合內部 trust/import 流程；它不是公開信任 code signing，不能期待消除 Windows SmartScreen 警告。
+- `Start Link Checker.exe` 的簽章狀態以 build manifest 為準；可能是 `NotSigned`，也可能是 local self-signed Authenticode。local self-signed 只適合內部 trust/import 流程，不是公開信任 code signing，不能期待消除 Windows SmartScreen 警告。
+- `LinkChecker-local-code-signing.cer` 只應在 launcher 成功 local self-signed 時保留於 package；它是該簽章憑證的公開憑證，供內部手動信任或匯入流程使用，一般使用者不需要安裝，也不能取代 zip SHA256 / manifest 驗證。
 - 若要正式公開發佈，應在 P11f 或正式 release 流程中評估公開信任 code signing certificate 或可信代管簽章服務。

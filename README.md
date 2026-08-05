@@ -34,7 +34,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 http://127.0.0.1:8787
 ```
 
-注意：目前 portable launcher 記錄為 `NotSigned`。散布或使用前，請核對 release 頁提供的 `LinkChecker-portable.zip.sha256` 與 build manifest。
+注意：目前 portable launcher 記錄為 `NotSigned`。散布或使用前，請核對 release 頁提供的 `LinkChecker-portable.zip.sha256` 與 build manifest；若可攜資料夾內出現 `LinkChecker-local-code-signing.cer`，那只供內部自簽 launcher 的手動信任流程使用，一般使用者不需要安裝。
 
 ### 從原始碼啟動
 
