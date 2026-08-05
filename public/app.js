@@ -46,8 +46,10 @@ const elapsed = document.querySelector("#elapsed");
 const progressTrack = document.querySelector(".progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const progressPercent = document.querySelector("#progress-percent");
+const scanPhaseNote = document.querySelector("#scan-phase-note");
 const pendingUrlNote = document.querySelector("#pending-url-note");
 const pageDiscoveryNote = document.querySelector("#page-discovery-note");
+const scanAdviceNote = document.querySelector("#scan-advice-note");
 const pages = document.querySelector("#pages");
 const checked = document.querySelector("#checked");
 const pendingUrls = document.querySelector("#pending-urls");
@@ -571,8 +573,10 @@ async function startCheck() {
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
   updateIncrementalSummary(null);
   pendingUrls.textContent = "0";
+  updateScanPhaseDisplay({ state: "running" });
   updatePendingUrlDisplay(0, 0, 0);
   updatePageDiscoveryDisplay(0, maxPagesInput.value, 0);
+  updateScanAdvice(null);
   updateActiveFilter();
   setProgressValue(0);
   showLogLocation(null);
@@ -972,8 +976,10 @@ function updateStatus(status) {
   const activeRequests = Number(status.activeRequests || 0);
   pages.textContent = `${pagesCrawled} / ${maxPages || maxPagesInput.value}`;
   checked.textContent = urlsChecked;
+  updateScanPhaseDisplay(status);
   updatePendingUrlDisplay(pendingUrlCount, urlsChecked, activeRequests);
   updatePageDiscoveryDisplay(pagesCrawled, maxPages || maxPagesInput.value, queuedPages);
+  updateScanAdvice(buildScanAdvice(status));
   active.textContent = activeRequests;
   queue.textContent = queuedPages;
   brokenCount.textContent = status.brokenLinks || 0;
@@ -1045,6 +1051,89 @@ function updatePendingUrlDisplay(count, checkedCount = 0, activeCount = 0) {
   const activeTotal = Math.max(0, Number(activeCount) || 0);
   pendingUrls.textContent = normalized;
   pendingUrlNote.textContent = `目前已知 URL：已檢測 ${checkedTotal} 個，尚有 ${normalized} 個待檢測，${activeTotal} 個請求中`;
+}
+
+function updateScanPhaseDisplay(status) {
+  if (!scanPhaseNote) {
+    return;
+  }
+  scanPhaseNote.textContent = `目前階段：${getScanPhaseText(status)}`;
+}
+
+function getScanPhaseText(status) {
+  const state = status?.state || "idle";
+  if (state === "idle") {
+    return "尚未開始";
+  }
+  if (state === "stopping") {
+    return "正在停止並整理已完成結果";
+  }
+  if (state === "stopped") {
+    return "已停止，報告可能未完整完成";
+  }
+  if (state === "failed") {
+    return "檢查失敗";
+  }
+  if (state === "finished") {
+    return "檢查完成";
+  }
+
+  const queuedPages = Number(status?.queuedPages || 0);
+  const pagesCrawled = Number(status?.pagesCrawled || 0);
+  const pendingUrlCount = getPendingUrlCount(status);
+  const activeRequests = Number(status?.activeRequests || 0);
+  const urlsChecked = Number(status?.urlsChecked || 0);
+
+  if (queuedPages > 0 && (activeRequests > 0 || pendingUrlCount === 0 || pagesCrawled === 0)) {
+    return "頁面探索與連結蒐集中";
+  }
+  if (pendingUrlCount > 0 || activeRequests > 0) {
+    return "URL 檢測中";
+  }
+  if (urlsChecked > 0) {
+    return "等待收尾與產生報告";
+  }
+  return "準備連線";
+}
+
+function buildScanAdvice(status) {
+  if (!status || status.state !== "running") {
+    return null;
+  }
+
+  const pendingUrlCount = getPendingUrlCount(status);
+  const urlsChecked = Number(status.urlsChecked || 0);
+  const queuedPages = Number(status.queuedPages || 0);
+  const maxPages = Number(status.maxPages || maxPagesInput.value || 0);
+  const pagesCrawled = Number(status.pagesCrawled || 0);
+  const knownUrls = urlsChecked + pendingUrlCount;
+
+  if (pendingUrlCount >= 300 || knownUrls >= 600) {
+    return "目前正在處理大量 URL，程式仍在工作；若只是初步盤點，可降低最多頁面或最大深度，並先關閉外部連結檢查。";
+  }
+
+  if (pendingUrlCount >= 100 || queuedPages >= 50) {
+    return "此網站已展開較多待檢查項目，完成時間可能拉長；可觀察待檢查 URL 是否持續下降。";
+  }
+
+  if (maxPages >= 300 && pagesCrawled >= 25 && queuedPages > 0) {
+    return "目前仍在探索站內頁面；大型清單網站使用 300 頁上限時，掃描時間可能明顯增加。";
+  }
+
+  return null;
+}
+
+function updateScanAdvice(message) {
+  if (!scanAdviceNote) {
+    return;
+  }
+  if (!message) {
+    scanAdviceNote.hidden = true;
+    scanAdviceNote.textContent = "";
+    return;
+  }
+  scanAdviceNote.hidden = false;
+  scanAdviceNote.textContent = message;
 }
 
 function updatePageDiscoveryDisplay(crawledCount, maxPagesCount, queuedCount) {
@@ -1128,10 +1217,20 @@ function renderReport(report) {
   const reportMaxPages = Number(options.maxPages || 0);
   const reportUrlsChecked = Number(summary.urlsChecked || 0);
   const reportPendingUrls = getReportPendingUrlCount(report);
+  const reportState = getReportPhaseState(report);
   pages.textContent = `${reportPagesCrawled} / ${reportMaxPages || options.maxPages || 0}`;
   checked.textContent = reportUrlsChecked;
   updatePendingUrlDisplay(reportPendingUrls, reportUrlsChecked, 0);
+  updateScanPhaseDisplay({
+    state: reportState,
+    pendingUrls: reportPendingUrls,
+    urlsChecked: reportUrlsChecked,
+    queuedPages: report.runStatus?.pendingPages || 0,
+    pagesCrawled: reportPagesCrawled,
+    maxPages: reportMaxPages || options.maxPages || 0,
+  });
   updatePageDiscoveryDisplay(reportPagesCrawled, reportMaxPages || options.maxPages || 0, report.runStatus?.pendingPages || 0);
+  updateScanAdvice(null);
   skipped.textContent = summary.skippedExternal || 0;
   setProgressValue(getReportUrlValidationProgress(report));
   updateIssueBreakdown(interpretationView.counts, interpretationTotal);
@@ -1142,6 +1241,17 @@ function renderReport(report) {
   updateActiveFilter();
 
   renderBrokenTableForReport(report);
+}
+
+function getReportPhaseState(report) {
+  const status = report?.runStatus?.status;
+  if (status === "partial" || status === "stopped") {
+    return "stopped";
+  }
+  if (status === "failed") {
+    return "failed";
+  }
+  return "finished";
 }
 
 function buildReportFromCompletePayload(data) {

@@ -729,8 +729,10 @@ input:focus {
 
 body.scan-idle .status-panel .progress-summary,
 body.scan-idle .status-panel .progress-track,
+body.scan-idle .status-panel .scan-phase-note,
 body.scan-idle .status-panel .pending-url-note,
 body.scan-idle .status-panel .page-discovery-note,
+body.scan-idle .status-panel .scan-advice-note,
 body.scan-idle .status-panel .current-url,
 body.scan-idle .status-panel .metric-grid,
 body.scan-idle .status-panel .status-subheading,
@@ -756,9 +758,21 @@ body.scan-idle .results-layout {
   background: var(--surface-muted);
 }
 
+.scan-phase-note,
 .pending-url-note {
   margin-bottom: 8px;
   color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.scan-advice-note {
+  margin: 10px 0 8px;
+  border: 1px solid #dcc49d;
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: #fff8e8;
+  color: #7a4b0b;
   font-size: 13px;
   font-weight: 700;
 }
