@@ -736,6 +736,7 @@ body.scan-idle .status-panel .url-pattern-note,
 body.scan-idle .status-panel .scan-advice-note,
 body.scan-idle .status-panel .current-url,
 body.scan-idle .status-panel .metric-grid,
+body.scan-idle .status-panel .status-details,
 body.scan-idle .status-panel .status-subheading,
 body.scan-idle .status-panel .issue-grid,
 body.scan-idle .status-panel .redirect-grid,
@@ -846,6 +847,27 @@ body.scan-idle .results-layout {
 .metric-grid .metric-card-attention span,
 .metric-grid .metric-card-attention strong {
   color: #7a4b0b;
+}
+
+.status-details {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.status-details summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.status-details[open] summary {
+  margin-bottom: 10px;
+}
+
+.detail-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
 }
 
 .status-subheading {

@@ -1003,7 +1003,7 @@ function updateStatus(status) {
   updateConfirmationBreakdown(emptyConfirmationBreakdown());
   updateIncrementalSummary(null);
 
-  setProgressValue(getUrlValidationProgress(status));
+  setProgressValue(getScanProgress(status));
 }
 
 function setProgressValue(value) {
@@ -1015,7 +1015,7 @@ function setProgressValue(value) {
 
 function capIncompleteProgress(value) {
   const normalized = Math.max(0, Math.min(100, Number(value) || 0));
-  return Math.min(99, normalized);
+  return Math.min(95, normalized);
 }
 
 function isStatusComplete(status) {
@@ -1027,17 +1027,44 @@ function isStatusComplete(status) {
     && Number(status?.activeRequests || 0) === 0;
 }
 
-function getUrlValidationProgress(status) {
+function getScanProgress(status) {
   if (isStatusComplete(status)) {
     return 100;
   }
-  const urlsChecked = Number(status?.urlsChecked || 0);
-  const pending = getPendingUrlCount(status);
-  const totalKnownUrls = urlsChecked + pending;
-  if (totalKnownUrls <= 0) {
+
+  const state = status?.state || "idle";
+  if (state === "idle") {
     return 0;
   }
-  return capIncompleteProgress((urlsChecked / totalKnownUrls) * 100);
+
+  const urlsChecked = Number(status?.urlsChecked || 0);
+  const pending = getPendingUrlCount(status);
+  const queuedPages = Number(status?.queuedPages || 0);
+  const activeRequests = Number(status?.activeRequests || 0);
+  const pagesCrawled = Number(status?.pagesCrawled || 0);
+  const maxPages = Number(status?.maxPages || maxPagesInput.value || 0);
+  const totalKnownUrls = urlsChecked + pending;
+  const validationRatio = totalKnownUrls > 0 ? urlsChecked / totalKnownUrls : 0;
+  const pageRatio = maxPages > 0 ? Math.min(1, pagesCrawled / maxPages) : 0;
+  const discoveryActive = queuedPages > 0 || (pagesCrawled === 0 && (activeRequests > 0 || pending > 0));
+
+  if (state === "stopping" || state === "stopped" || state === "failed") {
+    return capIncompleteProgress(Math.max(pageRatio * 65, validationRatio * 95));
+  }
+
+  if (discoveryActive) {
+    const discoveryProgress = Math.max(8, (pageRatio * 45) + (validationRatio * 15));
+    return Math.min(65, discoveryProgress);
+  }
+
+  if (pending > 0 || activeRequests > 0) {
+    return capIncompleteProgress(65 + (validationRatio * 30));
+  }
+
+  if (urlsChecked > 0) {
+    return 96;
+  }
+  return 5;
 }
 
 function getPendingUrlCount(status) {

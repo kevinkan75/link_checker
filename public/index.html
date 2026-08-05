@@ -261,7 +261,7 @@
           </div>
         </div>
         <div class="progress-summary">
-          <span id="progress-label">URL 檢測進度</span>
+          <span id="progress-label">整體掃描進度</span>
           <strong id="progress-percent">0%</strong>
         </div>
         <div class="progress-track" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -277,48 +277,53 @@
           <div><span>頁面探索</span><strong id="pages">0 / 100</strong></div>
           <div><span>已檢測 URL</span><strong id="checked">0</strong></div>
           <div><span>待檢測 URL</span><strong id="pending-urls">0</strong></div>
-          <div><span>目前請求</span><strong id="active">0</strong></div>
-          <div><span>待爬佇列</span><strong id="queue">0</strong></div>
           <div class="metric-card-attention"><span>需判讀結果</span><strong id="broken-count">0</strong></div>
-          <div><span>略過外部</span><strong id="skipped">0</strong></div>
         </div>
-        <h3 class="status-subheading">判讀分類</h3>
-        <div class="issue-grid">
-          <div><span>需處理</span><strong id="issue-not-found">0</strong></div>
-          <div><span>需人工確認</span><strong id="issue-protected">0</strong></div>
-          <div><span>外站限制</span><strong id="issue-access-denied">0</strong></div>
-          <div><span>可能失效</span><strong id="issue-http">0</strong></div>
-          <div><span>已轉址仍可用</span><strong id="issue-timeout">0</strong></div>
-          <div><span>可先忽略 / 正常</span><strong id="issue-network">0</strong></div>
-          <div><span>頁內品質提醒</span><strong id="issue-unknown">0</strong></div>
-        </div>
-        <h3 class="status-subheading">Redirect 摘要</h3>
-        <div class="redirect-grid">
-          <div><span>轉址 URL</span><strong id="redirect-total">0</strong></div>
-          <div><span>永久轉址</span><strong id="redirect-permanent">0</strong></div>
-          <div><span>暫時轉址</span><strong id="redirect-temporary">0</strong></div>
-          <div><span>跨 host</span><strong id="redirect-cross-host">0</strong></div>
-          <div><span>轉址過長</span><strong id="redirect-long">0</strong></div>
-          <div><span>未完成轉址</span><strong id="redirect-unresolved">0</strong></div>
-        </div>
-        <h3 class="status-subheading">二次確認</h3>
-        <div class="confirmation-grid">
-          <div><span>候選</span><strong id="confirmation-candidates">0</strong></div>
-          <div><span>已恢復</span><strong id="confirmation-recovered">0</strong></div>
-          <div><span>需複查</span><strong id="confirmation-needs-review">0</strong></div>
-          <div><span>確認不存在</span><strong id="confirmation-missing">0</strong></div>
-        </div>
-        <section id="incremental-panel" class="incremental-panel" aria-labelledby="incremental-title" hidden>
-          <h3 id="incremental-title" class="status-subheading">增量掃描</h3>
-          <div class="incremental-grid">
-            <div><span>模式</span><strong id="incremental-mode">-</strong></div>
-            <div><span>新增 URL</span><strong id="incremental-new">0</strong></div>
-            <div><span>已知 URL</span><strong id="incremental-known">0</strong></div>
-            <div><span>復用結果</span><strong id="incremental-reused">0</strong></div>
-            <div><span>上次存在本次未發現</span><strong id="incremental-disappeared">0</strong></div>
-            <div><span>優先 / 延後</span><strong id="incremental-priority">0 / 0</strong></div>
+        <details class="status-details">
+          <summary>詳細狀態</summary>
+          <div class="metric-grid detail-metric-grid">
+            <div><span>目前請求</span><strong id="active">0</strong></div>
+            <div><span>待爬佇列</span><strong id="queue">0</strong></div>
+            <div><span>略過外部</span><strong id="skipped">0</strong></div>
           </div>
-        </section>
+          <h3 class="status-subheading">判讀分類</h3>
+          <div class="issue-grid">
+            <div><span>需處理</span><strong id="issue-not-found">0</strong></div>
+            <div><span>需人工確認</span><strong id="issue-protected">0</strong></div>
+            <div><span>外站限制</span><strong id="issue-access-denied">0</strong></div>
+            <div><span>可能失效</span><strong id="issue-http">0</strong></div>
+            <div><span>已轉址仍可用</span><strong id="issue-timeout">0</strong></div>
+            <div><span>可先忽略 / 正常</span><strong id="issue-network">0</strong></div>
+            <div><span>頁內品質提醒</span><strong id="issue-unknown">0</strong></div>
+          </div>
+          <h3 class="status-subheading">Redirect 摘要</h3>
+          <div class="redirect-grid">
+            <div><span>轉址 URL</span><strong id="redirect-total">0</strong></div>
+            <div><span>永久轉址</span><strong id="redirect-permanent">0</strong></div>
+            <div><span>暫時轉址</span><strong id="redirect-temporary">0</strong></div>
+            <div><span>跨 host</span><strong id="redirect-cross-host">0</strong></div>
+            <div><span>轉址過長</span><strong id="redirect-long">0</strong></div>
+            <div><span>未完成轉址</span><strong id="redirect-unresolved">0</strong></div>
+          </div>
+          <h3 class="status-subheading">二次確認</h3>
+          <div class="confirmation-grid">
+            <div><span>候選</span><strong id="confirmation-candidates">0</strong></div>
+            <div><span>已恢復</span><strong id="confirmation-recovered">0</strong></div>
+            <div><span>需複查</span><strong id="confirmation-needs-review">0</strong></div>
+            <div><span>確認不存在</span><strong id="confirmation-missing">0</strong></div>
+          </div>
+          <section id="incremental-panel" class="incremental-panel" aria-labelledby="incremental-title" hidden>
+            <h3 id="incremental-title" class="status-subheading">增量掃描</h3>
+            <div class="incremental-grid">
+              <div><span>模式</span><strong id="incremental-mode">-</strong></div>
+              <div><span>新增 URL</span><strong id="incremental-new">0</strong></div>
+              <div><span>已知 URL</span><strong id="incremental-known">0</strong></div>
+              <div><span>復用結果</span><strong id="incremental-reused">0</strong></div>
+              <div><span>上次存在本次未發現</span><strong id="incremental-disappeared">0</strong></div>
+              <div><span>優先 / 延後</span><strong id="incremental-priority">0 / 0</strong></div>
+            </div>
+          </section>
+        </details>
         <p id="log-location" class="log-location" hidden></p>
       </section>
 
