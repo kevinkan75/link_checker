@@ -65,6 +65,25 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 | Report Analyzer 大型檔案體驗改善 | 讓大型 report 的人工檢視更順 | 優先沿用 NDJSON sidecar，不急著改主契約 |
 | 更細的 external risk governance 欄位 | 方便外連治理與交辦 | 需避免把工具膨脹成完整治理平台 |
 
+### 404 / 410 client-side redirect evidence 規劃筆記
+
+這是小範圍但重要的候選功能。第一版應掛在既有 `404 / 410` confirmation 階段，作為 additive evidence，而不是新的主掃描流程。
+
+建議範圍：
+
+- 只處理同站 `404 / 410` confirmation candidate。
+- 只在二次確認使用 `GET` 且取得 HTML body 時分析。
+- 只做靜態 HTML pattern 偵測，不引入 headless browser。
+- 優先偵測 `<meta http-equiv="refresh">`、`window.location`、`window.location.href`、`location.assign()`、`location.replace()` 等簡單 client-side redirect。
+- redirect target 最多驗證 1 個，並必須沿用既有 URL security policy、timeout、redirect limit 與 SSRF 防護。
+- target 驗證結果只作為證據，不覆蓋原始 `status`、`ok`、`issueType` 或 `confirmation.outcome`。
+
+建議 report 欄位可放在 `confirmation.clientRedirectEvidence`，至少包含 `detected`、`source`、`attribute`、`targetUrl`、`targetStatus`、`targetOk` 與 `reason`。若未偵測到，輸出 `detected=false` 與 `reason=no_client_redirect`，避免 GUI 猜測欄位缺漏。
+
+GUI / Report Analyzer 應以承辦人可理解的方式呈現，例如：「此錯誤頁會在瀏覽器端導向其他頁面，但原始 HTTP 狀態仍是 404 / 410，建議確認原連結是否應更新。」若 target 不可確認可用，則標示需要人工確認。
+
+實作可拆成三步：核心 report evidence、GUI / Report Analyzer / CSV 呈現、文件與 fixture 測試。因為會擴充 report schema，應視為 minor 版本候選，不放入 patch release。
+
 ## 延後項目
 
 這些項目有價值，但目前不應插入 patch release 或阻擋既有正式版維護。
