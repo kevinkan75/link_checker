@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const DIFF_SCHEMA_VERSION = "diff.p6.draft.1";
-const GENERATOR_VERSION = "0.1.0";
+const GENERATOR_VERSION = "1.1.0";
 const URL_COMPARISON_FIELDS = [
   "ok",
   "status",
