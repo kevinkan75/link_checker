@@ -13,7 +13,7 @@ import { performance } from "node:perf_hooks";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const TOOL_VERSION = "1.1.0";
+const TOOL_VERSION = "1.1.1";
 const REPORT_SCHEMA_VERSION = "1.3.0";
 const DEFAULT_MAX_HTML_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_BODY_PREVIEW_BYTES = 4096;

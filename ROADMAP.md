@@ -1,17 +1,18 @@
 # 開發路線圖
 
-更新日期：2026-08-03
+更新日期：2026-08-06
 
 本文件只保留目前狀態、近期維護主線、下一步候選與決策邊界。已完成階段與 `v1.0.4` 詳細狀態請看 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md)，更早期里程碑請看 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
 
 ## 目前狀態
 
-- 最新正式版本：`v1.1.0`。
+- 最新正式版本：`v1.1.1`。
 - 目前沒有阻擋正式版使用的已知 release gate 項目。
 - 主 GUI 預設檢查外部連結；CLI 仍維持保守預設，需要 `--external` 才檢查外部連結。
 - 三個 GUI 功能頁是「連結檢查」、「外部連結分析」、「報告分析」。
 - `404 / 410` 二次確認會保存錯誤頁的瀏覽器端導向輔助證據，主 GUI 與 Report Analyzer 會顯示「瀏覽器端導向」提示。
-- Portable launcher 目前記錄為 `NotSigned`；散布前仍需以 SHA256 / manifest 驗證 zip。
+- Portable launcher 簽章狀態以 build manifest 為準；散布前仍需以 SHA256 / manifest 驗證 zip。
+- `v1.1.1` patch release 聚焦 GUI 掃描狀態易用性：狀態提示、同型 URL 提醒、整體進度重新設計，以及初步盤點提醒文案。
 
 ## 產品邊界
 

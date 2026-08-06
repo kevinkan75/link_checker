@@ -4,7 +4,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.1.0`
+目前正式版本：`v1.1.1`
 
 ## 適用情境
 
@@ -20,7 +20,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 ### 使用 portable 版本
 
-1. 從 [v1.1.0 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.1.0) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.1.1 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.1.1) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
@@ -34,7 +34,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 http://127.0.0.1:8787
 ```
 
-注意：目前 portable launcher 記錄為 `NotSigned`。散布或使用前，請核對 release 頁提供的 `LinkChecker-portable.zip.sha256` 與 build manifest；若可攜資料夾內出現 `LinkChecker-local-code-signing.cer`，那只供內部自簽 launcher 的手動信任流程使用，一般使用者不需要安裝。
+注意：portable launcher 簽章狀態以 build manifest 為準，可能是未簽或 local self-signed。散布或使用前，請核對 release 頁提供的 `LinkChecker-portable.zip.sha256` 與 build manifest；若可攜資料夾內出現 `LinkChecker-local-code-signing.cer`，那只供內部自簽 launcher 的手動信任流程使用，一般使用者不需要安裝。
 
 ### 從原始碼啟動
 
