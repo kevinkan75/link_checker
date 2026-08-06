@@ -220,6 +220,15 @@ h2 {
   min-width: 0;
 }
 
+.url-field-note {
+  display: block;
+  grid-column: 1;
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .advanced-settings {
   border: 1px solid var(--border);
   border-radius: 6px;
