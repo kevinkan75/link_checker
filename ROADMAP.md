@@ -56,10 +56,15 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 
 ## 下一階段候選
 
+下一個實作項目：針對依賴 JavaScript 的動態網站提供掃描能力。初步規劃見 [docs/JS_DYNAMIC_SCAN_PLAN.md](docs/JS_DYNAMIC_SCAN_PLAN.md)。
+
+初步方向是新增可選的動態掃描模式，讓工具能處理靜態 HTML 中看不到、但瀏覽器執行 JavaScript 後才出現的連結。此功能應以使用者明確啟用為前提，並保留既有 timeout、同站限制、SSRF 防護、redirect limit、rate limit 與 localhost-only GUI 邊界；不偽裝搜尋引擎、不繞過 CAPTCHA 或 WAF，也不把工具定位成 bot protection bypass。
+
 以下項目可作為 `v1.1.x` 或後續 minor 版本候選；不建議塞進 patch release。
 
 | 項目 | 價值 | 注意事項 |
 | --- | --- | --- |
+| JS 動態網站掃描 | 補足 SPA / CSR 網站在靜態 HTML 掃描下漏掉的連結 | 建議先做 opt-in headless render spike，評估速度、資源、佇列、timeout 與報表證據欄位 |
 | GUI rules URL 輸入欄位 | 讓使用者不必切 CLI 就能載入 site-specific rules | 需設計安全提示、錯誤呈現與權限邊界 |
 | Fragment / duplicate anchor 檢查 | 補足頁內品質提醒 | 屬 optional 品質檢查，不應影響壞連結主判讀 |
 | 更完整的 release page template | 降低每次發版人工漏項 | 應包含 artifact、SHA256、簽章狀態與 smoke 結果 |
