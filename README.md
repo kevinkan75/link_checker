@@ -177,3 +177,9 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)：核心流程、report schema、GUI API 與技術契約。
 - [docs/REPORT_NORMALIZATION.md](docs/REPORT_NORMALIZATION.md)：report-to-report diff 與 normalization 設計。
 - [docs/archive/README.md](docs/archive/README.md)：歷史評估、驗收紀錄與舊版文件快照。
+
+## Dynamic Scan 開發
+
+- [JS Dynamic Scan 開發規劃](docs/JS_DYNAMIC_SCAN_PLAN_REVIEWED.md)
+- [Codex 執行規範](docs/codex/DYNAMIC_SCAN_EXECUTION.md)
+- [Codex Task 清單](docs/codex/tasks/README.md)
