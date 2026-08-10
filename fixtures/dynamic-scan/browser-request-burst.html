@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Browser Request Burst</title>
+  <link rel="stylesheet" href="__PRIMARY_ORIGIN__/observe/burst/resource?id=style-1&type=stylesheet&fixture=browser-request-burst">
+  <script src="__PRIMARY_ORIGIN__/observe/burst/resource?id=script-1&type=script&fixture=browser-request-burst" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Browser Request Burst</h1>
+    <div id="burst-images"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const images = document.getElementById("burst-images");
+      for (let index = 1; index <= 4; index += 1) {
+        const image = document.createElement("img");
+        image.setAttribute("alt", "burst image " + index);
+        image.setAttribute("src", "__PRIMARY_ORIGIN__/observe/burst/resource?id=image-" + index + "&type=image&fixture=browser-request-burst");
+        images.appendChild(image);
+      }
+      for (let index = 1; index <= 3; index += 1) {
+        fetch("__PRIMARY_ORIGIN__/observe/burst/fetch?id=fetch-" + index + "&type=fetch&fixture=browser-request-burst").catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>

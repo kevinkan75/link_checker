@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Challenge Rendered</title>
+</head>
+<body>
+  <main id="challenge-root" data-fixture="challenge-rendered" data-state="initial">
+    <h1>Challenge fixture initial page</h1>
+    <p>This neutral initial content changes only after runtime JavaScript executes.</p>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const root = document.getElementById("challenge-root");
+      root.setAttribute("data-state", "runtime-challenge");
+      root.textContent = "";
+
+      const title = document.createElement("h1");
+      title.textContent = ["Just", "a", "moment..."].join(" ");
+      root.appendChild(title);
+
+      const checking = document.createElement("p");
+      checking.textContent = "Checking your browser before accessing this local fixture.";
+      root.appendChild(checking);
+
+      const challenge = document.createElement("p");
+      challenge.textContent = "This synthetic page contains " + ["cap", "tcha"].join("") + " wording for deterministic challenge detection.";
+      root.appendChild(challenge);
+
+      const marker = document.createElement("span");
+      marker.setAttribute("data-challenge-platform", "/" + ["cdn-cgi", "challenge-platform"].join("/"));
+      marker.textContent = "local synthetic challenge marker";
+      root.appendChild(marker);
+
+      const link = document.createElement("a");
+      link.setAttribute("href", "/" + ["challenge", "rendered"].join("-") + "/" + ["decoy", "link"].join("-"));
+      link.textContent = "Runtime decoy link that should not be ingested later";
+      root.appendChild(link);
+    });
+  </script>
+</body>
+</html>

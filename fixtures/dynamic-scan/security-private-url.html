@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Security Private URL</title>
+</head>
+<body>
+  <main>
+    <h1>Security Private URL</h1>
+    <div id="security-targets"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const targets = [
+        { className: "loopback", url: "__PRIMARY_ORIGIN__/observe/security/loopback?fixture=security-private-url" },
+        { className: "localhost", url: "http://localhost/__dynamic_scan_localhost_probe__" },
+        { className: "private", url: "http://192.168.0.1/__dynamic_scan_private_probe__" },
+        { className: "link-local", url: "http://169.254.1.1/__dynamic_scan_link_local_probe__" },
+        { className: "metadata", url: "http://169.254.169.254/latest/meta-data/" }
+      ];
+      const container = document.getElementById("security-targets");
+      for (const target of targets) {
+        const link = document.createElement("a");
+        link.setAttribute("href", target.url);
+        link.setAttribute("data-address-class", target.className);
+        link.textContent = target.className + " target";
+        container.appendChild(link);
+      }
+    });
+  </script>
+</body>
+</html>

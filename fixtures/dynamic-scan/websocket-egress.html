@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - WebSocket Egress</title>
+</head>
+<body>
+  <main>
+    <h1>WebSocket Egress</h1>
+    <div id="websocket-status" data-websocket-url="__WS_ORIGIN__/observe/websocket?fixture=websocket-egress"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const status = document.getElementById("websocket-status");
+      try {
+        const socket = new WebSocket(status.getAttribute("data-websocket-url"), "dynamic-scan-fixture");
+        socket.addEventListener("open", () => {
+          status.setAttribute("data-websocket-open", "true");
+          socket.close();
+        });
+        socket.addEventListener("error", () => {
+          status.setAttribute("data-websocket-error", "true");
+        });
+      } catch {
+        status.setAttribute("data-websocket-error", "true");
+      }
+    });
+  </script>
+</body>
+</html>

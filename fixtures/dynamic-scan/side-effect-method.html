@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Side Effect Method</title>
+</head>
+<body>
+  <main>
+    <h1>Side Effect Method</h1>
+    <div id="method-attempts" data-expected-methods="POST,PUT"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const attempts = [
+        { method: "POST", operation: "create" },
+        { method: "PUT", operation: "replace" }
+      ];
+      for (const attempt of attempts) {
+        fetch("__PRIMARY_ORIGIN__/observe/unsafe-method?fixture=side-effect-method&operation=" + attempt.operation, {
+          method: attempt.method,
+          headers: { "content-type": "text/plain" },
+          body: "dynamic-scan-side-effect-method"
+        }).catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>

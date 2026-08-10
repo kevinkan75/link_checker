@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Popup Download</title>
+</head>
+<body>
+  <main>
+    <h1>Popup Download</h1>
+    <a id="download-link" href="__PRIMARY_ORIGIN__/observe/download?fixture=popup-download&filename=dynamic-scan-empty-download.txt" download="dynamic-scan-empty-download.txt">Download probe</a>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      window.open("__PRIMARY_ORIGIN__/observe/popup?fixture=popup-download&opener=window-open", "dynamicScanPopupFixture", "popup,width=320,height=240");
+      document.getElementById("download-link").click();
+    });
+  </script>
+</body>
+</html>

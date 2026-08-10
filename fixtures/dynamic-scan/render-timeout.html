@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Render Timeout</title>
+</head>
+<body>
+  <main>
+    <h1>Render Timeout</h1>
+    <div id="render-timeout-marker" data-render-timeout-tick="0"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const marker = document.getElementById("render-timeout-marker");
+      let tick = 0;
+      setInterval(() => {
+        tick += 1;
+        marker.setAttribute("data-render-timeout-tick", String(tick));
+        marker.textContent = "render-timeout tick " + tick;
+      }, 50);
+    });
+  </script>
+</body>
+</html>

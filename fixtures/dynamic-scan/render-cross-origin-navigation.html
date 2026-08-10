@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Cross Origin Navigation</title>
+</head>
+<body>
+  <main>
+    <h1>Cross Origin Navigation</h1>
+    <p id="target-origin" data-target-origin="__SECOND_ORIGIN__">Controlled alternate origin</p>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      window.location.assign("__SECOND_ORIGIN__/observe/cross-origin-target?fixture=render-cross-origin-navigation");
+    });
+  </script>
+</body>
+</html>
