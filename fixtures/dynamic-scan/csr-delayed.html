@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - CSR Delayed</title>
+</head>
+<body>
+  <main>
+    <h1>CSR Delayed</h1>
+    <div id="delayed-links"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => {
+        const link = document.createElement("a");
+        link.setAttribute("href", "/" + ["csr", "delayed", "target"].join("-"));
+        link.textContent = "Delayed runtime link";
+        document.getElementById("delayed-links").appendChild(link);
+      }, 250);
+    });
+  </script>
+</body>
+</html>

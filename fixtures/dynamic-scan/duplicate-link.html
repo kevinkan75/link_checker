@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Duplicate Link</title>
+</head>
+<body>
+  <main>
+    <h1>Duplicate Link</h1>
+    <a href="/duplicate-link/shared-target">Static shared target</a>
+    <div id="runtime-duplicates"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const duplicate = document.createElement("a");
+      duplicate.setAttribute("href", "/" + "duplicate-link" + "/" + ["shared", "target"].join("-"));
+      duplicate.textContent = "Runtime duplicate target";
+      document.getElementById("runtime-duplicates").appendChild(duplicate);
+    });
+  </script>
+</body>
+</html>

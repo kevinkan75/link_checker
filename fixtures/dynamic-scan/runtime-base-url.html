@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - Runtime Base URL</title>
+</head>
+<body>
+  <main>
+    <h1>Runtime Base URL</h1>
+    <div id="runtime-base-links"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      history.pushState(null, "", "/runtime-history/current-page");
+
+      const base = document.createElement("base");
+      base.setAttribute("href", "/runtime-base/");
+      document.head.appendChild(base);
+
+      const link = document.createElement("a");
+      link.setAttribute("href", "relative-target");
+      link.textContent = "Runtime base relative link";
+      document.getElementById("runtime-base-links").appendChild(link);
+    });
+  </script>
+</body>
+</html>

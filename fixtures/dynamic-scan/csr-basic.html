@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Scan Fixture - CSR Basic</title>
+</head>
+<body>
+  <main>
+    <h1>CSR Basic</h1>
+    <div id="runtime-links"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const container = document.getElementById("runtime-links");
+
+      const internal = document.createElement("a");
+      internal.setAttribute("href", "/" + ["csr", "basic", "same-origin"].join("-"));
+      internal.textContent = "Runtime same-origin link";
+      container.appendChild(internal);
+
+      const external = document.createElement("a");
+      external.setAttribute("href", ["https:", "", "dynamic.example", "csr-basic-external"].join("/"));
+      external.textContent = "Runtime external link";
+      container.appendChild(external);
+    });
+  </script>
+</body>
+</html>
