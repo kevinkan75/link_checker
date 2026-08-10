@@ -1,5 +1,6 @@
 dist/
 logs/
+node_modules/
 report.json
 manifest.json
 .cache/
