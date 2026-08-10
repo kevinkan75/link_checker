@@ -155,6 +155,22 @@ Examples that may require an external environment: branded Edge/Chrome launch, E
 - Preserve existing report meaning unless the current task explicitly owns a schema change.
 - Preserve sensitive-query redaction and sanitized diagnostics.
 
+## Existing report contract before Phase 3
+
+Treat the current production source/output as the baseline for already-shipped report behavior. Before Phase 3:
+
+- Current production source is Local Link Checker `1.1.1`; current report schema is `1.3.0`.
+- `checked[]` is the primary HTTP-result collection and does **not** currently contain full `sources[]`.
+- `broken[]` is the failing subset of checked results plus source provenance such as `sourceCount`, `sourcesTruncated`, and `sources[]`.
+- `externalLinks[]` remains a separate collection with its own `sources[]` and `externalRisk`; do not merge its governance semantics into `checked[]`.
+- Root `securityPolicy` is existing production output and must be preserved, even if an older documentation summary omits it.
+- Phase 0 must not add, remove, or rename report-schema fields.
+- Dynamic Render must never change existing HTTP `ok`, `status`, `classification`, `issueType`, or confirmation truth.
+- `report-diff.mjs` is supplementary compatibility/regression evidence, not a complete semantic-equivalence oracle. Behavior-preserving refactors must also assert inventory metrics and source provenance directly.
+- Reports captured from live external websites may be used as compatibility/reference samples, but not as exact deterministic golden snapshots. Prefer controlled local or sanitized deterministic fixtures for golden regression evidence.
+
+If maintained documentation and current production source/output disagree about an already-shipped field, preserve current production behavior and report the documentation drift instead of silently changing the runtime contract.
+
 ## Completion report
 
 Every task response must contain:

@@ -168,6 +168,44 @@ Verify at minimum:
 
 If running outside Windows, mark Windows-only smoke `HUMAN_WINDOWS_REQUIRED` or `ENV_BLOCKED` rather than PASS.
 
+### 5.5 Report regression baseline
+
+Before Phase 3, report behavior is a compatibility constraint, not an implementation playground. Current established baseline:
+
+```text
+Local Link Checker source: 1.1.1
+report schema: 1.3.0
+checked[]: primary HTTP results; no full sources[]
+broken[]: failing checked subset + source provenance
+externalLinks[]: separate source/governance collection
+root securityPolicy: existing production output
+```
+
+For behavior-preserving work such as P0-03, do **not** treat a successful `report-diff.mjs` run as proof of full report semantic equality. The current diff tool intentionally normalizes a selected subset of fields; for example, existing report data can contain object-valued `externalRisk.matchedRules`, while the current generic array cleaner only retains string items. Fixing that existing diff limitation is outside Dynamic Scan refactor scope unless separately assigned.
+
+Required direct regression assertions on controlled deterministic fixtures should cover, where applicable:
+
+```text
+canonical URL set
+summary.inventorySummary.urlsDiscovered
+summary.inventorySummary.uniqueCanonicalUrls
+summary.inventorySummary.duplicateUrlReferences
+summary.inventorySummary.sourcesMerged
+summary.inventorySummary.validationSkippedByInventory
+summary.inventorySummary.inventoryMergeRatio
+broken[].sourceCount / sources[]
+externalLinks[].sourceCount / sources[]
+existing sourceType values
+validation scheduling semantics
+page-queue / crawl-depth semantics
+```
+
+Use `report-diff.mjs` and normalization tests as **supplementary** evidence for backward compatibility. Use direct projections/assertions for inventory and provenance parity. Do not compare raw complete report JSON byte-for-byte when timestamps, elapsed times, or other nondeterministic fields are present; compare a deterministic projection instead.
+
+Live-site reports are compatibility/reference samples only. Do not promote a report captured from an external website to an exact golden fixture. Golden regression reports should come from controlled local fixtures or sanitized deterministic synthetic fixtures.
+
+If a documentation summary omits an already-shipped field that current source/output still emits, preserve current production behavior and report the documentation drift. Do not remove the runtime field merely to match the summary.
+
 ## 6. Validation Environment Matrix
 
 | Evidence | Codex automated | Controlled fixture | Windows/target environment | Human required |

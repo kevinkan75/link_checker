@@ -59,13 +59,32 @@ Tests:
 - validation scheduling/defer-pump behavior.
 - page queue depth behavior.
 - SPA payload and site-rule discovery behavior.
-- existing report semantics.
+- existing report schema `1.3.0` and report semantics.
+- current root `securityPolicy` output.
+- current `checked[]` / `broken[]` / `externalLinks[]` collection roles.
+
+On controlled fixtures, behavior parity must explicitly cover these inventory/provenance values where present:
+
+```text
+canonical URL set
+urlsDiscovered
+uniqueCanonicalUrls
+duplicateUrlReferences
+sourcesMerged
+validationSkippedByInventory
+inventoryMergeRatio
+broken[].sourceCount / sources[]
+externalLinks[].sourceCount / sources[]
+existing sourceType values
+```
 
 ## Acceptance criteria
 
 - `processPage()` no longer contains a duplicated full ingestion loop.
 - Existing static and SPA/framework links enter the same extracted method.
 - No Browser dependency exists after this task.
+- No report-schema field is added, removed, or renamed.
+- Deterministic before/after projections show no unintended change to canonical URL sets, inventory metrics, source provenance, validation scheduling, or crawl-queue semantics.
 - Existing report/regression tests show no unintended semantic difference.
 - Static fixture behavior is unchanged.
 
@@ -76,13 +95,18 @@ Run:
 - syntax gate;
 - all `test-*.mjs`;
 - P0 fixture tests;
-- existing report snapshot/normalization checks where available.
+- existing report snapshot/normalization checks where available;
+- a controlled-fixture before/after deterministic projection that asserts inventory and provenance parity.
+
+`report-diff.mjs` is supplementary evidence only and must not be the sole behavior-parity oracle. Do not fix unrelated existing diff-normalization limitations inside this task.
 
 ## Required completion evidence
 
 - Before/after responsibility summary for `processPage()`.
 - New method signature and inputs/outputs.
+- Deterministic before/after projection for canonical URL set, inventory metrics, and source provenance.
 - Tests proving no behavior change.
+- Confirmation that report schema remains `1.3.0` with no field-shape changes.
 - Any edge case intentionally left unchanged.
 
 ## Stop conditions

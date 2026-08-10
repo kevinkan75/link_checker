@@ -522,6 +522,39 @@ page.goto()
 - 不處理沒有 `href` / `src` 等 URL attribute、完全依賴 click handler 的 router element。
 - 不自動操作選單、load more、tab、infinite scroll 或其他互動後才出現的 link。
 
+### 3.7 既有 Report 1.3.0 regression baseline
+
+在 Phase 3 正式修改 report contract 前，Phase 0 / Phase 1 必須把目前 production source / output 視為既有相容性基線。已確認：
+
+```text
+Local Link Checker source version = 1.1.1
+report schema = 1.3.0
+checked[] = 主要 HTTP result collection，現況不保存完整 sources[]
+broken[] = checked[] 失敗子集 + source provenance
+externalLinks[] = 獨立 external source / governance collection
+root securityPolicy = 現行 production output
+```
+
+因此 Phase 0 的 behavior-preserving refactor 不得新增、刪除或改名 report 欄位，也不得因舊版文件摘要漏列某欄位就改變現行 runtime output。若維護文件與目前 production source / output 對「已發布欄位」描述不一致，應保留目前 production 行為並另外記錄 documentation drift。
+
+`report-diff.mjs` 可作為 normalization / compatibility regression evidence，但**不是完整 report semantic-equivalence oracle**。目前 diff 只比較既定投影欄位；行為不變 refactor 仍需在 controlled fixture 上直接驗證：
+
+```text
+canonical URL set
+urlsDiscovered
+uniqueCanonicalUrls
+duplicateUrlReferences
+sourcesMerged
+validationSkippedByInventory
+inventoryMergeRatio
+broken[].sourceCount / sources[]
+externalLinks[].sourceCount / sources[]
+existing sourceType values
+validation scheduling / crawl queue semantics
+```
+
+真實外部網站產生的 report 可作 compatibility / reference sample，但不作 exact deterministic golden snapshot；正式 regression golden 應優先使用 controlled local fixture 或 sanitized deterministic fixture。
+
 ---
 
 ## 4. 安全與合規邊界
@@ -1042,6 +1075,13 @@ checked[].discovery.sourceTypes[]
 - 同一 URL 同時由 static 與 render 發現時，保留兩種 provenance。
 - `rendered_dom` 只是 discovery provenance，不代表 Browser 已驗證 HTTP status。
 
+階段邊界：
+
+- Phase 1 必須證明 internal source / inventory 能保留 static + `rendered_dom` provenance，並可用 targeted tests / internal diagnostics 作為 Spike evidence。
+- Phase 1 **不要求**把 `checked[].discovery.sourceTypes[]` 定案成正式 production schema。
+- Phase 3 才正式加入 `checked[].discovery.sourceTypes[]`、schema validation、Analyzer / diff compatibility 與 release contract。
+- 若 Phase 1 為了 Spike evidence 暫時產生 projection，必須明確視為 provisional，不得宣稱已完成 Phase 3 report contract。
+
 ### 7.5 Render discovery metric 定義
 
 為避免 benchmark 與 report 各自解讀，第一版固定：
@@ -1187,6 +1227,9 @@ Static / SPA 行為不變。
 - static fixture。
 - GUI smoke。
 - 至少一份既有 report snapshot / normalization check。
+- controlled fixture 的 deterministic before / after projection，直接比較 canonical URL set、inventory metrics、source provenance、validation scheduling 與 crawl queue 語意。
+
+`report-diff.mjs` 在此只作 supplementary compatibility evidence，不作 behavior parity 的唯一 oracle。Phase 0 不修 unrelated report-diff normalization limitation。
 
 ### Exit gate
 
@@ -1648,6 +1691,7 @@ Phase 2 結束前：
 - 仍以既有 `ok/status/issueType/...` 比較為主。
 - 可先忽略未知 render 欄位。
 - 若後續需要比較 render coverage，再加入 diagnosticsChanges。
+- diff normalization 只代表既定投影的 compatibility comparison，不宣稱能證明完整 report semantic equality；inventory/source parity 由 crawler fixture / direct assertions 驗證。
 
 避免：
 
@@ -3283,7 +3327,7 @@ OQ-4 / OQ-5 / OQ-6 則是 Phase 6 前的穩定化 / operational Gate。
 11. 使用 `DOMContentLoaded` + minimum settle floor + URL-attribute signature stability。
 12. `page.content()` 後做 challenge / size guard，再重用 `extractLinks()`。
 13. runtime URL resolve 使用 `getDocumentBaseUrl(renderedHtml, page.url())`。
-14. `sourceType = "rendered_dom"`，並開始產生 compact `checked[].discovery.sourceTypes[]`。
+14. `sourceType = "rendered_dom"`，先以 internal source / inventory / targeted test 證明 provenance；正式 `checked[].discovery.sourceTypes[]` production schema 留到 Phase 3。
 15. 先以 internal stats / verbose event 驗證，不急著完成 GUI。
 16. 開始蒐集 OQ-6 Browser request burst / per-host telemetry。
 17. 驗證 scan stop / limiter queue drain / timeout / browser unavailable 都能正常收斂。

@@ -65,19 +65,28 @@ Settle max reached after successful navigation should preserve current DOM as pa
 ## Out of scope
 
 - No final schema bump/contract; Phase 3 owns that.
+- Do **not** make `checked[].discovery.sourceTypes[]` a formal production report contract in this task.
 - No GUI.
 - No automatic render recommendation/fallback.
 - No browser cache.
 - No unsafe HTTP methods.
 - No authenticated browsing.
 
-Compact discovery provenance may be produced for spike evidence, but do not claim the formal report schema is finalized in this task.
+Phase 1 must prove provenance at the internal source/inventory level. Preferred spike evidence is:
+
+```text
+internal source map / inventory
+targeted test assertions
+internal diagnostics / spike telemetry
+```
+
+A temporary test-only or clearly provisional projection may be used if necessary to demonstrate evidence, but it must not be treated as the Phase 3 report schema. Phase 3 owns the formal `checked[].discovery.sourceTypes[]` contract, schema validation, Analyzer/diff compatibility, and release semantics.
 
 ## Acceptance criteria
 
 - `csr-basic` URL absent from static HTML is found when Dynamic Render is enabled.
 - Same URL is validated by existing Node HTTP checker, not Browser status.
-- `duplicate-link` merges into existing canonical inventory and retains both provenance types.
+- `duplicate-link` merges into existing canonical inventory and retains both provenance types in the internal source/inventory model; formal `checked[].discovery.sourceTypes[]` output is deferred to Phase 3.
 - `runtime-base-url` resolves according to runtime `<base>` / `page.url()` contract.
 - `csr-delayed` is found using bounded settle.
 - Dynamic Render disabled preserves existing behavior/output semantics.
@@ -92,10 +101,11 @@ Browser-dependent integration is `LOCAL_FIXTURE_PASS` where a supported browser 
 ## Required completion evidence
 
 - Static-vs-dynamic discovery comparison.
-- Inventory count/provenance evidence.
+- Inventory count/provenance evidence from internal source/inventory state or targeted test diagnostics.
 - HTTP validation proof for a `rendered_dom` URL.
-- Duplicate merge evidence.
+- Duplicate merge evidence showing both static and `rendered_dom` provenance without changing HTTP truth.
 - Runtime base URL expected vs actual.
+- Confirmation that no formal Phase 3 report-schema contract was introduced.
 
 ## Suggested commit message
 

@@ -53,7 +53,9 @@ P1-01 through P1-05.
 
 ### Regression
 
-- Dynamic Render off preserves existing behavior
+- Dynamic Render off preserves existing behavior and report schema `1.3.0` semantics
+- controlled-fixture canonical URL / inventory metric / source provenance projection remains stable when Dynamic Render is off
+- `report-diff.mjs` / normalization smoke remains compatible, but is treated as supplementary evidence rather than full semantic equality
 - all existing tests
 - syntax gate
 
@@ -75,6 +77,7 @@ Browser
 Discovery
 Lifecycle
 Boundary observations
+Report / regression compatibility
 Observed performance/telemetry
 Open / Next Gate
 Decision
@@ -123,6 +126,8 @@ Use if Browser discovery cannot integrate reliably with existing inventory/HTTP 
 ## Acceptance criteria
 
 - Evidence file exists and distinguishes PASS from ENV_BLOCKED.
+- Dynamic Render-off regression evidence includes direct controlled-fixture inventory/provenance assertions, not only `report-diff.mjs`.
+- No formal Phase 3 report schema is prematurely declared complete.
 - No Windows/Enterprise/Persona check is falsely claimed as automated PASS.
 - Decision is exactly GO, ADJUST_AND_REPEAT, or NO_GO.
 - Rationale maps directly to the master-plan success/exit criteria.
