@@ -126,6 +126,7 @@ class BrowserProvider {
       browser: candidate,
       browserChannel: candidate,
       browserVersion,
+      browserInstance,
       status: BROWSER_PROVIDER_STATUS.AVAILABLE,
       launchOutcome: "available",
       attempts: sanitizeAttempts(attempts),
