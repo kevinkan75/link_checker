@@ -1333,59 +1333,69 @@ class LinkChecker {
       const links = [...htmlLinks, ...frameworkLinks];
       this.reporter?.pageLinksFound(url, links.length);
 
-      for (const link of links) {
-        if (this.stopped) {
-          break;
-        }
-
-        const resolved = resolveHttpUrl(link.value, pageBaseUrl);
-        if (!resolved) {
-          continue;
-        }
-
-        const fallbackUrls = getResolutionFallbackUrls(link.value, pageResult.finalUrl || url, resolved);
-        const source = {
-          page: url,
-          tag: link.tag,
-          attribute: link.attribute,
-          text: link.value,
-          sourceType: link.sourceType || "html_attribute",
-          fallbackUrls,
-        };
-        this.addSource(resolved, source);
-
-        const isExternal = !this.isCrawlOrigin(resolved);
-        const shouldCheck = this.shouldCheck(resolved);
-        const shouldCrawl = this.shouldCrawl(resolved, link, depth + 1);
-        const inventoryEntry = this.addInventoryItem(resolved, source, link, {
-          isExternal,
-          shouldCheck,
-          shouldCrawl,
-          needsStatusCheck: shouldCheck,
-          needsBodyFetch: shouldCrawl,
-        });
-
-        if (isExternal) {
-          this.addExternalLink(resolved, link, source);
-        }
-
-        if (shouldCheck && this.scheduleInventoryValidation(inventoryEntry, { requireBody: false })) {
-          this.enqueueValidation(inventoryEntry, resolved, { requireBody: false }, { deferPump: true });
-        } else if (shouldCheck) {
-          this.inventoryMetrics.validationSkippedByInventory += 1;
-        } else {
-          this.skippedExternal += 1;
-          this.reporter?.externalSkipped(resolved, url);
-        }
-
-        if (shouldCrawl) {
-          this.enqueuePage(resolved, depth + 1);
-        }
-      }
-      this.pumpValidationQueue();
+      this.ingestDiscoveredLinks(links, {
+        sourcePageUrl: url,
+        baseUrl: pageBaseUrl,
+        fallbackBaseUrl: pageResult.finalUrl || url,
+        pageDepth: depth,
+      });
     } finally {
       this.currentPages.delete(url);
     }
+  }
+
+  ingestDiscoveredLinks(links, { sourcePageUrl, baseUrl, fallbackBaseUrl, pageDepth }) {
+    for (const link of links) {
+      if (this.stopped) {
+        break;
+      }
+
+      const resolved = resolveHttpUrl(link.value, baseUrl);
+      if (!resolved) {
+        continue;
+      }
+
+      const fallbackUrls = getResolutionFallbackUrls(link.value, fallbackBaseUrl, resolved);
+      const source = {
+        page: sourcePageUrl,
+        tag: link.tag,
+        attribute: link.attribute,
+        text: link.value,
+        sourceType: link.sourceType || "html_attribute",
+        fallbackUrls,
+      };
+      this.addSource(resolved, source);
+
+      const isExternal = !this.isCrawlOrigin(resolved);
+      const shouldCheck = this.shouldCheck(resolved);
+      const crawlDepth = pageDepth + 1;
+      const shouldCrawl = this.shouldCrawl(resolved, link, crawlDepth);
+      const inventoryEntry = this.addInventoryItem(resolved, source, link, {
+        isExternal,
+        shouldCheck,
+        shouldCrawl,
+        needsStatusCheck: shouldCheck,
+        needsBodyFetch: shouldCrawl,
+      });
+
+      if (isExternal) {
+        this.addExternalLink(resolved, link, source);
+      }
+
+      if (shouldCheck && this.scheduleInventoryValidation(inventoryEntry, { requireBody: false })) {
+        this.enqueueValidation(inventoryEntry, resolved, { requireBody: false }, { deferPump: true });
+      } else if (shouldCheck) {
+        this.inventoryMetrics.validationSkippedByInventory += 1;
+      } else {
+        this.skippedExternal += 1;
+        this.reporter?.externalSkipped(resolved, sourcePageUrl);
+      }
+
+      if (shouldCrawl) {
+        this.enqueuePage(resolved, crawlDepth);
+      }
+    }
+    this.pumpValidationQueue();
   }
 
   shouldCheck(url) {
