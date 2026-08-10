@@ -12,6 +12,11 @@ import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  DEFAULT_RENDER_OPTIONS,
+  DYNAMIC_RENDER_OUTCOME,
+  DynamicRenderer,
+} from "./dynamic-renderer.mjs";
 
 const TOOL_VERSION = "1.1.1";
 const REPORT_SCHEMA_VERSION = "1.3.0";
@@ -164,6 +169,16 @@ const DEFAULTS = {
   confirmationDelayMinMs: 1000,
   confirmationDelayMaxMs: 3000,
   spaLinks: "auto",
+  dynamicRender: false,
+  renderBrowser: "auto",
+  renderConcurrency: 1,
+  renderTimeoutMs: DEFAULT_RENDER_OPTIONS.renderTimeoutMs,
+  renderSettleMinMs: DEFAULT_RENDER_OPTIONS.renderSettleMinMs,
+  renderSettleIntervalMs: DEFAULT_RENDER_OPTIONS.renderSettleIntervalMs,
+  renderSettleStableSamples: DEFAULT_RENDER_OPTIONS.renderSettleStableSamples,
+  renderSettleMaxMs: DEFAULT_RENDER_OPTIONS.renderSettleMaxMs,
+  renderMaxPages: 25,
+  maxRenderedHtmlBytes: DEFAULT_RENDER_OPTIONS.maxRenderedHtmlBytes,
   userAgent: `${BROWSER_USER_AGENT} LocalLinkChecker/1.0`,
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
 };
@@ -571,6 +586,16 @@ class LinkChecker {
     }
     this.options.retryAfterMaxMs = normalizeRetryAfterMaxMs(this.options.retryAfterMaxMs);
     this.options.protectionBodyHash = this.options.protectionBodyHash === true;
+    this.options.dynamicRender = this.options.dynamicRender === true;
+    this.options.renderBrowser = normalizeRenderBrowser(this.options.renderBrowser);
+    this.options.renderConcurrency = normalizeIntegerLimit(this.options.renderConcurrency, DEFAULTS.renderConcurrency) || DEFAULTS.renderConcurrency;
+    this.options.renderTimeoutMs = normalizeIntegerLimit(this.options.renderTimeoutMs, DEFAULTS.renderTimeoutMs) || DEFAULTS.renderTimeoutMs;
+    this.options.renderSettleMinMs = normalizeIntegerLimit(this.options.renderSettleMinMs, DEFAULTS.renderSettleMinMs);
+    this.options.renderSettleIntervalMs = normalizeIntegerLimit(this.options.renderSettleIntervalMs, DEFAULTS.renderSettleIntervalMs) || DEFAULTS.renderSettleIntervalMs;
+    this.options.renderSettleStableSamples = normalizeIntegerLimit(this.options.renderSettleStableSamples, DEFAULTS.renderSettleStableSamples) || DEFAULTS.renderSettleStableSamples;
+    this.options.renderSettleMaxMs = normalizeIntegerLimit(this.options.renderSettleMaxMs, DEFAULTS.renderSettleMaxMs);
+    this.options.renderMaxPages = normalizeIntegerLimit(this.options.renderMaxPages, DEFAULTS.renderMaxPages);
+    this.options.maxRenderedHtmlBytes = normalizeByteLimit(this.options.maxRenderedHtmlBytes, DEFAULTS.maxRenderedHtmlBytes);
     this.securityPolicy = normalizeSecurityPolicy(this.options);
     Object.assign(this.options, this.securityPolicy);
     this.complianceOptions = normalizeComplianceOptions(this.options);
@@ -682,6 +707,22 @@ class LinkChecker {
       }),
     });
     this.skippedExternal = 0;
+    this.dynamicRenderer = this.options.dynamicRender ? new DynamicRenderer({
+      enabled: true,
+      browser: this.options.renderBrowser,
+      renderConcurrency: this.options.renderConcurrency,
+      renderTimeoutMs: this.options.renderTimeoutMs,
+      renderSettleMinMs: this.options.renderSettleMinMs,
+      renderSettleIntervalMs: this.options.renderSettleIntervalMs,
+      renderSettleStableSamples: this.options.renderSettleStableSamples,
+      renderSettleMaxMs: this.options.renderSettleMaxMs,
+      maxRenderedHtmlBytes: this.options.maxRenderedHtmlBytes,
+      extractLinks,
+      getDocumentBaseUrl,
+      detectChallenge: detectRenderedChallenge,
+    }) : null;
+    this.dynamicRenderResults = [];
+    this.dynamicRenderAttemptedPages = 0;
     this.reporter = options.reporter || null;
     this.currentPages = new Map();
     this.stopped = false;
@@ -717,6 +758,7 @@ class LinkChecker {
       await this.saveIncrementalState(report);
       return report;
     } finally {
+      await this.dynamicRenderer?.close();
       this.reporter?.stop();
     }
   }
@@ -757,6 +799,9 @@ class LinkChecker {
     this.stopped = true;
     this.stopReason = reason;
     this.stoppedByUser = reason === "stopped_by_user";
+    this.dynamicRenderer?.requestStop().catch((error) => {
+      this.validationError = this.validationError || error;
+    });
   }
 
   async inspectRobotsTxt() {
@@ -1339,9 +1384,57 @@ class LinkChecker {
         fallbackBaseUrl: pageResult.finalUrl || url,
         pageDepth: depth,
       });
+
+      await this.processRenderedPage({
+        url,
+        depth,
+        pageResult,
+      });
     } finally {
       this.currentPages.delete(url);
     }
+  }
+
+  async processRenderedPage({ url, depth, pageResult }) {
+    if (!this.shouldRenderPage(url, pageResult)) {
+      return null;
+    }
+
+    this.dynamicRenderAttemptedPages += 1;
+    const renderResult = await this.dynamicRenderer.renderPage(pageResult.finalUrl || url);
+    this.dynamicRenderResults.push(renderResult);
+
+    if (
+      renderResult.outcome !== DYNAMIC_RENDER_OUTCOME.RENDERED
+      && renderResult.outcome !== DYNAMIC_RENDER_OUTCOME.RENDERED_UNSETTLED
+    ) {
+      return renderResult;
+    }
+
+    this.ingestDiscoveredLinks(renderResult.links, {
+      sourcePageUrl: renderResult.renderFinalUrl || pageResult.finalUrl || url,
+      baseUrl: renderResult.documentBaseUrl || renderResult.renderFinalUrl || pageResult.finalUrl || url,
+      fallbackBaseUrl: renderResult.renderFinalUrl || pageResult.finalUrl || url,
+      pageDepth: depth,
+    });
+
+    return renderResult;
+  }
+
+  shouldRenderPage(url, pageResult) {
+    if (!this.options.dynamicRender || !this.dynamicRenderer || this.stopped) {
+      return false;
+    }
+    if (this.dynamicRenderAttemptedPages >= this.options.renderMaxPages) {
+      return false;
+    }
+    if (!pageResult?.ok || !isHtml(pageResult.contentType) || !pageResult.body) {
+      return false;
+    }
+    if (!this.isCrawlOrigin(pageResult.finalUrl || url)) {
+      return false;
+    }
+    return looksLikePage(pageResult.finalUrl || url);
   }
 
   ingestDiscoveredLinks(links, { sourcePageUrl, baseUrl, fallbackBaseUrl, pageDepth }) {
@@ -5536,6 +5629,21 @@ function detectProtectionLayer(result, headers) {
   };
 }
 
+function detectRenderedChallenge(renderedHtml) {
+  const detection = detectProtectionLayer({
+    status: 200,
+    body: renderedHtml,
+    diagnosticBody: renderedHtml,
+  }, new Headers());
+  if (!detection) {
+    return { detected: false };
+  }
+  return {
+    detected: true,
+    ...detection,
+  };
+}
+
 function extractTitle(html) {
   return (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "")
     .replace(/\s+/g, " ")
@@ -6323,6 +6431,14 @@ function normalizeSpaLinkMode(value) {
     throw new Error(`Invalid SPA link mode "${value}". Use auto, off, or strict.`);
   }
   return mode;
+}
+
+function normalizeRenderBrowser(value) {
+  const browser = String(value || DEFAULTS.renderBrowser).toLowerCase();
+  if (!["auto", "msedge", "chrome"].includes(browser)) {
+    throw new Error(`Invalid render browser "${value}". Use auto, msedge, or chrome.`);
+  }
+  return browser;
 }
 
 function sortQueryParameters(url) {
@@ -8162,6 +8278,35 @@ function parseArgs(argv) {
       options.spaLinks = normalizeSpaLinkMode(value);
       continue;
     }
+    if (arg === "--dynamic-render") {
+      options.dynamicRender = true;
+      explicitOptions.add("dynamicRender");
+      continue;
+    }
+    if (arg === "--render-browser") {
+      const value = args.shift();
+      if (!value || value.startsWith("-")) {
+        throw new Error("--render-browser requires auto, msedge, or chrome");
+      }
+      options.renderBrowser = normalizeRenderBrowser(value);
+      explicitOptions.add("renderBrowser");
+      continue;
+    }
+    if (arg === "--render-timeout") {
+      options.renderTimeoutMs = readPositiveInteger(args.shift(), "--render-timeout");
+      explicitOptions.add("renderTimeoutMs");
+      continue;
+    }
+    if (arg === "--render-concurrency") {
+      options.renderConcurrency = readPositiveInteger(args.shift(), "--render-concurrency");
+      explicitOptions.add("renderConcurrency");
+      continue;
+    }
+    if (arg === "--render-max-pages") {
+      options.renderMaxPages = readPositiveInteger(args.shift(), "--render-max-pages");
+      explicitOptions.add("renderMaxPages");
+      continue;
+    }
     if (arg === "--canonical-strategy") {
       const value = args.shift();
       if (!value || value.startsWith("-")) {
@@ -8248,6 +8393,15 @@ function parseArgs(argv) {
   options.confirmationDelayMaxMs = Math.max(0, Math.min(options.confirmationDelayMaxMs, 60000));
   options.canonicalStrategy = normalizeCanonicalStrategy(options.canonicalStrategy);
   options.spaLinks = normalizeSpaLinkMode(options.spaLinks);
+  options.dynamicRender = options.dynamicRender === true;
+  options.renderBrowser = normalizeRenderBrowser(options.renderBrowser);
+  options.renderConcurrency = Math.max(1, Math.min(options.renderConcurrency, 20));
+  options.renderTimeoutMs = Math.max(1, Math.min(options.renderTimeoutMs, 120000));
+  options.renderSettleMinMs = Math.max(0, Math.min(options.renderSettleMinMs, 30000));
+  options.renderSettleIntervalMs = Math.max(1, Math.min(options.renderSettleIntervalMs, 10000));
+  options.renderSettleStableSamples = Math.max(1, Math.min(options.renderSettleStableSamples, 100));
+  options.renderSettleMaxMs = Math.max(options.renderSettleMinMs, Math.min(options.renderSettleMaxMs, 60000));
+  options.renderMaxPages = Math.max(0, Math.min(options.renderMaxPages, options.maxPages));
   options.redactSensitiveQuery = options.redactSensitiveQuery !== false;
   options.redactQueryKeys = normalizeRedactQueryKeys(options.redactQueryKeys);
   options.cache = options.cache === true;
@@ -8622,6 +8776,15 @@ Options:
                        Canonical URL strategy for report keys. Default: ${DEFAULTS.canonicalStrategy}
   --spa-links <auto|off|strict>
                        Extract explicit URL/path literals from SPA payloads. Default: ${DEFAULTS.spaLinks}
+  --dynamic-render     Enable opt-in Browser-rendered DOM discovery.
+  --render-browser <auto|msedge|chrome>
+                       Browser channel for Dynamic Render. Default: ${DEFAULTS.renderBrowser}
+  --render-timeout <ms>
+                       Dynamic Render navigation timeout. Default: ${DEFAULTS.renderTimeoutMs}
+  --render-concurrency <n>
+                       Dynamic Render jobs allowed at once. Default: ${DEFAULTS.renderConcurrency}
+  --render-max-pages <n>
+                       Maximum pages to render. Default: ${DEFAULTS.renderMaxPages}
   --external          Also check links that point to other domains.
                       External links are always inventoried in the JSON report.
   --conservative      Lower request rate and use browser-like checks to reduce blocking.

@@ -58,10 +58,10 @@ const fixtureDefinitions = [
     file: "runtime-base-url.html",
     path: "/fixtures/runtime-base-url",
     expectedPaths: [
-      "/runtime-base/relative-target",
+      "/runtime-history/runtime-base/relative-target",
     ],
     runtimeHistoryPath: "/runtime-history/current-page",
-    runtimeBasePath: "/runtime-base/",
+    runtimeBasePath: "/runtime-history/runtime-base/",
   },
   {
     id: "render-timeout",
@@ -354,6 +354,23 @@ function createServerHandler({ state, origins, serverRole }) {
       }
 
       if (await handleObservationRequest(request, response, requestUrl, state, serverRole)) {
+        return;
+      }
+
+      if (requestUrl.pathname === "/eligibility/failing-page") {
+        response.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+        response.end("<!doctype html><title>Controlled 404</title><p>Controlled failing page.</p>");
+        return;
+      }
+
+      if (requestUrl.pathname === "/eligibility/non-html") {
+        sendText(response, "controlled non-html response");
+        return;
+      }
+
+      if (requestUrl.pathname === "/eligibility/bodyless-html") {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.end("");
         return;
       }
 

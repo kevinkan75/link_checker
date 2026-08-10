@@ -296,8 +296,8 @@ async function assertRuntimeBaseProjection(server) {
   const projection = projectReport(checker, report, events);
   assertReportCompatibility(projection, "runtime-base-url");
   assertDeepEqual(projection.inventorySummary, {
-    urlsDiscovered: 2,
-    uniqueCanonicalUrls: 2,
+    urlsDiscovered: 1,
+    uniqueCanonicalUrls: 1,
     duplicateUrlReferences: 0,
     sourcesMerged: 0,
     validationSkippedByInventory: 0,
@@ -306,13 +306,11 @@ async function assertRuntimeBaseProjection(server) {
     inventoryMergeRatio: 0,
   }, "runtime-base-url inventory summary changed.");
   assertDeepEqual(projection.canonicalPaths, [
-    "/runtime-base/",
     "/runtime-history/current-page",
   ], "runtime-base-url static canonical URL set changed.");
-  assert(!projection.canonicalPaths.includes("/runtime-base/relative-target"), "runtime-base-url final runtime target became statically discoverable.");
+  assert(!projection.canonicalPaths.includes("/runtime-history/runtime-base/relative-target"), "runtime-base-url final runtime target became statically discoverable.");
   assertDeepEqual(projection.pageQueued, [
     { path: "/runtime-history/current-page", depth: 1 },
-    { path: "/runtime-base/", depth: 1 },
   ], "runtime-base-url crawl queue changed.");
   for (const item of projection.inventory) {
     assertInventoryFlags(item, {
