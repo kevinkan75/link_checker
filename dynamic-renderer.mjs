@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import {
   BROWSER_PROVIDER_STATUS,
   BrowserProvider,
@@ -34,6 +35,11 @@ const DEFAULT_RENDER_OPTIONS = Object.freeze({
   renderSettleMaxMs: 2500,
   maxRenderedHtmlBytes: 5 * 1024 * 1024,
 });
+
+const SAFE_BROWSER_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const TRAFFIC_REQUEST_SAMPLE_LIMIT = 200;
+const TRAFFIC_BLOCKED_SAMPLE_LIMIT = 100;
+const TRAFFIC_INTERVAL_SAMPLE_LIMIT = 200;
 
 class RenderLimiter {
   constructor(limit = 1) {
@@ -79,7 +85,10 @@ class DynamicRenderer {
     extractLinks = null,
     getDocumentBaseUrl = null,
     detectChallenge = null,
+    evaluateUrlSecurity = null,
+    securityPolicy = null,
     now = () => Date.now(),
+    trafficNow = monotonicNow,
     sleep = defaultSleep,
   } = {}) {
     this.enabled = enabled === true;
@@ -98,7 +107,10 @@ class DynamicRenderer {
     this.extractLinks = extractLinks;
     this.getDocumentBaseUrl = getDocumentBaseUrl;
     this.detectChallenge = detectChallenge;
+    this.evaluateUrlSecurity = evaluateUrlSecurity;
+    this.securityPolicy = securityPolicy;
     this.now = now;
+    this.trafficNow = trafficNow;
     this.sleep = sleep;
     this.browserResult = null;
     this.launchPromise = null;
@@ -109,7 +121,7 @@ class DynamicRenderer {
     this.closePromise = null;
   }
 
-  async withPage(callback) {
+  async withPage(callback, jobOptions = {}) {
     if (!this.enabled) {
       return buildRendererResult({
         ok: false,
@@ -118,12 +130,12 @@ class DynamicRenderer {
       });
     }
 
-    return this.renderLimiter.run(() => this.runJob(callback));
+    return this.renderLimiter.run(() => this.runJob(callback, jobOptions));
   }
 
   async renderPage(targetUrl) {
     const startedAt = this.now();
-    const result = await this.withPage(async ({ page }) => {
+    const result = await this.withPage(async ({ page, trafficTelemetry }) => {
       let navigationResult = null;
       try {
         navigationResult = await page.goto(targetUrl, {
@@ -146,6 +158,21 @@ class DynamicRenderer {
       const settle = await this.waitForSettle(page);
       const renderedHtml = await page.content();
       const renderFinalUrl = typeof page.url === "function" ? page.url() : targetUrl;
+
+      if (trafficTelemetry?.hasMainFrameNavigationBlocked()) {
+        return buildRenderResult({
+          attempted: true,
+          outcome: DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED,
+          requestedUrl: targetUrl,
+          renderFinalUrl,
+          elapsedMs: this.now() - startedAt,
+          settled: settle.settled,
+          settle,
+          navigationStatus: getNavigationStatus(navigationResult),
+          renderedHtmlBytes: Buffer.byteLength(renderedHtml, "utf8"),
+          links: [],
+        });
+      }
 
       if (Buffer.byteLength(renderedHtml, "utf8") > this.renderOptions.maxRenderedHtmlBytes) {
         return buildRenderResult({
@@ -197,6 +224,9 @@ class DynamicRenderer {
         renderedHtmlBytes: Buffer.byteLength(renderedHtml, "utf8"),
         links,
       });
+    }, {
+      renderPage: targetUrl,
+      allowedOrigin: getOrigin(targetUrl),
     });
 
     if (!result.ok) {
@@ -277,7 +307,7 @@ class DynamicRenderer {
       }));
   }
 
-  async runJob(callback) {
+  async runJob(callback, jobOptions = {}) {
     if (this.stopped) {
       return buildRendererResult({
         ok: false,
@@ -302,24 +332,25 @@ class DynamicRenderer {
     const browserInstance = browserResult.browserInstance;
     const context = await browserInstance.newContext({ ...this.contextOptions });
     this.activeContexts.add(context);
+    const trafficTelemetry = new BrowserTrafficTelemetry({
+      renderPage: jobOptions.renderPage || null,
+      now: this.trafficNow,
+    });
+    await this.installBoundaryHooks(context, trafficTelemetry, jobOptions);
     let primaryError = null;
+    let value;
     try {
       if (this.stopped) {
         return this.buildStoppedResult(browserResult);
       }
       const page = await context.newPage();
-      const value = await callback({
+      this.attachPageBoundaryHooks(page, trafficTelemetry);
+      value = await callback({
         browser: browserResult,
         context,
         page,
+        trafficTelemetry,
       });
-      return {
-        ok: true,
-        status: DYNAMIC_RENDERER_STATUS.COMPLETED,
-        browser: browserResult.browser,
-        browserChannel: browserResult.browserChannel,
-        value,
-      };
     } catch (error) {
       primaryError = error;
       throw error;
@@ -335,6 +366,107 @@ class DynamicRenderer {
       } finally {
         this.activeContexts.delete(context);
       }
+    }
+    attachTrafficTelemetry(value, trafficTelemetry.finalize());
+    return {
+      ok: true,
+      status: DYNAMIC_RENDERER_STATUS.COMPLETED,
+      browser: browserResult.browser,
+      browserChannel: browserResult.browserChannel,
+      value,
+    };
+  }
+
+  async installBoundaryHooks(context, trafficTelemetry, jobOptions = {}) {
+    if (typeof context.on === "function") {
+      context.on("requestfinished", (request) => {
+        trafficTelemetry.recordRequestFinished(request);
+      });
+      context.on("requestfailed", (request) => {
+        trafficTelemetry.recordRequestFailed(request);
+      });
+      let firstPage = true;
+      context.on("page", (page) => {
+        this.attachPageBoundaryHooks(page, trafficTelemetry);
+        if (firstPage) {
+          firstPage = false;
+          return;
+        }
+        if (trafficTelemetry.recordPopupClosed(page)) {
+          closeIfPossible(page).catch(() => {});
+        }
+      });
+    }
+
+    if (typeof context.route === "function") {
+      await context.route("**/*", async (route, requestFromHandler = null) => {
+        const request = requestFromHandler || (typeof route.request === "function" ? route.request() : null);
+        await this.handleRoutedRequest(route, request, trafficTelemetry, jobOptions);
+      });
+    }
+
+    if (typeof context.routeWebSocket === "function") {
+      await context.routeWebSocket(/.*/, async (webSocketRoute) => {
+        trafficTelemetry.recordWebSocketBlocked(getWebSocketUrl(webSocketRoute));
+        if (typeof webSocketRoute?.close === "function") {
+          await webSocketRoute.close({
+            code: 1008,
+            reason: "blocked_by_policy",
+          });
+        }
+      });
+    }
+  }
+
+  attachPageBoundaryHooks(page, trafficTelemetry) {
+    if (!page || typeof page.on !== "function" || trafficTelemetry.pageHooks.has(page)) {
+      return;
+    }
+    trafficTelemetry.pageHooks.add(page);
+    page.on("download", async (download) => {
+      trafficTelemetry.recordDownloadCancelled(getDownloadUrl(download));
+      if (typeof download?.cancel === "function") {
+        await download.cancel().catch(() => {});
+      }
+    });
+    page.on("popup", async (popup) => {
+      if (trafficTelemetry.recordPopupClosed(popup)) {
+        await closeIfPossible(popup).catch(() => {});
+      }
+    });
+  }
+
+  async handleRoutedRequest(route, request, trafficTelemetry, jobOptions = {}) {
+    const record = trafficTelemetry.recordRequestStarted(request);
+    const method = record.method;
+    try {
+      if (!SAFE_BROWSER_METHODS.has(method)) {
+        trafficTelemetry.recordMethodBlocked(request, method);
+        await abortRoute(route);
+        return;
+      }
+
+      if (isBlockedMainFrameNavigation(request, jobOptions.allowedOrigin)) {
+        trafficTelemetry.recordMainFrameNavigationBlocked(request, jobOptions.allowedOrigin);
+        await abortRoute(route);
+        return;
+      }
+
+      if (typeof this.evaluateUrlSecurity === "function") {
+        const decision = await this.evaluateUrlSecurity(record.url, this.securityPolicy);
+        if (decision && decision.allowed === false) {
+          trafficTelemetry.recordSecurityBlocked(request, decision.reason || "blocked_by_security_policy");
+          await abortRoute(route);
+          return;
+        }
+      }
+
+      if (typeof route?.continue === "function") {
+        await route.continue();
+      }
+    } catch (error) {
+      trafficTelemetry.recordRequestFailed(request, sanitizeRenderError(error));
+      throw error;
     }
   }
 
@@ -495,6 +627,255 @@ function attachCleanupError(primaryError, cleanupError) {
   }
 }
 
+class BrowserTrafficTelemetry {
+  constructor({ renderPage = null, now = monotonicNow } = {}) {
+    this.renderPage = renderPage;
+    this.now = now;
+    this.requestSequence = 0;
+    this.records = new Map();
+    this.pageHooks = new WeakSet();
+    this.popupPages = new WeakSet();
+    this.currentInflight = 0;
+    this.currentInflightByHost = new Map();
+    this.lastStartByHost = new Map();
+    this.lastObservedAtMs = null;
+    this.data = {
+      renderPage,
+      hostKeyType: "host",
+      timingUnit: "milliseconds_from_monotonic_process_clock",
+      requestSampleLimit: TRAFFIC_REQUEST_SAMPLE_LIMIT,
+      blockedRequestSampleLimit: TRAFFIC_BLOCKED_SAMPLE_LIMIT,
+      requestStartIntervalSampleLimit: TRAFFIC_INTERVAL_SAMPLE_LIMIT,
+      requestSamplesDropped: 0,
+      blockedRequestSamplesDropped: 0,
+      requestStartIntervalSamplesDropped: 0,
+      requestsStarted: 0,
+      requestsFinished: 0,
+      requestsFailed: 0,
+      requestsStartedByHost: {},
+      requestsFinishedByHost: {},
+      requestsFailedByHost: {},
+      requestsByMethod: {},
+      requestsByResourceType: {},
+      peakInflight: 0,
+      peakInflightByHost: {},
+      requestStartIntervals: [],
+      securityBlockedRequests: 0,
+      methodBlockedRequests: 0,
+      websocketBlockedRequests: 0,
+      popupClosed: 0,
+      downloadCancelled: 0,
+      mainFrameNavigationBlocked: 0,
+      blockedRequests: [],
+      requests: [],
+    };
+  }
+
+  recordRequestStarted(request) {
+    const existing = this.records.get(request);
+    if (existing) {
+      return existing;
+    }
+
+    const startedAtMs = this.nextMonotonicTimestamp();
+    const url = getRequestUrl(request);
+    const host = getHostKey(url);
+    const method = getRequestMethod(request);
+    const resourceType = getRequestResourceType(request);
+    const record = {
+      id: ++this.requestSequence,
+      request,
+      url,
+      host,
+      method,
+      resourceType,
+      startedAtMs,
+      terminal: false,
+    };
+    this.records.set(request, record);
+
+    this.data.requestsStarted += 1;
+    incrementObjectCounter(this.data.requestsStartedByHost, host);
+    incrementObjectCounter(this.data.requestsByMethod, method);
+    incrementObjectCounter(this.data.requestsByResourceType, resourceType);
+
+    this.currentInflight += 1;
+    this.data.peakInflight = Math.max(this.data.peakInflight, this.currentInflight);
+    const hostInflight = (this.currentInflightByHost.get(host) || 0) + 1;
+    this.currentInflightByHost.set(host, hostInflight);
+    this.data.peakInflightByHost[host] = Math.max(this.data.peakInflightByHost[host] || 0, hostInflight);
+
+    if (this.lastStartByHost.has(host)) {
+      this.pushSample(this.data.requestStartIntervals, {
+        host,
+        intervalMs: Math.max(0, startedAtMs - this.lastStartByHost.get(host)),
+      }, TRAFFIC_INTERVAL_SAMPLE_LIMIT, "requestStartIntervalSamplesDropped");
+    }
+    this.lastStartByHost.set(host, startedAtMs);
+
+    this.pushSample(this.data.requests, {
+      id: record.id,
+      host,
+      method,
+      resourceType,
+      path: getUrlPath(url),
+      startedAtMs,
+      terminal: null,
+    }, TRAFFIC_REQUEST_SAMPLE_LIMIT, "requestSamplesDropped");
+    return record;
+  }
+
+  recordRequestFinished(request) {
+    this.recordRequestTerminal(request, "finished");
+  }
+
+  recordRequestFailed(request, error = null) {
+    this.recordRequestTerminal(request, "failed", error);
+  }
+
+  recordMethodBlocked(request, method) {
+    const record = this.recordRequestStarted(request);
+    this.data.methodBlockedRequests += 1;
+    this.pushBlockedSample({
+      id: record.id,
+      reason: "method",
+      method,
+      host: record.host,
+      resourceType: record.resourceType,
+      path: getUrlPath(record.url),
+    });
+    this.recordRequestTerminal(request, "blocked");
+  }
+
+  recordSecurityBlocked(request, reason) {
+    const record = this.recordRequestStarted(request);
+    this.data.securityBlockedRequests += 1;
+    this.pushBlockedSample({
+      id: record.id,
+      reason: "security",
+      securityReason: reason,
+      method: record.method,
+      host: record.host,
+      resourceType: record.resourceType,
+      path: getUrlPath(record.url),
+    });
+    this.recordRequestTerminal(request, "blocked");
+  }
+
+  recordMainFrameNavigationBlocked(request, allowedOrigin) {
+    const record = this.recordRequestStarted(request);
+    this.data.mainFrameNavigationBlocked += 1;
+    this.pushBlockedSample({
+      id: record.id,
+      reason: "main_frame_origin",
+      allowedOrigin,
+      method: record.method,
+      host: record.host,
+      resourceType: record.resourceType,
+      path: getUrlPath(record.url),
+    });
+    this.recordRequestTerminal(request, "blocked");
+  }
+
+  recordWebSocketBlocked(url) {
+    this.data.websocketBlockedRequests += 1;
+    this.pushBlockedSample({
+      reason: "websocket",
+      host: getHostKey(url),
+      path: getUrlPath(url),
+    });
+  }
+
+  recordPopupClosed(pageOrUrl) {
+    if (pageOrUrl && typeof pageOrUrl === "object") {
+      if (this.popupPages.has(pageOrUrl)) {
+        return false;
+      }
+      this.popupPages.add(pageOrUrl);
+    }
+    const url = typeof pageOrUrl === "string" ? pageOrUrl : getPageUrl(pageOrUrl);
+    this.data.popupClosed += 1;
+    this.pushBlockedSample({
+      reason: "popup",
+      host: getHostKey(url),
+      path: getUrlPath(url),
+    });
+    return true;
+  }
+
+  recordDownloadCancelled(url) {
+    this.data.downloadCancelled += 1;
+    this.pushBlockedSample({
+      reason: "download",
+      host: getHostKey(url),
+      path: getUrlPath(url),
+    });
+  }
+
+  nextMonotonicTimestamp() {
+    const timestamp = normalizeTelemetryTimestamp(this.now());
+    if (this.lastObservedAtMs === null || timestamp >= this.lastObservedAtMs) {
+      this.lastObservedAtMs = timestamp;
+      return timestamp;
+    }
+    return this.lastObservedAtMs;
+  }
+
+  pushBlockedSample(sample) {
+    this.pushSample(
+      this.data.blockedRequests,
+      sample,
+      TRAFFIC_BLOCKED_SAMPLE_LIMIT,
+      "blockedRequestSamplesDropped",
+    );
+  }
+
+  pushSample(target, sample, limit, droppedCounter) {
+    if (target.length < limit) {
+      target.push(sample);
+      return;
+    }
+    this.data[droppedCounter] += 1;
+  }
+
+  recordRequestTerminal(request, terminal, error = null) {
+    const record = this.records.get(request);
+    if (!record || record.terminal) {
+      return;
+    }
+    record.terminal = terminal;
+    if (terminal === "finished") {
+      this.data.requestsFinished += 1;
+      incrementObjectCounter(this.data.requestsFinishedByHost, record.host);
+    } else {
+      this.data.requestsFailed += 1;
+      incrementObjectCounter(this.data.requestsFailedByHost, record.host);
+    }
+
+    this.currentInflight = Math.max(0, this.currentInflight - 1);
+    this.currentInflightByHost.set(record.host, Math.max(0, (this.currentInflightByHost.get(record.host) || 0) - 1));
+
+    const requestEntry = this.data.requests.find((candidate) => candidate.id === record.id);
+    if (requestEntry) {
+      requestEntry.terminal = terminal;
+      if (error) {
+        requestEntry.error = typeof error === "string" ? error : error.message || error.name || "request_failed";
+      }
+    }
+  }
+
+  hasMainFrameNavigationBlocked() {
+    return this.data.mainFrameNavigationBlocked > 0;
+  }
+
+  finalize() {
+    return JSON.parse(JSON.stringify({
+      ...this.data,
+      inflightAtFinalize: this.currentInflight,
+    }));
+  }
+}
+
 function normalizeRenderOptions(options) {
   return {
     renderTimeoutMs: normalizePositiveInteger(options.renderTimeoutMs, DEFAULT_RENDER_OPTIONS.renderTimeoutMs),
@@ -521,6 +902,130 @@ function normalizeNonNegativeInteger(value, fallback) {
 
 function defaultSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function monotonicNow() {
+  return performance.now();
+}
+
+function normalizeTelemetryTimestamp(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+async function abortRoute(route) {
+  if (typeof route?.abort === "function") {
+    await route.abort("blockedbyclient");
+  }
+}
+
+function attachTrafficTelemetry(value, traffic) {
+  if (value && typeof value === "object" && !Object.hasOwn(value, "traffic")) {
+    value.traffic = traffic;
+  }
+}
+
+function incrementObjectCounter(target, key) {
+  const normalizedKey = key || "unknown";
+  target[normalizedKey] = (target[normalizedKey] || 0) + 1;
+}
+
+function getRequestUrl(request) {
+  try {
+    return typeof request?.url === "function" ? request.url() : "about:blank";
+  } catch {
+    return "about:blank";
+  }
+}
+
+function getRequestMethod(request) {
+  try {
+    return String(typeof request?.method === "function" ? request.method() : "UNKNOWN").toUpperCase();
+  } catch {
+    return "UNKNOWN";
+  }
+}
+
+function getRequestResourceType(request) {
+  try {
+    return String(typeof request?.resourceType === "function" ? request.resourceType() : "unknown").toLowerCase();
+  } catch {
+    return "unknown";
+  }
+}
+
+function getOrigin(urlValue) {
+  try {
+    return new URL(urlValue).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getHostKey(urlValue) {
+  try {
+    return new URL(urlValue).host.toLowerCase();
+  } catch {
+    return "unknown";
+  }
+}
+
+function getUrlPath(urlValue) {
+  try {
+    return new URL(urlValue).pathname;
+  } catch {
+    return "";
+  }
+}
+
+function getPageUrl(page) {
+  try {
+    return typeof page?.url === "function" ? page.url() : "about:blank";
+  } catch {
+    return "about:blank";
+  }
+}
+
+function getDownloadUrl(download) {
+  try {
+    return typeof download?.url === "function" ? download.url() : "about:blank";
+  } catch {
+    return "about:blank";
+  }
+}
+
+function getWebSocketUrl(webSocketRoute) {
+  try {
+    return typeof webSocketRoute?.url === "function" ? webSocketRoute.url() : "ws://unknown/";
+  } catch {
+    return "ws://unknown/";
+  }
+}
+
+function isBlockedMainFrameNavigation(request, allowedOrigin) {
+  if (!allowedOrigin || !isMainFrameNavigationRequest(request)) {
+    return false;
+  }
+  const requestOrigin = getOrigin(getRequestUrl(request));
+  return Boolean(requestOrigin && requestOrigin !== allowedOrigin);
+}
+
+function isMainFrameNavigationRequest(request) {
+  try {
+    if (typeof request?.isNavigationRequest === "function" && !request.isNavigationRequest()) {
+      return false;
+    }
+    if (getRequestResourceType(request) !== "document") {
+      return false;
+    }
+    const frame = typeof request?.frame === "function" ? request.frame() : null;
+    if (!frame || typeof frame.parentFrame !== "function") {
+      return true;
+    }
+    return frame.parentFrame() === null;
+  } catch {
+    return getRequestResourceType(request) === "document";
+  }
 }
 
 async function getUrlAttributeSignature(page) {

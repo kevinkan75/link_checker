@@ -720,6 +720,8 @@ class LinkChecker {
       extractLinks,
       getDocumentBaseUrl,
       detectChallenge: detectRenderedChallenge,
+      evaluateUrlSecurity,
+      securityPolicy: this.securityPolicy,
     }) : null;
     this.dynamicRenderResults = [];
     this.dynamicRenderAttemptedPages = 0;
