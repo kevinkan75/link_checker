@@ -7,6 +7,7 @@ import {
 const DYNAMIC_RENDERER_STATUS = Object.freeze({
   NOT_CHECKED: "not_checked",
   STOPPED: "stopped",
+  RENDER_TIMEOUT: "render_timeout",
   COMPLETED: "completed",
 });
 
@@ -15,7 +16,9 @@ const DYNAMIC_RENDER_OUTCOME = Object.freeze({
   RENDERED_UNSETTLED: "rendered_unsettled",
   BROWSER_UNAVAILABLE: "browser_unavailable",
   NAVIGATION_TIMEOUT: "navigation_timeout",
+  RENDER_TIMEOUT: "render_timeout",
   NAVIGATION_FAILED: "navigation_failed",
+  RENDER_SCOPE_BLOCKED: "render_scope_blocked",
   CHALLENGE_DETECTED: "challenge_detected",
   RENDER_HTML_TOO_LARGE: "render_html_too_large",
   STOPPED: "stopped",
@@ -87,7 +90,7 @@ class DynamicRenderer {
     detectChallenge = null,
     evaluateUrlSecurity = null,
     securityPolicy = null,
-    now = () => Date.now(),
+    now = monotonicNow,
     trafficNow = monotonicNow,
     sleep = defaultSleep,
   } = {}) {
@@ -114,9 +117,11 @@ class DynamicRenderer {
     this.sleep = sleep;
     this.browserResult = null;
     this.launchPromise = null;
+    this.launchWaiters = new Set();
     this.terminalLaunchResult = null;
     this.activeContexts = new Set();
     this.closedBrowserResults = new WeakSet();
+    this.stopWaiters = new Set();
     this.stopped = false;
     this.closePromise = null;
   }
@@ -134,15 +139,38 @@ class DynamicRenderer {
   }
 
   async renderPage(targetUrl) {
-    const startedAt = this.now();
-    const result = await this.withPage(async ({ page, trafficTelemetry }) => {
+    const deadline = this.createRenderDeadline();
+    const startedAt = deadline.startedAtMs;
+    let result;
+    try {
+      result = await this.withPage(async ({ page, context, trafficTelemetry }) => {
       let navigationResult = null;
+      let failureStage = "navigation";
       try {
-        navigationResult = await page.goto(targetUrl, {
+        const navigation = await this.awaitLifecycleOperation(() => page.goto(targetUrl, {
           waitUntil: "domcontentloaded",
-          timeout: this.renderOptions.renderTimeoutMs,
+          timeout: Math.max(1, deadline.remainingMs()),
+        }), {
+          deadline,
+          onInterrupt: () => closeIfPossible(context),
         });
+        if (navigation.type === "stopped") {
+          return this.buildStoppedRenderResult(targetUrl, page, deadline);
+        }
+        if (navigation.type === "timeout") {
+          return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage);
+        }
+        navigationResult = navigation.value;
       } catch (error) {
+        if (this.stopped) {
+          return this.buildStoppedRenderResult(targetUrl, page, deadline, error);
+        }
+        if (deadline.expired()) {
+          return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage, error);
+        }
+        if (this.isBrowserUnexpectedlyClosed()) {
+          return this.buildBrowserUnavailableRenderResult(targetUrl, page, deadline, error);
+        }
         return buildRenderResult({
           attempted: true,
           outcome: isTimeoutError(error)
@@ -150,22 +178,90 @@ class DynamicRenderer {
             : DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED,
           requestedUrl: targetUrl,
           renderFinalUrl: typeof page.url === "function" ? page.url() : targetUrl,
-          elapsedMs: this.now() - startedAt,
+          elapsedMs: deadline.elapsedMs(),
+          failureStage,
           error: sanitizeRenderError(error),
         });
       }
 
-      const settle = await this.waitForSettle(page);
-      const renderedHtml = await page.content();
+      failureStage = "settle";
+      let settle;
+      try {
+        settle = await this.waitForSettle(page, deadline, () => closeIfPossible(context));
+      } catch (error) {
+        if (this.stopped) {
+          return this.buildStoppedRenderResult(targetUrl, page, deadline, error);
+        }
+        if (deadline.expired()) {
+          return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage, error);
+        }
+        if (this.isBrowserUnexpectedlyClosed()) {
+          return this.buildBrowserUnavailableRenderResult(targetUrl, page, deadline, error);
+        }
+        return buildRenderResult({
+          attempted: true,
+          outcome: DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED,
+          requestedUrl: targetUrl,
+          renderFinalUrl: typeof page.url === "function" ? page.url() : targetUrl,
+          elapsedMs: deadline.elapsedMs(),
+          failureStage,
+          error: sanitizeRenderError(error),
+        });
+      }
+      if (settle.stopped) {
+        return this.buildStoppedRenderResult(targetUrl, page, deadline);
+      }
+      if (settle.timedOut) {
+        return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage);
+      }
+
+      failureStage = "content";
+      let renderedHtml = "";
+      try {
+        const content = await this.awaitLifecycleOperation(() => page.content(), {
+          deadline,
+          onInterrupt: () => closeIfPossible(context),
+        });
+        if (content.type === "stopped") {
+          return this.buildStoppedRenderResult(targetUrl, page, deadline);
+        }
+        if (content.type === "timeout") {
+          return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage);
+        }
+        renderedHtml = content.value;
+      } catch (error) {
+        if (this.stopped) {
+          return this.buildStoppedRenderResult(targetUrl, page, deadline, error);
+        }
+        if (deadline.expired()) {
+          return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage, error);
+        }
+        if (this.isBrowserUnexpectedlyClosed()) {
+          return this.buildBrowserUnavailableRenderResult(targetUrl, page, deadline, error);
+        }
+        return buildRenderResult({
+          attempted: true,
+          outcome: DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED,
+          requestedUrl: targetUrl,
+          renderFinalUrl: typeof page.url === "function" ? page.url() : targetUrl,
+          elapsedMs: deadline.elapsedMs(),
+          settled: settle.settled,
+          settle,
+          navigationStatus: getNavigationStatus(navigationResult),
+          failureStage,
+          error: sanitizeRenderError(error),
+        });
+      }
+
       const renderFinalUrl = typeof page.url === "function" ? page.url() : targetUrl;
 
       if (trafficTelemetry?.hasMainFrameNavigationBlocked()) {
         return buildRenderResult({
           attempted: true,
-          outcome: DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED,
+          outcome: DYNAMIC_RENDER_OUTCOME.RENDER_SCOPE_BLOCKED,
           requestedUrl: targetUrl,
           renderFinalUrl,
-          elapsedMs: this.now() - startedAt,
+          elapsedMs: deadline.elapsedMs(),
           settled: settle.settled,
           settle,
           navigationStatus: getNavigationStatus(navigationResult),
@@ -180,7 +276,7 @@ class DynamicRenderer {
           outcome: DYNAMIC_RENDER_OUTCOME.RENDER_HTML_TOO_LARGE,
           requestedUrl: targetUrl,
           renderFinalUrl,
-          elapsedMs: this.now() - startedAt,
+          elapsedMs: deadline.elapsedMs(),
           settled: settle.settled,
           settle,
           navigationStatus: getNavigationStatus(navigationResult),
@@ -197,7 +293,7 @@ class DynamicRenderer {
           outcome: DYNAMIC_RENDER_OUTCOME.CHALLENGE_DETECTED,
           requestedUrl: targetUrl,
           renderFinalUrl,
-          elapsedMs: this.now() - startedAt,
+          elapsedMs: deadline.elapsedMs(),
           settled: settle.settled,
           settle,
           navigationStatus: getNavigationStatus(navigationResult),
@@ -207,8 +303,49 @@ class DynamicRenderer {
         });
       }
 
+      if (this.stopped) {
+        return this.buildStoppedRenderResult(targetUrl, page, deadline);
+      }
+      if (deadline.expired()) {
+        return this.buildRenderTimeoutResult(targetUrl, page, deadline, "extraction");
+      }
+
+      failureStage = "extraction";
       const documentBaseUrl = this.resolveDocumentBaseUrl(renderedHtml, renderFinalUrl);
-      const links = this.extractRenderedLinks(renderedHtml, documentBaseUrl);
+      let links = [];
+      try {
+        links = this.extractRenderedLinks(renderedHtml, documentBaseUrl);
+      } catch (error) {
+        if (this.stopped) {
+          return this.buildStoppedRenderResult(targetUrl, page, deadline, error);
+        }
+        if (deadline.expired()) {
+          return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage, error);
+        }
+        if (this.isBrowserUnexpectedlyClosed()) {
+          return this.buildBrowserUnavailableRenderResult(targetUrl, page, deadline, error);
+        }
+        return buildRenderResult({
+          attempted: true,
+          outcome: DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED,
+          requestedUrl: targetUrl,
+          renderFinalUrl,
+          documentBaseUrl,
+          elapsedMs: deadline.elapsedMs(),
+          settled: settle.settled,
+          settle,
+          navigationStatus: getNavigationStatus(navigationResult),
+          renderedHtmlBytes: Buffer.byteLength(renderedHtml, "utf8"),
+          failureStage,
+          error: sanitizeRenderError(error),
+        });
+      }
+      if (this.stopped) {
+        return this.buildStoppedRenderResult(targetUrl, page, deadline);
+      }
+      if (deadline.expired()) {
+        return this.buildRenderTimeoutResult(targetUrl, page, deadline, failureStage);
+      }
       return buildRenderResult({
         attempted: true,
         outcome: settle.settled
@@ -217,36 +354,68 @@ class DynamicRenderer {
         requestedUrl: targetUrl,
         renderFinalUrl,
         documentBaseUrl,
-        elapsedMs: this.now() - startedAt,
+        elapsedMs: deadline.elapsedMs(),
         settled: settle.settled,
         settle,
         navigationStatus: getNavigationStatus(navigationResult),
         renderedHtmlBytes: Buffer.byteLength(renderedHtml, "utf8"),
         links,
       });
-    }, {
-      renderPage: targetUrl,
-      allowedOrigin: getOrigin(targetUrl),
-    });
+      }, {
+        renderPage: targetUrl,
+        allowedOrigin: getOrigin(targetUrl),
+        deadline,
+      });
+    } catch (error) {
+      const outcome = this.stopped
+        ? DYNAMIC_RENDER_OUTCOME.STOPPED
+        : (deadline.expired()
+            ? DYNAMIC_RENDER_OUTCOME.RENDER_TIMEOUT
+            : DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED);
+      return buildRenderResult({
+        attempted: true,
+        outcome,
+        requestedUrl: targetUrl,
+        renderFinalUrl: targetUrl,
+        elapsedMs: deadline.elapsedMs(),
+        failureStage: "setup",
+        error: sanitizeRenderError(error),
+      });
+    }
 
     if (!result.ok) {
       return buildRenderResult({
         attempted: result.status !== BROWSER_PROVIDER_STATUS.NOT_CHECKED,
-        outcome: result.status === DYNAMIC_RENDERER_STATUS.STOPPED
-          ? DYNAMIC_RENDER_OUTCOME.STOPPED
-          : DYNAMIC_RENDER_OUTCOME.BROWSER_UNAVAILABLE,
+        outcome: mapRendererStatusToRenderOutcome(result.status),
         requestedUrl: targetUrl,
         renderFinalUrl: targetUrl,
-        elapsedMs: this.now() - startedAt,
+        elapsedMs: deadline.elapsedMs(),
         rendererStatus: result.status,
         launchOutcome: result.launchOutcome,
+        failureStage: result.status === DYNAMIC_RENDERER_STATUS.STOPPED
+          || result.status === DYNAMIC_RENDERER_STATUS.RENDER_TIMEOUT
+          ? "setup"
+          : null,
+      });
+    }
+
+    if (!isRenderResult(result.value)) {
+      return buildRenderResult({
+        attempted: result.value?.status !== BROWSER_PROVIDER_STATUS.NOT_CHECKED,
+        outcome: mapRendererStatusToRenderOutcome(result.value?.status),
+        requestedUrl: targetUrl,
+        renderFinalUrl: targetUrl,
+        elapsedMs: deadline.elapsedMs(),
+        rendererStatus: result.value?.status || null,
+        launchOutcome: result.value?.launchOutcome || null,
+        failureStage: "setup",
       });
     }
 
     return result.value;
   }
 
-  async waitForSettle(page) {
+  async waitForSettle(page, deadline = null, onInterrupt = null) {
     const startMs = this.now();
     const minUntilMs = startMs + this.renderOptions.renderSettleMinMs;
     const maxUntilMs = startMs + this.renderOptions.renderSettleMaxMs;
@@ -255,16 +424,77 @@ class DynamicRenderer {
     let samples = 0;
 
     while (this.now() < maxUntilMs) {
+      if (this.stopped) {
+        return {
+          settled: false,
+          stopped: true,
+          samples,
+          stableSamples,
+          elapsedMs: Math.max(0, this.now() - startMs),
+        };
+      }
+      if (deadline?.expired()) {
+        return {
+          settled: false,
+          timedOut: true,
+          samples,
+          stableSamples,
+          elapsedMs: Math.max(0, this.now() - startMs),
+        };
+      }
       const delayMs = Math.min(
         this.renderOptions.renderSettleIntervalMs,
         Math.max(0, maxUntilMs - this.now()),
       );
       if (delayMs > 0) {
-        await this.sleep(delayMs);
+        const sleepResult = await this.awaitLifecycleOperation(() => this.sleep(delayMs), {
+          deadline,
+          onInterrupt,
+        });
+        if (sleepResult.type === "stopped") {
+          return {
+            settled: false,
+            stopped: true,
+            samples,
+            stableSamples,
+            elapsedMs: Math.max(0, this.now() - startMs),
+          };
+        }
+        if (sleepResult.type === "timeout") {
+          return {
+            settled: false,
+            timedOut: true,
+            samples,
+            stableSamples,
+            elapsedMs: Math.max(0, this.now() - startMs),
+          };
+        }
       }
 
       samples += 1;
-      const signature = await getUrlAttributeSignature(page);
+      const signatureResult = await this.awaitLifecycleOperation(() => getUrlAttributeSignature(page), {
+        deadline,
+        onInterrupt,
+      });
+      if (signatureResult.type === "stopped") {
+        return {
+          settled: false,
+          stopped: true,
+          samples,
+          stableSamples,
+          elapsedMs: Math.max(0, this.now() - startMs),
+        };
+      }
+      if (signatureResult.type === "timeout") {
+        return {
+          settled: false,
+          timedOut: true,
+          samples,
+          stableSamples,
+          elapsedMs: Math.max(0, this.now() - startMs),
+        };
+      }
+      const signature = signatureResult.value;
       if (signature === previousSignature) {
         stableSamples += 1;
       } else {
@@ -277,7 +507,7 @@ class DynamicRenderer {
           settled: true,
           samples,
           stableSamples,
-          elapsedMs: this.now() - startMs,
+          elapsedMs: Math.max(0, this.now() - startMs),
         };
       }
     }
@@ -286,7 +516,7 @@ class DynamicRenderer {
       settled: false,
       samples,
       stableSamples,
-      elapsedMs: this.now() - startMs,
+      elapsedMs: Math.max(0, this.now() - startMs),
     };
   }
 
@@ -315,8 +545,11 @@ class DynamicRenderer {
         launchOutcome: "renderer_stopped",
       });
     }
+    if (jobOptions.deadline?.expired()) {
+      return this.buildRenderTimeoutRendererResult();
+    }
 
-    const browserResult = await this.ensureBrowser();
+    const browserResult = await this.ensureBrowserForJob(jobOptions.deadline || null);
     if (!browserResult.ok) {
       return browserResult;
     }
@@ -330,7 +563,20 @@ class DynamicRenderer {
     }
 
     const browserInstance = browserResult.browserInstance;
-    const context = await browserInstance.newContext({ ...this.contextOptions });
+    const contextWait = await this.awaitLifecycleOperation(
+      () => browserInstance.newContext({ ...this.contextOptions }),
+      {
+        deadline: jobOptions.deadline || null,
+        onLateValue: (context) => closeIfPossible(context),
+      },
+    );
+    if (contextWait.type === "stopped") {
+      return this.buildStoppedResult(browserResult);
+    }
+    if (contextWait.type === "timeout") {
+      return this.buildRenderTimeoutRendererResult(browserResult);
+    }
+    const context = contextWait.value;
     this.activeContexts.add(context);
     const trafficTelemetry = new BrowserTrafficTelemetry({
       renderPage: jobOptions.renderPage || null,
@@ -343,7 +589,20 @@ class DynamicRenderer {
       if (this.stopped) {
         return this.buildStoppedResult(browserResult);
       }
-      const page = await context.newPage();
+      if (jobOptions.deadline?.expired()) {
+        return this.buildRenderTimeoutRendererResult(browserResult);
+      }
+      const pageWait = await this.awaitLifecycleOperation(() => context.newPage(), {
+        deadline: jobOptions.deadline || null,
+        onLateValue: (page) => closeIfPossible(page),
+      });
+      if (pageWait.type === "stopped") {
+        return this.buildStoppedResult(browserResult);
+      }
+      if (pageWait.type === "timeout") {
+        return this.buildRenderTimeoutRendererResult(browserResult);
+      }
+      const page = pageWait.value;
       this.attachPageBoundaryHooks(page, trafficTelemetry);
       value = await callback({
         browser: browserResult,
@@ -471,6 +730,10 @@ class DynamicRenderer {
   }
 
   async ensureBrowser() {
+    return this.ensureBrowserForJob(null);
+  }
+
+  async ensureBrowserForJob(deadline = null) {
     if (this.stopped) {
       return buildRendererResult({
         ok: false,
@@ -492,38 +755,93 @@ class DynamicRenderer {
     }
 
     if (!this.launchPromise) {
-      this.launchPromise = this.browserProvider.launchFirstAvailable({ browser: this.browser })
-        .then(async (result) => {
-          if (result.ok) {
-            if (this.stopped) {
-              await this.disposeBrowserResult(result);
-              return this.buildStoppedResult(result);
-            }
-            this.browserResult = result;
-            return result;
-          }
-          if (this.stopped) {
-            return this.buildStoppedResult(result);
-          }
-          this.terminalLaunchResult = result;
-          return result;
-        })
-        .catch((error) => {
-          if (this.stopped) {
-            return this.buildStoppedResult();
-          }
-          throw error;
-        })
-        .finally(() => {
-          this.launchPromise = null;
-        });
+      this.startBrowserLaunch();
     }
 
-    return this.launchPromise;
+    const launchWaiter = {};
+    this.launchWaiters.add(launchWaiter);
+    let released = false;
+    const releaseWaiter = async (result = null) => {
+      if (!released) {
+        released = true;
+        this.launchWaiters.delete(launchWaiter);
+      }
+      if (result?.ok && !this.browserResult?.ok && this.launchWaiters.size === 0) {
+        await this.disposeBrowserResult(result);
+      }
+    };
+
+    try {
+      const launchWait = await this.awaitLifecycleOperation(() => this.launchPromise, { deadline });
+      if (launchWait.type === "stopped") {
+        await releaseWaiter();
+        return this.buildStoppedResult();
+      }
+      if (launchWait.type === "timeout") {
+        await releaseWaiter();
+        return this.buildRenderTimeoutRendererResult();
+      }
+
+      const result = launchWait.value;
+      if (!result.ok) {
+        await releaseWaiter();
+        return result;
+      }
+      if (this.stopped) {
+        await releaseWaiter(result);
+        return this.buildStoppedResult(result);
+      }
+      if (deadline?.expired()) {
+        await releaseWaiter(result);
+        return this.buildRenderTimeoutRendererResult(result);
+      }
+
+      if (!this.browserResult?.ok) {
+        this.browserResult = result;
+      }
+      await releaseWaiter();
+      return result;
+    } catch (error) {
+      await releaseWaiter();
+      if (this.stopped) {
+        return this.buildStoppedResult();
+      }
+      throw error;
+    }
+  }
+
+  startBrowserLaunch() {
+    this.launchPromise = this.browserProvider.launchFirstAvailable({ browser: this.browser })
+      .then(async (result) => {
+        if (result.ok) {
+          if (this.stopped || this.launchWaiters.size === 0) {
+            await this.disposeBrowserResult(result);
+            return this.stopped
+              ? this.buildStoppedResult(result)
+              : this.buildRenderTimeoutRendererResult(result);
+          }
+          return result;
+        }
+        if (this.stopped) {
+          return this.buildStoppedResult(result);
+        }
+        this.terminalLaunchResult = result;
+        return result;
+      })
+      .catch((error) => {
+        if (this.stopped) {
+          return this.buildStoppedResult();
+        }
+        throw error;
+      })
+      .finally(() => {
+        this.launchPromise = null;
+      });
   }
 
   async requestStop() {
     this.stopped = true;
+    this.notifyStopWaiters();
     await this.closeActiveContexts();
     return {
       ok: true,
@@ -561,6 +879,136 @@ class DynamicRenderer {
     await Promise.all([...this.activeContexts].map((context) => closeIfPossible(context)));
   }
 
+  createRenderDeadline() {
+    const startedAtMs = normalizeTelemetryTimestamp(this.now());
+    const timeoutMs = this.renderOptions.renderTimeoutMs;
+    const expiresAtMs = startedAtMs + timeoutMs;
+    return {
+      startedAtMs,
+      timeoutMs,
+      expiresAtMs,
+      remainingMs: () => Math.max(0, expiresAtMs - normalizeTelemetryTimestamp(this.now())),
+      elapsedMs: () => Math.max(0, normalizeTelemetryTimestamp(this.now()) - startedAtMs),
+      expired: () => normalizeTelemetryTimestamp(this.now()) >= expiresAtMs,
+    };
+  }
+
+  async awaitLifecycleOperation(operation, {
+    deadline = null,
+    onInterrupt = null,
+    onLateValue = null,
+  } = {}) {
+    if (this.stopped) {
+      return { type: "stopped" };
+    }
+    if (deadline?.expired()) {
+      return { type: "timeout" };
+    }
+
+    const lifecycle = this.createLifecycleSignal(deadline);
+    const operationPromise = Promise.resolve()
+      .then(operation);
+    const wrappedOperation = operationPromise
+      .then((value) => ({ type: "value", value }))
+      .catch((error) => ({ type: "error", error }));
+    const winner = await Promise.race([wrappedOperation, lifecycle.promise]);
+    lifecycle.cancel();
+
+    if (winner.type === "value") {
+      return winner;
+    }
+    if (winner.type === "error") {
+      if (this.stopped) {
+        return { type: "stopped" };
+      }
+      if (deadline?.expired()) {
+        return { type: "timeout" };
+      }
+      throw winner.error;
+    }
+
+    wrappedOperation
+      .then((late) => {
+        if (late.type === "value" && typeof onLateValue === "function") {
+          return onLateValue(late.value);
+        }
+        return null;
+      })
+      .catch(() => {});
+
+    if (typeof onInterrupt === "function") {
+      await Promise.resolve(onInterrupt(winner.type)).catch(() => {});
+    }
+    return winner;
+  }
+
+  createLifecycleSignal(deadline = null) {
+    if (this.stopped) {
+      return {
+        promise: Promise.resolve({ type: "stopped" }),
+        cancel: () => {},
+      };
+    }
+
+    const remainingMs = deadline ? deadline.remainingMs() : null;
+    if (remainingMs !== null && remainingMs <= 0) {
+      return {
+        promise: Promise.resolve({ type: "timeout" }),
+        cancel: () => {},
+      };
+    }
+
+    let settled = false;
+    let timeoutId = null;
+    let stopWaiter = null;
+    const promise = new Promise((resolve) => {
+      const finish = (type) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        if (stopWaiter) {
+          this.stopWaiters.delete(stopWaiter);
+          stopWaiter = null;
+        }
+        resolve({ type });
+      };
+      stopWaiter = () => finish("stopped");
+      this.stopWaiters.add(stopWaiter);
+      if (remainingMs !== null) {
+        timeoutId = setTimeout(() => finish("timeout"), remainingMs);
+      }
+    });
+
+    return {
+      promise,
+      cancel: () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        if (stopWaiter) {
+          this.stopWaiters.delete(stopWaiter);
+          stopWaiter = null;
+        }
+      },
+    };
+  }
+
+  notifyStopWaiters() {
+    for (const stopWaiter of [...this.stopWaiters]) {
+      stopWaiter();
+    }
+  }
+
   isBrowserUnexpectedlyClosed() {
     return this.browserResult?.ok
       && typeof this.browserResult.getStatus === "function"
@@ -584,6 +1032,52 @@ class DynamicRenderer {
       launchOutcome: "renderer_stopped",
       browser: browserResult?.browser || null,
       browserChannel: browserResult?.browserChannel || null,
+    });
+  }
+
+  buildRenderTimeoutRendererResult(browserResult = null) {
+    return buildRendererResult({
+      ok: false,
+      status: DYNAMIC_RENDERER_STATUS.RENDER_TIMEOUT,
+      launchOutcome: "render_timeout",
+      browser: browserResult?.browser || null,
+      browserChannel: browserResult?.browserChannel || null,
+    });
+  }
+
+  buildStoppedRenderResult(targetUrl, page, deadline, error = null) {
+    return buildRenderResult({
+      attempted: true,
+      outcome: DYNAMIC_RENDER_OUTCOME.STOPPED,
+      requestedUrl: targetUrl,
+      renderFinalUrl: typeof page?.url === "function" ? page.url() : targetUrl,
+      elapsedMs: deadline.elapsedMs(),
+      error: error ? sanitizeRenderError(error) : null,
+    });
+  }
+
+  buildRenderTimeoutResult(targetUrl, page, deadline, failureStage, error = null) {
+    return buildRenderResult({
+      attempted: true,
+      outcome: DYNAMIC_RENDER_OUTCOME.RENDER_TIMEOUT,
+      requestedUrl: targetUrl,
+      renderFinalUrl: typeof page?.url === "function" ? page.url() : targetUrl,
+      elapsedMs: Math.min(deadline.timeoutMs, deadline.elapsedMs()),
+      failureStage,
+      error: error ? sanitizeRenderError(error) : null,
+    });
+  }
+
+  buildBrowserUnavailableRenderResult(targetUrl, page, deadline, error = null) {
+    return buildRenderResult({
+      attempted: true,
+      outcome: DYNAMIC_RENDER_OUTCOME.BROWSER_UNAVAILABLE,
+      requestedUrl: targetUrl,
+      renderFinalUrl: typeof page?.url === "function" ? page.url() : targetUrl,
+      elapsedMs: deadline.elapsedMs(),
+      rendererStatus: BROWSER_PROVIDER_STATUS.CLOSED_UNEXPECTEDLY,
+      launchOutcome: "browser_closed_unexpectedly",
+      error: error ? sanitizeRenderError(error) : null,
     });
   }
 
@@ -625,6 +1119,22 @@ function attachCleanupError(primaryError, cleanupError) {
   if (primaryError && typeof primaryError === "object" && !Object.hasOwn(primaryError, "cleanupError")) {
     primaryError.cleanupError = cleanupError;
   }
+}
+
+function isRenderResult(value) {
+  return Boolean(value)
+    && typeof value === "object"
+    && Object.hasOwn(value, "outcome");
+}
+
+function mapRendererStatusToRenderOutcome(status) {
+  if (status === DYNAMIC_RENDERER_STATUS.STOPPED) {
+    return DYNAMIC_RENDER_OUTCOME.STOPPED;
+  }
+  if (status === DYNAMIC_RENDERER_STATUS.RENDER_TIMEOUT) {
+    return DYNAMIC_RENDER_OUTCOME.RENDER_TIMEOUT;
+  }
+  return DYNAMIC_RENDER_OUTCOME.BROWSER_UNAVAILABLE;
 }
 
 class BrowserTrafficTelemetry {
@@ -1091,6 +1601,7 @@ function buildRenderResult({
   error = null,
   rendererStatus = null,
   launchOutcome = null,
+  failureStage = null,
 }) {
   return {
     attempted,
@@ -1109,6 +1620,7 @@ function buildRenderResult({
     error,
     rendererStatus,
     launchOutcome,
+    failureStage,
   };
 }
 

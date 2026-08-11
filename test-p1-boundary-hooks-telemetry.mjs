@@ -699,7 +699,7 @@ async function assertCrossOriginNavigationBlocked(server) {
   const { checker } = await runFixture(server, "render-cross-origin-navigation");
   const result = renderResult(checker);
   assert.notEqual(result.outcome, DYNAMIC_RENDER_OUTCOME.BROWSER_UNAVAILABLE);
-  assert.equal(result.outcome, DYNAMIC_RENDER_OUTCOME.NAVIGATION_FAILED);
+  assert.equal(result.outcome, DYNAMIC_RENDER_OUTCOME.RENDER_SCOPE_BLOCKED);
   assert.equal(result.traffic.mainFrameNavigationBlocked, 1);
   assert.equal(result.links.length, 0);
   const serverCrossOriginNavigations = server.getState().crossOriginNavigations.length;

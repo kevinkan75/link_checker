@@ -1406,6 +1406,10 @@ class LinkChecker {
     const renderResult = await this.dynamicRenderer.renderPage(pageResult.finalUrl || url);
     this.dynamicRenderResults.push(renderResult);
 
+    if (this.stopped) {
+      return renderResult;
+    }
+
     if (
       renderResult.outcome !== DYNAMIC_RENDER_OUTCOME.RENDERED
       && renderResult.outcome !== DYNAMIC_RENDER_OUTCOME.RENDERED_UNSETTLED
