@@ -43,6 +43,31 @@ const SAFE_BROWSER_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const TRAFFIC_REQUEST_SAMPLE_LIMIT = 200;
 const TRAFFIC_BLOCKED_SAMPLE_LIMIT = 100;
 const TRAFFIC_INTERVAL_SAMPLE_LIMIT = 200;
+const BROWSER_REQUEST_POLICY_DECISION = Object.freeze({
+  ALLOW: "ALLOW",
+  BLOCK: "BLOCK",
+  ERROR_OR_FAIL_CLOSED: "ERROR_OR_FAIL_CLOSED",
+});
+const BROWSER_REQUEST_POLICY_REASON = Object.freeze({
+  UNSAFE_METHOD: "unsafe_method",
+  MAIN_FRAME_SCOPE_BLOCKED: "main_frame_scope_blocked",
+  URL_SECURITY_BLOCKED: "url_security_blocked",
+  SECURITY_EVALUATOR_FAILED: "security_evaluator_failed",
+  INVALID_SECURITY_DECISION: "invalid_security_decision",
+  UNKNOWN_REQUEST_CLASS: "unknown_request_class",
+});
+const BROWSER_REQUEST_CLASSES = new Set([
+  "main_document",
+  "iframe_frame",
+  "fetch",
+  "xhr",
+  "image",
+  "script",
+  "stylesheet",
+  "font",
+  "media",
+  "other",
+]);
 
 class RenderLimiter {
   constructor(limit = 1) {
@@ -697,36 +722,105 @@ class DynamicRenderer {
 
   async handleRoutedRequest(route, request, trafficTelemetry, jobOptions = {}) {
     const record = trafficTelemetry.recordRequestStarted(request);
-    const method = record.method;
     try {
-      if (!SAFE_BROWSER_METHODS.has(method)) {
-        trafficTelemetry.recordMethodBlocked(request, method);
-        await abortRoute(route);
-        return;
-      }
+      const policyDecision = await this.evaluateBrowserRequestPolicy(request, jobOptions);
+      trafficTelemetry.recordPolicyDecision(request, policyDecision);
 
-      if (isBlockedMainFrameNavigation(request, jobOptions.allowedOrigin)) {
-        trafficTelemetry.recordMainFrameNavigationBlocked(request, jobOptions.allowedOrigin);
-        await abortRoute(route);
-        return;
-      }
-
-      if (typeof this.evaluateUrlSecurity === "function") {
-        const decision = await this.evaluateUrlSecurity(record.url, this.securityPolicy);
-        if (decision && decision.allowed === false) {
-          trafficTelemetry.recordSecurityBlocked(request, decision.reason || "blocked_by_security_policy");
-          await abortRoute(route);
-          return;
+      if (policyDecision.decision === BROWSER_REQUEST_POLICY_DECISION.ALLOW) {
+        if (typeof route?.continue === "function") {
+          await route.continue();
         }
+        return;
       }
 
-      if (typeof route?.continue === "function") {
-        await route.continue();
+      if (policyDecision.reason === BROWSER_REQUEST_POLICY_REASON.UNSAFE_METHOD) {
+        trafficTelemetry.recordMethodBlocked(request, record.method, policyDecision.reason);
+        await abortRoute(route);
+        return;
       }
+
+      if (policyDecision.reason === BROWSER_REQUEST_POLICY_REASON.MAIN_FRAME_SCOPE_BLOCKED) {
+        trafficTelemetry.recordMainFrameNavigationBlocked(request, jobOptions.allowedOrigin, policyDecision.reason);
+        await abortRoute(route);
+        return;
+      }
+
+      if (policyDecision.reason === BROWSER_REQUEST_POLICY_REASON.URL_SECURITY_BLOCKED) {
+        trafficTelemetry.recordSecurityBlocked(
+          request,
+          policyDecision.urlSecurityReason || "blocked_by_security_policy",
+          policyDecision.reason,
+        );
+        await abortRoute(route);
+        return;
+      }
+
+      trafficTelemetry.recordPolicyBlocked(request, policyDecision);
+      await abortRoute(route);
     } catch (error) {
       trafficTelemetry.recordRequestFailed(request, sanitizeRenderError(error));
       throw error;
     }
+  }
+
+  async evaluateBrowserRequestPolicy(request, jobOptions = {}) {
+    const input = normalizeBrowserRequestPolicyInput(request, jobOptions);
+
+    if (!SAFE_BROWSER_METHODS.has(input.method)) {
+      return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.BLOCK, {
+        input,
+        reason: BROWSER_REQUEST_POLICY_REASON.UNSAFE_METHOD,
+      });
+    }
+
+    if (!BROWSER_REQUEST_CLASSES.has(input.requestClass)) {
+      return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.BLOCK, {
+        input,
+        reason: BROWSER_REQUEST_POLICY_REASON.UNKNOWN_REQUEST_CLASS,
+      });
+    }
+
+    if (input.isMainFrame && input.allowedOrigin && input.origin && input.origin !== input.allowedOrigin) {
+      return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.BLOCK, {
+        input,
+        reason: BROWSER_REQUEST_POLICY_REASON.MAIN_FRAME_SCOPE_BLOCKED,
+      });
+    }
+
+    if (typeof this.evaluateUrlSecurity !== "function") {
+      return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.ALLOW, { input });
+    }
+
+    let urlSecurityDecision;
+    try {
+      urlSecurityDecision = await this.evaluateUrlSecurity(input.url, this.securityPolicy);
+    } catch (error) {
+      return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.ERROR_OR_FAIL_CLOSED, {
+        input,
+        reason: BROWSER_REQUEST_POLICY_REASON.SECURITY_EVALUATOR_FAILED,
+        error,
+      });
+    }
+
+    if (!isValidUrlSecurityDecision(urlSecurityDecision)) {
+      return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.ERROR_OR_FAIL_CLOSED, {
+        input: normalizeBrowserRequestPolicyInput(request, jobOptions, urlSecurityDecision),
+        reason: BROWSER_REQUEST_POLICY_REASON.INVALID_SECURITY_DECISION,
+      });
+    }
+
+    const inputWithSecurityDecision = normalizeBrowserRequestPolicyInput(request, jobOptions, urlSecurityDecision);
+    if (urlSecurityDecision.allowed === false) {
+      return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.BLOCK, {
+        input: inputWithSecurityDecision,
+        reason: BROWSER_REQUEST_POLICY_REASON.URL_SECURITY_BLOCKED,
+        urlSecurityReason: urlSecurityDecision.reason || "blocked_by_security_policy",
+      });
+    }
+
+    return buildBrowserRequestPolicyDecision(BROWSER_REQUEST_POLICY_DECISION.ALLOW, {
+      input: inputWithSecurityDecision,
+    });
   }
 
   async ensureBrowser() {
@@ -1167,6 +1261,9 @@ class BrowserTrafficTelemetry {
       requestsFailedByHost: {},
       requestsByMethod: {},
       requestsByResourceType: {},
+      requestsByClass: {},
+      policyDecisionsByDecision: {},
+      policyDecisionsByReason: {},
       peakInflight: 0,
       peakInflightByHost: {},
       requestStartIntervals: [],
@@ -1176,6 +1273,7 @@ class BrowserTrafficTelemetry {
       popupClosed: 0,
       downloadCancelled: 0,
       mainFrameNavigationBlocked: 0,
+      policyBlockedRequests: 0,
       blockedRequests: [],
       requests: [],
     };
@@ -1192,6 +1290,7 @@ class BrowserTrafficTelemetry {
     const host = getHostKey(url);
     const method = getRequestMethod(request);
     const resourceType = getRequestResourceType(request);
+    const requestClass = getBrowserRequestClass(request);
     const record = {
       id: ++this.requestSequence,
       request,
@@ -1199,6 +1298,9 @@ class BrowserTrafficTelemetry {
       host,
       method,
       resourceType,
+      requestClass,
+      policyDecision: null,
+      policyReason: null,
       startedAtMs,
       terminal: false,
     };
@@ -1208,6 +1310,7 @@ class BrowserTrafficTelemetry {
     incrementObjectCounter(this.data.requestsStartedByHost, host);
     incrementObjectCounter(this.data.requestsByMethod, method);
     incrementObjectCounter(this.data.requestsByResourceType, resourceType);
+    incrementObjectCounter(this.data.requestsByClass, requestClass);
 
     this.currentInflight += 1;
     this.data.peakInflight = Math.max(this.data.peakInflight, this.currentInflight);
@@ -1228,8 +1331,11 @@ class BrowserTrafficTelemetry {
       host,
       method,
       resourceType,
+      requestClass,
       path: getUrlPath(url),
       startedAtMs,
+      policyDecision: null,
+      policyReason: null,
       terminal: null,
     }, TRAFFIC_REQUEST_SAMPLE_LIMIT, "requestSamplesDropped");
     return record;
@@ -1243,45 +1349,99 @@ class BrowserTrafficTelemetry {
     this.recordRequestTerminal(request, "failed", error);
   }
 
-  recordMethodBlocked(request, method) {
+  recordPolicyDecision(request, policyDecision) {
+    const record = this.recordRequestStarted(request);
+    const decision = sanitizePolicyReason(policyDecision?.decision, BROWSER_REQUEST_POLICY_DECISION.ERROR_OR_FAIL_CLOSED);
+    const reason = policyDecision?.reason ? sanitizePolicyReason(policyDecision.reason, null) : null;
+    record.policyDecision = decision;
+    record.policyReason = reason;
+    incrementObjectCounter(this.data.policyDecisionsByDecision, decision);
+    if (reason) {
+      incrementObjectCounter(this.data.policyDecisionsByReason, reason);
+    }
+
+    const requestEntry = this.data.requests.find((candidate) => candidate.id === record.id);
+    if (requestEntry) {
+      requestEntry.policyDecision = decision;
+      requestEntry.policyReason = reason;
+    }
+  }
+
+  recordMethodBlocked(request, method, policyReason = BROWSER_REQUEST_POLICY_REASON.UNSAFE_METHOD) {
     const record = this.recordRequestStarted(request);
     this.data.methodBlockedRequests += 1;
     this.pushBlockedSample({
       id: record.id,
       reason: "method",
+      policyDecision: BROWSER_REQUEST_POLICY_DECISION.BLOCK,
+      policyReason,
       method,
       host: record.host,
       resourceType: record.resourceType,
+      requestClass: record.requestClass,
       path: getUrlPath(record.url),
     });
     this.recordRequestTerminal(request, "blocked");
   }
 
-  recordSecurityBlocked(request, reason) {
+  recordSecurityBlocked(request, reason, policyReason = BROWSER_REQUEST_POLICY_REASON.URL_SECURITY_BLOCKED) {
     const record = this.recordRequestStarted(request);
     this.data.securityBlockedRequests += 1;
     this.pushBlockedSample({
       id: record.id,
       reason: "security",
+      policyDecision: BROWSER_REQUEST_POLICY_DECISION.BLOCK,
+      policyReason,
       securityReason: reason,
       method: record.method,
       host: record.host,
       resourceType: record.resourceType,
+      requestClass: record.requestClass,
       path: getUrlPath(record.url),
     });
     this.recordRequestTerminal(request, "blocked");
   }
 
-  recordMainFrameNavigationBlocked(request, allowedOrigin) {
+  recordMainFrameNavigationBlocked(
+    request,
+    allowedOrigin,
+    policyReason = BROWSER_REQUEST_POLICY_REASON.MAIN_FRAME_SCOPE_BLOCKED,
+  ) {
     const record = this.recordRequestStarted(request);
     this.data.mainFrameNavigationBlocked += 1;
     this.pushBlockedSample({
       id: record.id,
       reason: "main_frame_origin",
+      policyDecision: BROWSER_REQUEST_POLICY_DECISION.BLOCK,
+      policyReason,
       allowedOrigin,
       method: record.method,
       host: record.host,
       resourceType: record.resourceType,
+      requestClass: record.requestClass,
+      path: getUrlPath(record.url),
+    });
+    this.recordRequestTerminal(request, "blocked");
+  }
+
+  recordPolicyBlocked(request, policyDecision) {
+    const record = this.recordRequestStarted(request);
+    this.data.policyBlockedRequests += 1;
+    this.pushBlockedSample({
+      id: record.id,
+      reason: "policy",
+      policyDecision: sanitizePolicyReason(
+        policyDecision?.decision,
+        BROWSER_REQUEST_POLICY_DECISION.ERROR_OR_FAIL_CLOSED,
+      ),
+      policyReason: sanitizePolicyReason(
+        policyDecision?.reason,
+        BROWSER_REQUEST_POLICY_REASON.INVALID_SECURITY_DECISION,
+      ),
+      method: record.method,
+      host: record.host,
+      resourceType: record.resourceType,
+      requestClass: record.requestClass,
       path: getUrlPath(record.url),
     });
     this.recordRequestTerminal(request, "blocked");
@@ -1440,6 +1600,71 @@ function incrementObjectCounter(target, key) {
   target[normalizedKey] = (target[normalizedKey] || 0) + 1;
 }
 
+function normalizeBrowserRequestPolicyInput(request, jobOptions = {}, urlSecurityDecision = null) {
+  const url = getRequestUrl(request);
+  const resourceType = getRequestResourceType(request);
+  const isMainFrame = isMainFrameNavigationRequest(request);
+  return {
+    url,
+    method: getRequestMethod(request),
+    resourceType,
+    requestClass: getBrowserRequestClass(request),
+    isMainFrame,
+    origin: getOrigin(url),
+    allowedOrigin: jobOptions.allowedOrigin || null,
+    urlSecurityDecision: summarizeUrlSecurityDecision(urlSecurityDecision),
+  };
+}
+
+function buildBrowserRequestPolicyDecision(decision, {
+  input,
+  reason = null,
+  urlSecurityReason = null,
+  error = null,
+} = {}) {
+  const normalizedDecision = Object.values(BROWSER_REQUEST_POLICY_DECISION).includes(decision)
+    ? decision
+    : BROWSER_REQUEST_POLICY_DECISION.ERROR_OR_FAIL_CLOSED;
+  return {
+    decision: normalizedDecision,
+    reason: reason ? sanitizePolicyReason(reason, BROWSER_REQUEST_POLICY_REASON.INVALID_SECURITY_DECISION) : null,
+    method: input?.method || "UNKNOWN",
+    resourceType: input?.resourceType || "unknown",
+    requestClass: input?.requestClass || "unknown",
+    isMainFrame: input?.isMainFrame === true,
+    urlSecurityAllowed: input?.urlSecurityDecision?.allowed ?? null,
+    urlSecurityReason: urlSecurityReason
+      ? sanitizePolicyReason(urlSecurityReason, "blocked_by_security_policy")
+      : input?.urlSecurityDecision?.reason || null,
+    error: error ? { name: String(error?.name || "Error").slice(0, 80) } : null,
+  };
+}
+
+function isValidUrlSecurityDecision(decision) {
+  return Boolean(decision)
+    && typeof decision === "object"
+    && typeof decision.allowed === "boolean";
+}
+
+function summarizeUrlSecurityDecision(decision) {
+  if (!decision || typeof decision !== "object") {
+    return null;
+  }
+  return {
+    allowed: typeof decision.allowed === "boolean" ? decision.allowed : null,
+    reason: decision.reason ? sanitizePolicyReason(decision.reason, null) : null,
+  };
+}
+
+function sanitizePolicyReason(value, fallback) {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+  return String(value)
+    .slice(0, 120)
+    .replace(/[^A-Za-z0-9_.:-]/g, "_");
+}
+
 function getRequestUrl(request) {
   try {
     return typeof request?.url === "function" ? request.url() : "about:blank";
@@ -1462,6 +1687,17 @@ function getRequestResourceType(request) {
   } catch {
     return "unknown";
   }
+}
+
+function getBrowserRequestClass(request) {
+  const resourceType = getRequestResourceType(request);
+  if (resourceType === "document") {
+    return isMainFrameNavigationRequest(request) ? "main_document" : "iframe_frame";
+  }
+  if (BROWSER_REQUEST_CLASSES.has(resourceType)) {
+    return resourceType;
+  }
+  return "unknown";
 }
 
 function getOrigin(urlValue) {
