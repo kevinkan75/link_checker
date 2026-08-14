@@ -1,6 +1,132 @@
 # JS Dynamic Scan Plan
 
-狀態：初步規劃。此文件記錄下一個實作項目「針對依賴 JavaScript 的動態網站提供掃描能力」的範圍、分階段方向與驗收邊界。
+狀態：`DEFERRED / PRESERVED`。此文件保留「針對依賴 JavaScript 的動態網站提供掃描能力」的研究、分階段方向與驗收邊界，但 Dynamic Render 不再是目前立即實作項目。
+
+## Current Product Decision
+
+```text
+DYNAMIC_RENDER_RESEARCH = PRESERVED
+DYNAMIC_RENDER_PRODUCT_PRIORITY = DEFERRED
+DYNAMIC_RENDER_RELEASE_BLOCKER = NO
+```
+
+Current production baseline:
+
+```text
+production release = v1.1.1
+production scanner = existing static-link-checking workflow
+current product focus = STATIC_DISCOVERY_RESILIENCE
+```
+
+Technical research state remains:
+
+```text
+P2-02 iteration 1 = COMPLETE / COMMITTED
+iteration 1 outcome = ADJUST_ARCHITECTURE
+P2-02 iteration 2 = COMPLETE / COMMITTED
+H2 = H2_UNRESOLVED
+H3 = H3_PROVEN
+Iteration 2 recommendation = ADJUST_ARCHITECTURE
+P2-02 technical state = IN_PROGRESS / ADJUST_ARCHITECTURE
+P2-02 further execution = DEFERRED_BY_PRODUCT_SCOPE
+P2-03+ = DEFERRED / NOT AUTHORIZED
+```
+
+Preserved security state:
+
+```text
+Accepted Candidate = NONE
+Preventive Guarantee = NOT PROVEN
+FEASIBLE_ALLOWED = NO
+
+DNS ownership = SEPARATE_RESOLUTION
+DNS/SSRF parity not proven.
+P2-02_REQUIRED
+OQ-3 = open / Phase 2 hard blocker
+OQ-2 = collecting_evidence
+```
+
+This is a product-priority decision. It is not `P2-02_FAILED`, not proof that the proxy architecture is disproven, and not a permanent rejection of Dynamic Render. The current production static scanner remains valid and supported.
+
+Further Browser-network security work is deferred because completing Browser network security parity would introduce engineering, security, trust-infrastructure, and lifecycle cost that is disproportionate to the current Local Link Checker product priority. The existing production workflow already serves the main public-sector operator use case: finding broken links, links requiring manual review, redirect issues, external-link issues, and scan limitations.
+
+## Current Priority: Static Discovery Resilience
+
+Immediate product development should focus on `STATIC_DISCOVERY_RESILIENCE`:
+
+- real-site compatibility diagnostics;
+- low-link-yield / weak-frontier detection;
+- existing sitemap behavior verification;
+- sitemap / seed fallback refinement;
+- conservative HTML site-map discovery;
+- user-facing warning when scan coverage may be incomplete;
+- preserving existing crawler, security, and report pipelines.
+
+Any newly discovered seed must continue through existing canonicalization, URL security policy, crawl scope, scheduler / rate controls, HTTP validation, and report pipeline. Do not create a second crawler.
+
+The current diagnostic / acceptance example is:
+
+```text
+start URL:
+https://travel.tycg.gov.tw/zh-tw
+
+possible static site-navigation seed:
+https://travel.tycg.gov.tw/zh-tw/siteinformation/sitemap
+```
+
+This site is documentation context only. Do not hard-code the hostname, do not add site-specific production logic, and do not create a special-case crawler rule. The engineering question is why this type of site fails to establish an adequate static crawl frontier and what smallest generic fallback improves coverage.
+
+## Dynamic Render Resume Criteria
+
+Dynamic Render research should resume only when real product evidence shows that existing static and fallback discovery remain materially insufficient.
+
+Recommended resume condition:
+
+1. Normal static HTML link extraction has been evaluated.
+2. Existing SPA / payload / static-signal extraction has been evaluated.
+3. Robots / XML sitemap discovery has been evaluated.
+4. Conservative fallback seed discovery has been evaluated.
+5. HTML site-map / site-navigation discovery has been evaluated where appropriate.
+
+AND:
+
+Browser runtime DOM execution demonstrably exposes important links that those safer methods cannot discover.
+
+Until then, Dynamic Render remains `PRESERVED_RESEARCH`, not an active product implementation track.
+
+## Trust Infrastructure Deferral
+
+Iteration 3 planning identified trusted HTTPS proof infrastructure as a remaining H4 blocker:
+
+- trusted HTTPS main document remains unresolved;
+- trusted HTTPS representative subresource remains unresolved;
+- trusted HTTPS redirect remains unresolved;
+- certificate hostname validation remains unresolved;
+- trust-chain validation remains unresolved;
+- complete Browser direct-target bypass exclusion remains unresolved;
+- a controlled publicly trusted test fixture was identified as a possible proof path.
+
+No such fixture is required to be created now. The previous trust-infrastructure discussion does not authorize public DNS, certificate issuance, public test receivers, root CA installation, OS trust-store mutation, persistent Browser trust, MITM, TLS verification bypass, Iteration 3 execution, or P2-03 execution.
+
+## Research Value Preserved
+
+The Dynamic Render branch and evidence remain valuable. Existing work established controlled evidence for:
+
+- Browser provider compatibility work;
+- Browser lifecycle;
+- rendered DOM discovery;
+- Browser request security policy;
+- CONNECT proxy feasibility;
+- proxy-controlled resolver path;
+- approved IP-literal upstream binding;
+- actual socket peer / receiver evidence;
+- parent-compatible mixed-address handling;
+- non-MITM TLS tunnel behavior;
+- Browser-originated ClientHello / SNI observation;
+- transport-backed A -> B rebinding proof;
+- separate `msedge` and `chrome` evidence.
+
+These are research results, not production DNS/SSRF parity and not an accepted production architecture.
 
 ## 背景
 
@@ -10,7 +136,7 @@
 - 選單、列表、分頁、文章卡片由 client-side render 建立。
 - 原始 HTML 只含 framework shell，沒有可抽取的內容連結。
 
-因此，下一階段需要評估並實作可選的動態掃描模式，讓使用者在明確需要時能取得瀏覽器渲染後的連結。
+因此，若日後 resume criteria 成立，才應重新評估可選的動態掃描模式，讓使用者在明確需要時能取得瀏覽器渲染後的連結。
 
 ## 目標
 
@@ -172,7 +298,9 @@
 
 ## 下一步
 
-建議先做 Phase 0 + Phase 1 的小範圍 spike：
+目前不建議立即執行新的 Dynamic Render spike。下一步應先完成 `STATIC_DISCOVERY_RESILIENCE` 的產品驗證，確認靜態 HTML、SPA / payload / static-signal extraction、robots / XML sitemap discovery、保守 fallback seed 與 HTML site-map / site-navigation discovery 仍不足以發現重要連結。
+
+若未來符合 resume criteria，再以既有研究為基礎恢復 Dynamic Render 工作：
 
 1. 建立 CSR / timeout / security fixture。
 2. 新增 opt-in headless render 流程，只抽取渲染後 DOM 連結。

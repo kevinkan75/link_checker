@@ -1,6 +1,6 @@
 # 開發路線圖
 
-更新日期：2026-08-06
+更新日期：2026-08-14
 
 本文件只保留目前狀態、近期維護主線、下一步候選與決策邊界。已完成階段與 `v1.0.4` 詳細狀態請看 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md)，更早期里程碑請看 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
 
@@ -8,6 +8,8 @@
 
 - 最新正式版本：`v1.1.1`。
 - 目前沒有阻擋正式版使用的已知 release gate 項目。
+- 目前 production 支援主線仍是既有靜態掃描流程；Dynamic Render 研究已保存，但不是 release blocker。
+- 下一個產品優先方向改為 `STATIC_DISCOVERY_RESILIENCE`：先補強真實網站相容性診斷、低連結產出提醒、sitemap / seed fallback、HTML site-map discovery 與「掃描覆蓋可能不完整」的使用者提示。
 - 主 GUI 預設檢查外部連結；CLI 仍維持保守預設，需要 `--external` 才檢查外部連結。
 - 三個 GUI 功能頁是「連結檢查」、「外部連結分析」、「報告分析」。
 - `404 / 410` 二次確認會保存錯誤頁的瀏覽器端導向輔助證據，主 GUI 與 Report Analyzer 會顯示「瀏覽器端導向」提示。
@@ -56,20 +58,38 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 
 ## 下一階段候選
 
-下一個實作項目：針對依賴 JavaScript 的動態網站提供掃描能力。初步規劃見 [docs/JS_DYNAMIC_SCAN_PLAN.md](docs/JS_DYNAMIC_SCAN_PLAN.md)。
+下一個產品優先方向：Static Discovery Resilience / real-site compatibility。
 
-初步方向是新增可選的動態掃描模式，讓工具能處理靜態 HTML 中看不到、但瀏覽器執行 JavaScript 後才出現的連結。此功能應以使用者明確啟用為前提，並保留既有 timeout、同站限制、SSRF 防護、redirect limit、rate limit 與 localhost-only GUI 邊界；不偽裝搜尋引擎、不繞過 CAPTCHA 或 WAF，也不把工具定位成 bot protection bypass。
+先回答真實網站在既有 production 靜態掃描下為何建立不了足夠 crawl frontier，並用最小的通用 fallback 改善覆蓋率。所有新 seed 仍必須走既有 canonicalization、URL security policy、crawl scope、scheduler / rate controls、HTTP validation 與 report pipeline；不要建立第二套 crawler。
+
+目前 motivating diagnostic case 是 `https://travel.tycg.gov.tw/zh-tw`，可能的靜態 site-navigation seed 是 `https://travel.tycg.gov.tw/zh-tw/siteinformation/sitemap`。這只能作為診斷與驗收例子，不得 hard-code hostname、不得加入 domain-specific production logic。
 
 以下項目可作為 `v1.1.x` 或後續 minor 版本候選；不建議塞進 patch release。
 
 | 項目 | 價值 | 注意事項 |
 | --- | --- | --- |
-| JS 動態網站掃描 | 補足 SPA / CSR 網站在靜態 HTML 掃描下漏掉的連結 | 建議先做 opt-in headless render spike，評估速度、資源、佇列、timeout 與報表證據欄位 |
+| Static Discovery Resilience | 改善低連結產出、弱 frontier、sitemap / seed fallback、HTML site-map discovery 與不完整覆蓋提醒 | 優先保留既有 crawler/security/report pipeline；不得為單一 hostname 寫特殊邏輯 |
 | GUI rules URL 輸入欄位 | 讓使用者不必切 CLI 就能載入 site-specific rules | 需設計安全提示、錯誤呈現與權限邊界 |
 | Fragment / duplicate anchor 檢查 | 補足頁內品質提醒 | 屬 optional 品質檢查，不應影響壞連結主判讀 |
 | 更完整的 release page template | 降低每次發版人工漏項 | 應包含 artifact、SHA256、簽章狀態與 smoke 結果 |
 | Report Analyzer 大型檔案體驗改善 | 讓大型 report 的人工檢視更順 | 優先沿用 NDJSON sidecar，不急著改主契約 |
 | 更細的 external risk governance 欄位 | 方便外連治理與交辦 | 需避免把工具膨脹成完整治理平台 |
+
+### Dynamic Render research preserved / deferred
+
+狀態：
+
+```text
+DYNAMIC_RENDER_RESEARCH = PRESERVED
+DYNAMIC_RENDER_PRODUCT_PRIORITY = DEFERRED
+DYNAMIC_RENDER_RELEASE_BLOCKER = NO
+```
+
+Dynamic Render 原本是下一階段可選能力，用來改善 JavaScript runtime 後才出現的連結探索。相關研究與證據保留在 [docs/JS_DYNAMIC_SCAN_PLAN.md](docs/JS_DYNAMIC_SCAN_PLAN.md)、Phase 2 security plan、P2-02 task packets 與 evidence files。
+
+目前不再把 JS Dynamic Scan 當成立即實作項目。原因是現有 production 靜態掃描已支援主要 public-sector operator use case，而繼續完成 Browser network security parity 需要額外 engineering、security、trust-infrastructure 與 lifecycle 成本，暫時不符合產品優先順序。
+
+這不是 `P2-02_FAILED`、不是 proxy architecture disproven，也不是永久拒絕 Dynamic Render。
 
 ### v1.1.0 已完成：404 / 410 client-side redirect evidence
 
@@ -99,7 +119,7 @@ Report 欄位放在 `confirmation.clientRedirectEvidence`，包含 `detected`、
 | Scheduler / 平台化監控 | 超出本機輔助工具定位 |
 | 複雜 suppress rules | 需要更完整治理流程，暫不納入近期版本 |
 | 多種技術型 profile presets | 目前保留簡化掃描模式，避免增加操作負擔 |
-| Headless render 預設化 | 容易引入速度、資源與 bot protection 問題，需另開設計 |
+| Dynamic Render / headless render 後續 Phase 2+ | 研究保留；P2-02 Iteration 3、P2-03 與 P2-04+ 因產品優先順序暫緩，不是技術完成或技術失敗 |
 | `report.json` streaming parser | 已先用 NDJSON sidecar 和「載入更多」降低大型 report 痛點 |
 | 集中式規則平台 | 目前只補 schema、trace 與安全載入，不建立多人審核或發布流程 |
 | 公開信任 code signing | 對正式對外散布有價值，但需另行評估憑證成本、流程與維護責任 |
@@ -107,6 +127,7 @@ Report 欄位放在 `confirmation.clientRedirectEvidence`，包含 `detected`、
 ## 全域原則
 
 - 掃描邊界：先維持 DOM / HTML / SPA payload / site rules 抽取，不預設引入 headless browser。
+- Dynamic Render 邊界：只有當靜態 HTML、SPA / payload / static-signal extraction、robots / XML sitemap discovery、保守 fallback seed、HTML site-map / site-navigation discovery 仍無法覆蓋重要連結，且 Browser runtime DOM execution 明確提供額外重要連結時，才恢復 active product candidate。
 - 規則邊界：site-specific 邏輯應放在 rules 檔，不要硬寫進 crawler。
 - 外連邊界：保守處理 rate limit、WAF、Bot challenge 與 timeout，並明確標示需要人工確認。
 - 安全邊界：預設阻擋 private / localhost / metadata / reserved IP；內部掃描需明確開啟。
