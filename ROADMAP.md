@@ -6,14 +6,15 @@
 
 ## 目前狀態
 
-- 最新正式版本：`v1.1.1`。
+- 最新正式版本：`v1.2.0`。
 - 目前沒有阻擋正式版使用的已知 release gate 項目。
 - 既有 production 靜態掃描流程仍是目前支援主線；Dynamic Render 研究已保存，但不是 release blocker。
-- 目前產品開發優先方向是 `STATIC_DISCOVERY_RESILIENCE`：真實網站相容性診斷、低連結產出 / 弱 frontier 偵測、sitemap / seed fallback、HTML site-map / site-navigation discovery 與「掃描覆蓋可能不完整」提示。
+- 目前產品開發優先方向仍是 `STATIC_DISCOVERY_RESILIENCE`；HTML Sitemap Fallback Phase 1 已完成，後續聚焦真實網站相容性 / 弱 frontier 證據、robots-advertised sitemap 機會與「掃描覆蓋可能不完整」提示。
 - 主 GUI 預設檢查外部連結；CLI 仍維持保守預設，需要 `--external` 才檢查外部連結。
 - 三個 GUI 功能頁是「連結檢查」、「外部連結分析」、「報告分析」。
 - `404 / 410` 二次確認會保存錯誤頁的瀏覽器端導向輔助證據，主 GUI 與 Report Analyzer 會顯示「瀏覽器端導向」提示。
 - Portable launcher 簽章狀態以 build manifest 為準；散布前仍需以 SHA256 / manifest 驗證 zip。
+- `v1.2.0` minor release 新增 empty initial crawl frontier 的保守 HTML site-map / site-navigation fallback，沿用既有 crawler、安全與 report pipeline。
 - `v1.1.1` patch release 聚焦 GUI 掃描狀態易用性：狀態提示、同型 URL 提醒、整體進度重新設計，以及初步盤點提醒文案。
 
 ## 產品邊界
@@ -60,18 +61,26 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 
 目前產品優先方向：Static Discovery Resilience / real-site compatibility。
 
-下一步先補強既有 production 靜態掃描無法建立足夠 crawl frontier 的情境，並用最小的通用 fallback 改善覆蓋率。所有新增 seed 仍必須走既有 canonicalization、URL security policy、crawl scope、scheduler / rate controls、HTTP validation 與 report pipeline；不要建立第二套 crawler。
+HTML Sitemap Fallback Phase 1 已補上 empty initial crawl frontier 的第一個通用 fallback。下一步只保留真實網站相容性 / 弱 frontier 證據、robots-advertised sitemap 機會與不完整覆蓋提示等研究方向；所有新增 seed 仍必須走既有 canonicalization、URL security policy、crawl scope、scheduler / rate controls、HTTP validation 與 report pipeline，不建立第二套 crawler。
 
-以下項目可作為 `v1.1.x` 或後續 minor 版本候選；不建議塞進 patch release。
+以下項目只作為後續版本候選，不代表已授權或承諾實作。
 
 | 項目 | 價值 | 注意事項 |
 | --- | --- | --- |
-| Static Discovery Resilience | 改善低連結產出、弱 frontier、sitemap / seed fallback、HTML site-map / site-navigation discovery 與不完整覆蓋提醒 | 優先保留既有 crawler/security/report pipeline；不得為單一 hostname 寫特殊邏輯 |
+| Static Discovery Resilience follow-up | 累積 real-site / weak-frontier 證據，評估 robots-advertised sitemap 與不完整覆蓋提醒 | 優先保留既有 crawler/security/report pipeline；不得為單一 hostname 寫特殊邏輯 |
 | GUI rules URL 輸入欄位 | 讓使用者不必切 CLI 就能載入 site-specific rules | 需設計安全提示、錯誤呈現與權限邊界 |
 | Fragment / duplicate anchor 檢查 | 補足頁內品質提醒 | 屬 optional 品質檢查，不應影響壞連結主判讀 |
 | 更完整的 release page template | 降低每次發版人工漏項 | 應包含 artifact、SHA256、簽章狀態與 smoke 結果 |
 | Report Analyzer 大型檔案體驗改善 | 讓大型 report 的人工檢視更順 | 優先沿用 NDJSON sidecar，不急著改主契約 |
 | 更細的 external risk governance 欄位 | 方便外連治理與交辦 | 需避免把工具膨脹成完整治理平台 |
+
+### v1.2.0 已完成：HTML Sitemap Fallback Phase 1
+
+- 只在起始頁完成正常靜態解析後，沒有額外 same-origin crawlable page 進入一般 page queue 時啟用。
+- 最多依序探測 6 個通用、same-origin 的 HTML site-map / site-navigation 慣例候選，不遞迴搜尋、不加入 hostname 特例。
+- 接受的候選頁仍由既有 crawler、URL security policy、`maxDepth`、`maxPages`、inventory 與 report pipeline 處理。
+- 不引入 Browser / Playwright；Dynamic Render 維持 deferred。
+- HTML fallback 與既有 P8d XML sitemap 機制分離，P8d 行為不變。
 
 ### Dynamic Render research preserved / deferred
 

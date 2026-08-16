@@ -4,7 +4,9 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.1.1`
+目前正式版本：`v1.2.0`
+
+v1.2.0 新增保守的網站導覽補充探索：當首頁找不到可繼續掃描的站內頁面時，工具會嘗試少量同站的網站導覽或網站地圖頁面。這可改善部分大量使用 JavaScript 或首頁連結較少網站的探索範圍，不需執行瀏覽器，也不代表能完整涵蓋整個網站。
 
 ## 適用情境
 
@@ -20,7 +22,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 ### 使用 portable 版本
 
-1. 從 [v1.1.1 Portable](https://github.com/kevinkan75/link_checker/releases/tag/v1.1.1) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.2.0 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.2.0/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
@@ -146,6 +148,8 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。
 | `page_quality_notice` | 頁內品質提醒，保留給 optional 檢查 | 視內容維護需求處理 |
 
 提醒：`403`、`429`、timeout、WAF、Bot challenge 或 TLS 類結果不一定代表連結壞掉，通常需要人工確認。
+
+注意：若掃描結果未發現壞連結，只代表本次已探索並成功檢查到的連結未發現明確問題，不代表整個網站已完整涵蓋；重要頁面及未被探索到的內容仍建議人工確認。
 
 ### 404 / 410 與瀏覽器端導向
 

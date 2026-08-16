@@ -14,9 +14,9 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("Link Checker")]
 [assembly: AssemblyProduct("Link Checker")]
 [assembly: AssemblyCopyright("Copyright (c) 2026")]
-[assembly: AssemblyVersion("1.1.1.0")]
-[assembly: AssemblyFileVersion("1.1.1.0")]
-[assembly: AssemblyInformationalVersion("1.1.1-portable")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyInformationalVersion("1.2.0-portable")]
 
 internal static class StartLinkChecker
 {
