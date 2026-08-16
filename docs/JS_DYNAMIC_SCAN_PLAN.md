@@ -1,6 +1,33 @@
 # JS Dynamic Scan Plan
 
-狀態：初步規劃。此文件記錄下一個實作項目「針對依賴 JavaScript 的動態網站提供掃描能力」的範圍、分階段方向與驗收邊界。
+狀態：`DEFERRED / PRESERVED`。此文件保留原本「針對依賴 JavaScript 的動態網站提供掃描能力」的規劃方向，但 Dynamic Render 目前不是 main branch 的立即實作項目。
+
+## Current Product Status
+
+```text
+DYNAMIC_RENDER_RESEARCH = PRESERVED
+DYNAMIC_RENDER_PRODUCT_PRIORITY = DEFERRED
+DYNAMIC_RENDER_RELEASE_BLOCKER = NO
+CURRENT_PRODUCT_PRIORITY = STATIC_DISCOVERY_RESILIENCE
+```
+
+這是產品優先順序決定，不是 Dynamic Render 失敗、放棄、不可行或本質不安全。現有 production 靜態連結檢查流程已支援 Local Link Checker 的主要使用情境；繼續 Browser / network / security work 的工程與維護成本，暫時不符合目前產品需求。
+
+詳細 implementation / security 研究保存在 `feature/js-dynamic-scan`。main branch 只記錄產品層級停止點，不匯入該研究分支的 implementation、tests、dependencies、security evidence 或 task packets。
+
+目前產品開發優先方向是 `STATIC_DISCOVERY_RESILIENCE`：真實網站相容性診斷、低連結產出 / 弱 frontier 偵測、sitemap / seed fallback、HTML site-map / site-navigation discovery 與「掃描覆蓋可能不完整」提示。
+
+Dynamic Render 只有在以下較安全的 static / fallback discovery 仍被實際產品證據證明不足時，才應重新列為 active product candidate：
+
+1. Normal static HTML link extraction.
+2. SPA / payload / static-signal extraction.
+3. Robots / XML sitemap discovery.
+4. Conservative fallback seed discovery.
+5. HTML site-map / site-navigation discovery.
+
+AND:
+
+Browser runtime DOM execution demonstrably exposes important additional links that those methods cannot discover.
 
 ## 背景
 
@@ -10,7 +37,7 @@
 - 選單、列表、分頁、文章卡片由 client-side render 建立。
 - 原始 HTML 只含 framework shell，沒有可抽取的內容連結。
 
-因此，下一階段需要評估並實作可選的動態掃描模式，讓使用者在明確需要時能取得瀏覽器渲染後的連結。
+因此，若未來符合上述 resume criteria，才應重新評估可選的動態掃描模式，讓使用者在明確需要時能取得瀏覽器渲染後的連結。
 
 ## 目標
 
@@ -172,7 +199,7 @@
 
 ## 下一步
 
-建議先做 Phase 0 + Phase 1 的小範圍 spike：
+以下是原始規劃中的 Phase 0 + Phase 1 小範圍 spike 順序；目前不代表 main branch 的已授權下一步。現階段應先執行 `STATIC_DISCOVERY_RESILIENCE` 方向的產品驗證，確認較安全的 static / fallback discovery 仍不足以發現重要連結後，再考慮恢復 Dynamic Render。
 
 1. 建立 CSR / timeout / security fixture。
 2. 新增 opt-in headless render 流程，只抽取渲染後 DOM 連結。
