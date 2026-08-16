@@ -578,6 +578,25 @@ P8d-3 新增 sitemap 保守 seed：
 - `summary.incremental.sitemap.seed` 記錄 enabled、depth、attempted、seeded、ignored 與 ignoredByReason。
 - 遠端 sitemap index child 只接受 same-origin HTTP(S) URL；`file://` 或本機路徑 child 會被忽略並記錄 warning。
 
+### 7.8 Static Discovery Resilience HTML site-map fallback
+
+HTML site-map fallback 是保守的靜態 discovery 補強，不屬於 P8d XML sitemap，也不啟用 Browser / Dynamic Render。觸發條件是起始頁 `depth=0` 完成既有 HTML extraction、SPA payload extraction 與 site link rules 後，沒有額外 same-origin crawlable page 被排入一般 page queue。
+
+Phase 1 只產生固定、去重後最多 6 個 same-origin 慣例候選：
+
+- `<start-prefix>/siteinformation/sitemap`
+- `<start-prefix>/sitemap`
+- `<start-prefix>/site-map`
+- `/siteinformation/sitemap`
+- `/sitemap`
+- `/site-map`
+
+`<start-prefix>` 只來自起始路徑第一個非空且不含副檔名的 segment；不推論多層 prefix，也不加入 hostname 特例。候選頁透過既有 `checkUrl(candidate, { requireBody: true })` 路徑檢查，因此沿用既有 URL security policy、redirect recheck、timeout、retry、connection 與 body cache 行為。候選必須成功回應 HTML，且 server-returned body 內至少有一個新的 same-origin page-like crawl candidate，才會被加上 `sourceType: "html_sitemap_fallback"` 並以 `depth=1` 進入既有 `pageQueue`。候選頁內的連結仍由一般 `processPage()`、`extractLinks()` / SPA extraction、inventory、validation 與 report pipeline 處理。
+
+此 fallback 共用 `maxDepth` 與 `maxPages`。`maxDepth: 0` 不 fetch / enqueue 候選；`maxDepth: 1` 可 crawl 被接受的候選頁，但不再 crawl 其子頁；`maxDepth >= 2` 時其子頁依現有規則繼續排程。若一般起始頁 discovery 已產生任何額外 crawlable page，fallback 狀態為 `not_needed`。
+
+報告會在 `summary.discoveryFallback.htmlSitemap` 記錄最小診斷資訊：`status`、`reason`、`attempted`、`candidateLimit`、`candidatesTried`、`accepted`、`acceptedUrl` 與 `linksDiscovered`。未被接受的候選 probe 不會保留為一般 checked / broken link 結果；URL 輸出仍套用既有 sensitive query redaction。
+
 Report 會記錄：
 
 - `options.incremental`

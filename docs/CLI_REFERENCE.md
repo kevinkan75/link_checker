@@ -155,6 +155,19 @@ P8d 會對同時存在於 current inventory 與 sitemap 的 URL 加入 priority 
 
 P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `maxDepth`、`maxPages` 與 `--sitemap-max-urls` 控制。Seeded URL 仍會實際抓 HTML body，並用本次 HTML discovery 建立 inventory / sources；sitemap 不會取代本輪 HTML discovery。
 
+### Static Discovery Resilience
+
+當起始頁完成靜態解析後沒有產生任何額外 same-origin crawlable page，工具會自動嘗試一個保守的 HTML site-map / site-navigation fallback。此 fallback 只會檢查最多 6 個 same-origin 慣例路徑：
+
+- `<start-prefix>/siteinformation/sitemap`
+- `<start-prefix>/sitemap`
+- `<start-prefix>/site-map`
+- `/siteinformation/sitemap`
+- `/sitemap`
+- `/site-map`
+
+`<start-prefix>` 只取起始路徑的第一段，例如 `/zh-tw/page` 會使用 `/zh-tw`。候選頁必須是 successful HTML response，且內容至少包含一個新的 same-origin page-like 連結，才會被加入一般 page queue；後續仍由既有 HTML extraction、URL security policy、`maxDepth`、`maxPages`、inventory 與 report pipeline 處理。這不是 XML sitemap/P8d，也不會使用 Browser rendering。
+
 ### 輸出與診斷
 
 | 參數 | 說明 |

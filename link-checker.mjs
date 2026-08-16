@@ -33,6 +33,12 @@ const RULES_TRACE_SCHEMA_VERSION = "rules-trace.p9c2";
 const DEFAULT_SITEMAP_MAX_URLS = 50000;
 const DEFAULT_SITEMAP_INDEX_MAX_CHILDREN = 20;
 const DEFAULT_SITEMAP_SAMPLE_URLS = 5;
+const HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT = 6;
+const HTML_SITEMAP_FALLBACK_PATHS = [
+  "siteinformation/sitemap",
+  "sitemap",
+  "site-map",
+];
 const REDACTED_QUERY_VALUE = "REDACTED";
 const DEFAULT_REDACT_QUERY_KEYS = [
   "access_token",
@@ -646,6 +652,7 @@ class LinkChecker {
     this.sitemapEntries = [];
     this.sitemapByHash = new Map();
     this.sitemapSeed = createEmptySitemapSeedSummary(this.options);
+    this.discoveryFallback = createInitialDiscoveryFallbackSummary();
     this.results = new Map();
     this.sources = new Map();
     this.externalLinks = new Map();
@@ -1321,17 +1328,10 @@ class LinkChecker {
         return;
       }
 
-      const pageBaseUrl = getDocumentBaseUrl(pageResult.body, pageResult.finalUrl || url);
-      const spaDetection = detectSpaFramework(pageResult.body);
+      const { pageBaseUrl, spaDetection, links } = this.extractPageLinks(pageResult.body, pageResult.finalUrl || url);
       this.recordSpaDetection(url, pageResult.finalUrl || url, spaDetection);
-      const htmlLinks = extractLinks(pageResult.body, pageBaseUrl);
-      const frameworkLinks = this.shouldExtractFrameworkLinks(spaDetection)
-        ? extractFrameworkLinks(pageResult.body, pageBaseUrl, {
-            siteLinkRules: this.options.spaLinks === "strict" ? {} : this.siteLinkRules,
-          })
-        : [];
-      const links = [...htmlLinks, ...frameworkLinks];
       this.reporter?.pageLinksFound(url, links.length);
+      let crawlEnqueuedFromPage = 0;
 
       for (const link of links) {
         if (this.stopped) {
@@ -1380,12 +1380,163 @@ class LinkChecker {
 
         if (shouldCrawl) {
           this.enqueuePage(resolved, depth + 1);
+          crawlEnqueuedFromPage += 1;
         }
       }
       this.pumpValidationQueue();
+      if (url === this.startUrl && depth === 0) {
+        if (crawlEnqueuedFromPage === 0) {
+          await this.tryHtmlSitemapFallback(pageResult.finalUrl || url);
+        } else {
+          this.discoveryFallback.htmlSitemap = {
+            ...this.discoveryFallback.htmlSitemap,
+            status: "not_needed",
+            reason: "normal_frontier_present",
+          };
+        }
+      }
     } finally {
       this.currentPages.delete(url);
     }
+  }
+
+  extractPageLinks(body, pageUrl) {
+    const pageBaseUrl = getDocumentBaseUrl(body, pageUrl);
+    const spaDetection = detectSpaFramework(body);
+    const htmlLinks = extractLinks(body, pageBaseUrl);
+    const frameworkLinks = this.shouldExtractFrameworkLinks(spaDetection)
+      ? extractFrameworkLinks(body, pageBaseUrl, {
+          siteLinkRules: this.options.spaLinks === "strict" ? {} : this.siteLinkRules,
+        })
+      : [];
+    return {
+      pageBaseUrl,
+      spaDetection,
+      links: [...htmlLinks, ...frameworkLinks],
+    };
+  }
+
+  async tryHtmlSitemapFallback(pageUrl) {
+    if (this.discoveryFallback.htmlSitemap.status !== "not_evaluated") {
+      return;
+    }
+
+    if (this.options.maxDepth < 1) {
+      this.discoveryFallback.htmlSitemap = {
+        ...this.discoveryFallback.htmlSitemap,
+        status: "skipped",
+        reason: "max_depth",
+      };
+      return;
+    }
+
+    if (this.queuedPages.size >= this.options.maxPages) {
+      this.discoveryFallback.htmlSitemap = {
+        ...this.discoveryFallback.htmlSitemap,
+        status: "skipped",
+        reason: "max_pages",
+      };
+      return;
+    }
+
+    const candidates = buildHtmlSitemapFallbackCandidates(pageUrl, this.startOrigin);
+    this.discoveryFallback.htmlSitemap = {
+      ...this.discoveryFallback.htmlSitemap,
+      status: "attempted",
+      reason: "empty_initial_frontier",
+      attempted: true,
+      candidateLimit: HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT,
+    };
+
+    for (const candidate of candidates) {
+      if (this.discoveryFallback.htmlSitemap.candidatesTried >= HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT) {
+        break;
+      }
+
+      this.discoveryFallback.htmlSitemap.candidatesTried += 1;
+      const result = await this.checkUrl(candidate, { requireBody: true });
+      if (!result.ok || !isHtml(result.contentType) || !result.body) {
+        this.discardHtmlSitemapProbe(candidate);
+        continue;
+      }
+      if (result.finalUrl && !this.isCrawlOrigin(result.finalUrl)) {
+        this.discardHtmlSitemapProbe(candidate);
+        continue;
+      }
+
+      const usefulLinks = this.findUsefulHtmlSitemapLinks(result.body, result.finalUrl || candidate);
+      if (usefulLinks.length === 0) {
+        this.discardHtmlSitemapProbe(candidate);
+        continue;
+      }
+
+      const source = {
+        page: this.startUrl,
+        tag: "html-sitemap-fallback",
+        attribute: "candidate",
+        text: candidate,
+        sourceType: "html_sitemap_fallback",
+      };
+      const link = {
+        value: candidate,
+        tag: "html-sitemap-fallback",
+        attribute: "candidate",
+        sourceType: "html_sitemap_fallback",
+      };
+      this.addSource(candidate, source);
+      this.addInventoryItem(candidate, source, link, {
+        isExternal: false,
+        shouldCheck: true,
+        shouldCrawl: true,
+        needsStatusCheck: true,
+        needsBodyFetch: true,
+      });
+      this.enqueuePage(candidate, 1);
+      this.discoveryFallback.htmlSitemap = {
+        ...this.discoveryFallback.htmlSitemap,
+        status: "accepted",
+        accepted: true,
+        acceptedUrl: candidate,
+        linksDiscovered: usefulLinks.length,
+      };
+      return;
+    }
+
+    this.discoveryFallback.htmlSitemap = {
+      ...this.discoveryFallback.htmlSitemap,
+      status: "not_found",
+      reason: "no_useful_candidate",
+    };
+  }
+
+  discardHtmlSitemapProbe(url) {
+    const key = this.getCanonicalKey(url);
+    this.results.delete(key);
+    this.bodyCache.delete(key);
+    this.statusCache.delete(key);
+  }
+
+  findUsefulHtmlSitemapLinks(body, pageUrl) {
+    const { pageBaseUrl, links } = this.extractPageLinks(body, pageUrl);
+    const useful = new Set();
+    for (const link of links) {
+      const resolved = resolveHttpUrl(link.value, pageBaseUrl);
+      if (!resolved || !this.isCrawlOrigin(resolved)) {
+        continue;
+      }
+      if (!PAGE_NAVIGATION_TAGS.has(link.tag) && !isPayloadLink(link)) {
+        continue;
+      }
+      if (!looksLikePage(resolved)) {
+        continue;
+      }
+      const canonical = this.getCanonicalKey(resolved);
+      if (this.inventory.has(canonical) || this.queuedPages.has(resolved) || this.crawledPages.has(resolved)) {
+        continue;
+      }
+      useful.add(canonical);
+    }
+    return [...useful];
   }
 
   shouldCheck(url) {
@@ -2375,6 +2526,7 @@ class LinkChecker {
         nuxtAssetsChecked: checkedByKind.nuxtAssets,
         checkedByKind,
         inventorySummary,
+        discoveryFallback: this.discoveryFallback,
         cache: this.buildCacheSummary(),
         incremental: this.buildIncrementalSummary(),
         spaDetection,
@@ -2817,6 +2969,21 @@ function createEmptySitemapSeedSummary(options = DEFAULTS) {
     seeded: 0,
     ignored: 0,
     ignoredByReason: {},
+  };
+}
+
+function createInitialDiscoveryFallbackSummary() {
+  return {
+    htmlSitemap: {
+      status: "not_evaluated",
+      reason: null,
+      attempted: false,
+      candidateLimit: HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT,
+      candidatesTried: 0,
+      accepted: false,
+      acceptedUrl: null,
+      linksDiscovered: 0,
+    },
   };
 }
 
@@ -6271,6 +6438,31 @@ function getRouteDirectoryBaseUrl(pageUrl) {
 
   url.pathname = `${url.pathname}/`;
   return url.toString();
+}
+
+function buildHtmlSitemapFallbackCandidates(pageUrl, startOrigin) {
+  const prefixes = getHtmlSitemapFallbackPrefixes(pageUrl);
+  const candidates = [];
+
+  for (const prefix of prefixes) {
+    for (const path of HTML_SITEMAP_FALLBACK_PATHS) {
+      candidates.push(new URL(`${prefix}/${path}`, startOrigin).toString());
+    }
+  }
+  for (const path of HTML_SITEMAP_FALLBACK_PATHS) {
+    candidates.push(new URL(`/${path}`, startOrigin).toString());
+  }
+
+  return [...new Set(candidates)].slice(0, HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT);
+}
+
+function getHtmlSitemapFallbackPrefixes(pageUrl) {
+  const url = new URL(pageUrl);
+  const firstSegment = url.pathname.split("/").filter(Boolean)[0];
+  if (!firstSegment || firstSegment.includes(".")) {
+    return [];
+  }
+  return [`/${firstSegment}`];
 }
 
 function normalizeUrl(value) {
