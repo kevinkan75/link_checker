@@ -27,4 +27,9 @@ assert(
   "GUI startup output should include the Report Analyzer URL.",
 );
 
+assert(
+  source.includes("console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);"),
+  "GUI startup output should preserve the launcher-compatible URL marker.",
+);
+
 console.log("ok gui startup messages");

@@ -1723,6 +1723,7 @@ function printStartupSuccess(port, fallbackUsed) {
   if (fallbackUsed) {
     console.log(`預設連接埠 ${DEFAULT_PORT} 已被使用，已改用：http://${HOST}:${port}`);
   }
+  console.log(`Link Checker GUI is running at http://127.0.0.1:${port}`);
   console.log("Link Checker 已啟動，請在瀏覽器開啟下列頁面：");
   console.log("");
   console.log(`連結檢查主頁：http://127.0.0.1:${port}`);
