@@ -33,6 +33,7 @@ const RULES_TRACE_SCHEMA_VERSION = "rules-trace.p9c2";
 const DEFAULT_SITEMAP_MAX_URLS = 50000;
 const DEFAULT_SITEMAP_INDEX_MAX_CHILDREN = 20;
 const DEFAULT_SITEMAP_SAMPLE_URLS = 5;
+const XML_SITEMAP_FALLBACK_CANDIDATE_LIMIT = 1;
 const HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT = 6;
 const HTML_SITEMAP_FALLBACK_PATHS = [
   "siteinformation/sitemap",
@@ -652,6 +653,7 @@ class LinkChecker {
     this.sitemapEntries = [];
     this.sitemapByHash = new Map();
     this.sitemapSeed = createEmptySitemapSeedSummary(this.options);
+    this.effectiveSitemap = null;
     this.discoveryFallback = createInitialDiscoveryFallbackSummary();
     this.results = new Map();
     this.sources = new Map();
@@ -816,19 +818,10 @@ class LinkChecker {
       return;
     }
 
+    const effectiveSitemap = this.createEffectiveSitemap(this.options.sitemap, "explicit");
     try {
-      const loaded = await loadSitemapTree(this.options.sitemap, this);
-      this.sitemapEntries = loaded.entries;
-      this.sitemapByHash = buildSitemapEntryHashMap(loaded.entries, this);
-      this.sitemap = buildLoadedSitemapSummary(loaded, this.options);
-      this.sitemapSeed = createEmptySitemapSeedSummary(this.options);
-      for (const warning of loaded.warnings) {
-        this.incremental.warnings.push({
-          code: "sitemap_warning",
-          message: warning.message,
-          detail: warning.code,
-        });
-      }
+      const loaded = await this.loadEffectiveSitemap(effectiveSitemap);
+      this.commitLoadedSitemap(effectiveSitemap, loaded, { recordIncrementalWarnings: true });
     } catch (error) {
       this.sitemapEntries = [];
       this.sitemapByHash = new Map();
@@ -841,29 +834,85 @@ class LinkChecker {
     }
   }
 
-  seedSitemapPages() {
-    if (!this.options.sitemap || this.sitemapEntries.length === 0) {
-      return;
+  createEffectiveSitemap(source, provenance) {
+    return { source, provenance };
+  }
+
+  async loadEffectiveSitemap(effectiveSitemap) {
+    if (effectiveSitemap.provenance === "auto_conventional") {
+      const sourceValidator = (source) => this.isCrawlOrigin(source.finalUrl || source.source);
+      return loadSitemapTree(effectiveSitemap.source, this, {
+        rootSourceValidator: sourceValidator,
+        childSourceValidator: sourceValidator,
+      });
+    }
+    return loadSitemapTree(effectiveSitemap.source, this);
+  }
+
+  commitLoadedSitemap(effectiveSitemap, loaded, { recordIncrementalWarnings = false } = {}) {
+    this.effectiveSitemap = effectiveSitemap;
+    this.sitemapEntries = loaded.entries;
+    this.sitemapByHash = buildSitemapEntryHashMap(loaded.entries, this);
+    this.sitemap = buildLoadedSitemapSummary(loaded, this.options);
+    this.sitemapSeed = createEmptySitemapSeedSummary({
+      ...this.options,
+      sitemap: effectiveSitemap.source,
+    });
+    if (recordIncrementalWarnings) {
+      for (const warning of loaded.warnings) {
+        this.incremental.warnings.push({
+          code: "sitemap_warning",
+          message: warning.message,
+          detail: warning.code,
+        });
+      }
+    }
+  }
+
+  seedSitemapPages(effectiveSitemap = this.effectiveSitemap, entries = this.sitemapEntries) {
+    if (!effectiveSitemap || entries.length === 0) {
+      return this.sitemapSeed;
     }
 
-    this.sitemapSeed.enabled = true;
-    this.sitemapSeed.depth = 1;
-    for (const entry of this.sitemapEntries) {
-      this.sitemapSeed.attempted += 1;
-      const decision = this.getSitemapSeedDecision(entry);
+    const plan = this.planSitemapSeeds(effectiveSitemap, entries);
+    this.applySitemapSeedPlan(effectiveSitemap, plan);
+    return this.sitemapSeed;
+  }
+
+  planSitemapSeeds(effectiveSitemap, entries) {
+    const summary = createEmptySitemapSeedSummary({
+      ...this.options,
+      sitemap: effectiveSitemap.source,
+    });
+    summary.enabled = true;
+    summary.depth = 1;
+    const queuedPages = new Set(this.queuedPages);
+    const seeds = [];
+    for (const entry of entries) {
+      summary.attempted += 1;
+      const decision = this.getSitemapSeedDecision(entry, { queuedPages });
       if (!decision.ok) {
-        recordSitemapSeedIgnored(this.sitemapSeed, decision.reason);
+        recordSitemapSeedIgnored(summary, decision.reason);
         continue;
       }
 
-      const url = decision.url;
+      seeds.push({ entry, url: decision.url });
+      queuedPages.add(decision.url);
+      summary.seeded += 1;
+    }
+    return { summary, seeds };
+  }
+
+  applySitemapSeedPlan(effectiveSitemap, plan) {
+    this.sitemapSeed = plan.summary;
+    for (const { entry, url } of plan.seeds) {
       const source = {
         page: this.startUrl,
         tag: "sitemap",
         attribute: "loc",
         text: entry.url,
         sourceType: "sitemap",
-        sitemapSource: this.options.sitemap,
+        sitemapSource: effectiveSitemap.source,
       };
       const link = {
         value: entry.url,
@@ -880,15 +929,14 @@ class LinkChecker {
         needsBodyFetch: true,
       });
       this.enqueuePage(url, 1);
-      this.sitemapSeed.seeded += 1;
     }
   }
 
-  getSitemapSeedDecision(entry) {
+  getSitemapSeedDecision(entry, { queuedPages = this.queuedPages } = {}) {
     if (this.options.maxDepth < 1) {
       return { ok: false, reason: "max_depth" };
     }
-    if (this.queuedPages.size >= this.options.maxPages) {
+    if (queuedPages.size >= this.options.maxPages) {
       return { ok: false, reason: "max_pages" };
     }
     let url;
@@ -903,7 +951,7 @@ class LinkChecker {
     if (!looksLikePage(url)) {
       return { ok: false, reason: "non_page_like" };
     }
-    if (this.queuedPages.has(url) || this.crawledPages.has(url)) {
+    if (queuedPages.has(url) || this.crawledPages.has(url)) {
       return { ok: false, reason: "already_queued_or_crawled" };
     }
     return { ok: true, url };
@@ -1386,8 +1434,15 @@ class LinkChecker {
       this.pumpValidationQueue();
       if (url === this.startUrl && depth === 0) {
         if (crawlEnqueuedFromPage === 0) {
-          await this.tryHtmlSitemapFallback(pageResult.finalUrl || url);
+          const xmlSitemapAccepted = await this.tryXmlSitemapFallback();
+          if (!xmlSitemapAccepted) {
+            await this.tryHtmlSitemapFallback(pageResult.finalUrl || url);
+          }
         } else {
+          this.updateXmlSitemapFallback({
+            status: "not_needed",
+            reason: "normal_frontier_present",
+          });
           this.discoveryFallback.htmlSitemap = {
             ...this.discoveryFallback.htmlSitemap,
             status: "not_needed",
@@ -1414,6 +1469,108 @@ class LinkChecker {
       spaDetection,
       links: [...htmlLinks, ...frameworkLinks],
     };
+  }
+
+  updateXmlSitemapFallback(update) {
+    this.discoveryFallback.xmlSitemap = {
+      ...this.discoveryFallback.xmlSitemap,
+      ...update,
+    };
+  }
+
+  async tryXmlSitemapFallback() {
+    if (this.options.sitemap) {
+      this.updateXmlSitemapFallback({
+        status: "not_needed",
+        reason: "explicit_sitemap",
+      });
+      return false;
+    }
+    if (this.options.maxDepth < 1) {
+      this.updateXmlSitemapFallback({
+        status: "skipped",
+        reason: "max_depth",
+      });
+      return false;
+    }
+    if (this.queuedPages.size >= this.options.maxPages) {
+      this.updateXmlSitemapFallback({
+        status: "skipped",
+        reason: "max_pages",
+      });
+      return false;
+    }
+
+    const candidate = new URL("/sitemap.xml", this.startOrigin).toString();
+    const effectiveSitemap = this.createEffectiveSitemap(candidate, "auto_conventional");
+    this.updateXmlSitemapFallback({
+      status: "attempted",
+      reason: "empty_initial_frontier",
+      attempted: true,
+      candidateLimit: XML_SITEMAP_FALLBACK_CANDIDATE_LIMIT,
+      candidatesTried: 1,
+      accepted: false,
+    });
+    let loaded;
+    try {
+      loaded = await this.loadEffectiveSitemap(effectiveSitemap);
+    } catch {
+      this.updateXmlSitemapFallback({
+        status: "not_found",
+        reason: "fetch_failed",
+      });
+      return false;
+    }
+
+    const finalUrl = loaded.finalUrl || candidate;
+    if (!this.isCrawlOrigin(finalUrl)) {
+      this.updateXmlSitemapFallback({
+        status: "not_found",
+        reason: "fetch_failed",
+      });
+      return false;
+    }
+    if (loaded.type !== "urlset" && loaded.type !== "sitemapindex") {
+      this.updateXmlSitemapFallback({
+        status: "not_found",
+        reason: "unsupported_sitemap",
+        sitemapType: loaded.type || null,
+        urlsDiscovered: loaded.entries.length,
+        urlsSeeded: 0,
+      });
+      return false;
+    }
+
+    const plan = this.planSitemapSeeds(effectiveSitemap, loaded.entries);
+    if (plan.summary.seeded === 0) {
+      this.updateXmlSitemapFallback({
+        status: "not_found",
+        reason: "no_usable_seed",
+        sitemapType: loaded.type,
+        urlsDiscovered: loaded.entries.length,
+        urlsSeeded: 0,
+      });
+      return false;
+    }
+
+    this.commitLoadedSitemap(effectiveSitemap, loaded);
+    this.applySitemapSeedPlan(effectiveSitemap, plan);
+    this.updateXmlSitemapFallback({
+      status: "accepted",
+      reason: "empty_initial_frontier",
+      accepted: true,
+      acceptedUrl: redactSensitiveQueryValue(finalUrl, { ...this.options, redactSensitiveQuery: true }),
+      sitemapType: loaded.type,
+      urlsDiscovered: loaded.entries.length,
+      urlsSeeded: plan.summary.seeded,
+    });
+    this.discoveryFallback.htmlSitemap = {
+      ...this.discoveryFallback.htmlSitemap,
+      status: "not_needed",
+      reason: "xml_sitemap_accepted",
+      attempted: false,
+    };
+    return true;
   }
 
   async tryHtmlSitemapFallback(pageUrl) {
@@ -2974,6 +3131,18 @@ function createEmptySitemapSeedSummary(options = DEFAULTS) {
 
 function createInitialDiscoveryFallbackSummary() {
   return {
+    xmlSitemap: {
+      status: "not_evaluated",
+      reason: null,
+      attempted: false,
+      candidateLimit: XML_SITEMAP_FALLBACK_CANDIDATE_LIMIT,
+      candidatesTried: 0,
+      accepted: false,
+      acceptedUrl: null,
+      sitemapType: null,
+      urlsDiscovered: 0,
+      urlsSeeded: 0,
+    },
     htmlSitemap: {
       status: "not_evaluated",
       reason: null,
@@ -3077,11 +3246,19 @@ function compareSitemapLastmod(current, previous) {
   return String(current || "").localeCompare(String(previous || ""));
 }
 
-async function loadSitemapTree(source, checker) {
+async function loadSitemapTree(source, checker, {
+  rootSourceValidator = null,
+  childSourceValidator = null,
+} = {}) {
   const options = checker.options;
   const maxUrls = normalizeSitemapMaxUrls(options.sitemapMaxUrls);
   const maxIndexChildren = normalizeSitemapIndexMaxChildren(options.sitemapIndexMaxChildren);
   const root = await readSitemapSource(source, checker);
+  if (rootSourceValidator && !rootSourceValidator(root)) {
+    const error = new Error("Sitemap redirect left the crawl-origin boundary");
+    error.code = "sitemap_redirect_outside_crawl_origin";
+    throw error;
+  }
   const parsed = parseSitemapXml(root.text, {
     maxUrls,
     maxIndexChildren,
@@ -3096,6 +3273,7 @@ async function loadSitemapTree(source, checker) {
     return {
       source,
       sourceType: root.sourceType,
+      finalUrl: root.finalUrl,
       type: parsed.type,
       entries,
       indexChildCount: 0,
@@ -3120,6 +3298,13 @@ async function loadSitemapTree(source, checker) {
     }
     try {
       const childSource = await readSitemapSource(child.url, checker);
+      if (childSourceValidator && !childSourceValidator(childSource)) {
+        warnings.push({
+          code: "sitemap_child_redirect_outside_crawl_origin",
+          message: `Ignored sitemap child redirected outside the crawl-origin boundary: ${redactSensitiveQueryValue(childSource.finalUrl || child.url, options)}.`,
+        });
+        continue;
+      }
       bodyTruncated = bodyTruncated || childSource.bodyTruncated;
       const childParsed = parseSitemapXml(childSource.text, {
         maxUrls: maxUrls - entries.length,
@@ -3149,6 +3334,7 @@ async function loadSitemapTree(source, checker) {
   return {
     source,
     sourceType: root.sourceType,
+    finalUrl: root.finalUrl,
     type: parsed.type,
     entries,
     indexChildCount: parsed.indexEntries.length,
@@ -3194,6 +3380,7 @@ async function readSitemapSource(source, checker) {
     return {
       source,
       sourceType,
+      finalUrl: result.finalUrl || source,
       text: result.body || "",
       bodyTruncated: result.bodyTruncated === true,
       warnings,
@@ -3212,6 +3399,7 @@ async function readSitemapSource(source, checker) {
   return {
     source,
     sourceType,
+    finalUrl: null,
     text: buffer.subarray(0, maxBytes).toString("utf8"),
     bodyTruncated,
     warnings,
