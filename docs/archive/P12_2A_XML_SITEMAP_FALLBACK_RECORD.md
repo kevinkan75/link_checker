@@ -1,6 +1,6 @@
 # P12-2A XML Sitemap Fallback Record
 
-本文件記錄 P12-2A 的規劃基線與 P12-2A.1 唯讀實作稽核。它不是已完成能力的使用說明；目前沒有修改掃描器、測試、版本或 report schema。
+本文件是 P12-2A 的單一演進紀錄，涵蓋規劃、設計鎖定、實作、診斷、測試與完成驗證。使用者與技術契約說明分別以根 README、CLI reference 與 technical spec 為準。
 
 ## 1. Background
 
@@ -207,7 +207,7 @@ Explicit `--sitemap` 的 read/parse error 與 incremental warning 行為完全�
 - `/sitemap.xml` 不存在時不加入 `sitemap_read_failed` incremental warning。
 - 不停止 scan。
 - failure reason 只記入 `summary.discoveryFallback.xmlSitemap`，再接續 HTML fallback。
-- Auto sitemap 若成功 parse，即使 seed 為 0，`summary.incremental.sitemap` 仍可呈現實際成功的 parse / seed 結果；`no_usable_seed` 的 fallback 判斷只記在 XML discovery diagnostic，不視為 incremental warning。
+- Auto sitemap 即使成功 parse，只要 seed 為 0，就不提交 `effectiveSitemap`、`sitemapEntries`、sitemap hash/seed、inventory、source 或 page queue 狀態；`no_usable_seed` 只記在 XML discovery diagnostic，不視為 incremental warning。
 
 ### Locked redirect policy
 
@@ -266,16 +266,16 @@ Terminal status / reason mapping 鎖定如下：
 | explicit sitemap 存在 | `not_needed` | `explicit_sitemap` | 不 probe，explicit path 不變 |
 | `maxDepth < 1` | `skipped` | `max_depth` | 不 probe |
 | `maxPages` 無剩餘額度 | `skipped` | `max_pages` | 不 probe |
-| 已確認 empty frontier 並開始 probe | `not_evaluated`（暫態） | `empty_initial_frontier` | `attempted=true`，請求開始後 `candidatesTried=1` |
+| 已確認 empty frontier 並開始 probe | `attempted`（暫態） | `empty_initial_frontier` | `attempted=true`，請求開始後 `candidatesTried=1` |
 | Supported parse 且 `urlsSeeded > 0` | `accepted` | `empty_initial_frontier` | `accepted=true`，停止 fallback chain |
 | 404、request/security failure | `not_found` | `fetch_failed` | quiet failure，接續 HTML fallback |
 | Parser 無法辨識 supported sitemap | `not_found` | `unsupported_sitemap` | 接續 HTML fallback |
 | Supported sitemap 但 `urlsSeeded = 0` | `not_found` | `no_usable_seed` | 接續 HTML fallback |
-| Redirect final URL 不在 crawl-origin boundary | `not_found` | `redirect_outside_crawl_origin` | 接續 HTML fallback |
+| Redirect final URL 不在 crawl-origin boundary | `not_found` | `fetch_failed` | 不公開 raw redirect error，接續 HTML fallback |
 
 Reason precedence 鎖定為：先判定 `explicit_sitemap`；沒有 explicit source 時，起始頁完成 discovery 後先判定 `normal_frontier_present`；只有 empty frontier 才依序判定 `max_depth`、`max_pages`，最後進入唯一候選的 probe。如此同一輪不會同時以 frontier 與 budget reason 表示 auto fallback 結果。
 
-Allowed terminal `status` 僅為 `not_evaluated`、`not_needed`、`skipped`、`accepted`、`not_found`。除表列額外 redirect reason 外，最低必要 reason 集合為 `normal_frontier_present`、`explicit_sitemap`、`max_depth`、`max_pages`、`empty_initial_frontier`、`fetch_failed`、`unsupported_sitemap`、`no_usable_seed`。
+Allowed terminal `status` 僅為 `not_evaluated`、`not_needed`、`skipped`、`accepted`、`not_found`；實際 probe 期間另使用暫態 `attempted`。最低必要 reason 集合為 `normal_frontier_present`、`explicit_sitemap`、`max_depth`、`max_pages`、`empty_initial_frontier`、`fetch_failed`、`unsupported_sitemap`、`no_usable_seed`。
 
 現行 schema 的 root 與 `summary` 均允許 additional properties，因此這項 additive diagnostic 不需要 schema bump。
 
@@ -341,17 +341,32 @@ P12-2A 完成時必須證明：
 
 ```text
 P12-1 = COMPLETE
-P12-2A = PLANNED
+P12-2A = COMPLETE
 P12_2A_1_READ_ONLY_CODE_AUDIT = COMPLETE / PASS
 P12_2A_2_MINIMAL_DESIGN_LOCK = COMPLETE / PASS
 P12_2A_2_DESIGN_REVIEW = COMPLETE / PASS
-SOURCE_MODIFICATION = NOT STARTED
-VERSION_BUMP = NOT STARTED
-MERGE = NOT AUTHORIZED
+P12_2A_3_CORE_IMPLEMENTATION = COMPLETE / PASS
+P12_2A_4_DIAGNOSTICS = COMPLETE / PASS
+P12_2A_5_FOCUSED_TESTS = COMPLETE / PASS
+P12_2A_6_FULL_REGRESSION = COMPLETE / 30 OF 30 PASS
+P12_2A_7_TYCG_REAL_SITE_VALIDATION = COMPLETE / PASS
+P12_2A_8_READ_ONLY_FINAL_AUDIT = COMPLETE / PASS
+SOURCE_MODIFICATION = COMPLETE
+VERSION_BUMP = COMPLETE / PENDING REVIEW / v1.3.0
+MERGE = COMPLETE
 RELEASE = NOT AUTHORIZED
-NEXT_GATE = P12_2A_3_CORE_IMPLEMENTATION
+NEXT_GATE = V1_3_0_RELEASE_PREP_A_REVIEW
 ```
 
 `UNRESOLVED_QUESTIONS = NONE`
 
-P12-2A.2 已鎖定並通過 provenance、incremental boundary、trigger、ordering、acceptance、shared-loader refactor、quiet failure、redirect、diagnostic 與 future test surface 的設計審查。尚未修改 production source、implementation tests、版本或 schema；下一個 gate 為 `P12_2A_3_CORE_IMPLEMENTATION`。
+## 11. Completion evidence
+
+- P12-2A.1 code audit、P12-2A.2 design lock/review、P12-2A.3 core implementation、P12-2A.4 diagnostics、P12-2A.5 focused tests 與 P12-2A.8 final audit 均已接受。
+- P12-2A.6 完整 root regression：`30 / 30 PASS`。
+- Implementation commit：`20e86b9697ec8b3f9b1e2c6dea964e1ad6f7eeb8`；main integration：complete。
+- Release target：`v1.3.0`；report schema 維持 `1.3.0`。
+- P12-2A.7 TYCG real-site validation 從 `https://travel.tycg.gov.tw/` 啟動，未提供 `--sitemap`；同站 `/sitemap.xml` 被接受為 `urlset`，`urlsDiscovered > 0`、`urlsSeeded > 0`、`pagesCrawled > 1`，XML 接受後 HTML fallback 為 `not_needed / xml_sitemap_accepted`。
+- 該次 live-site observation 為 `urlsDiscovered = 207`、`urlsSeeded = 49`、`pagesCrawled = 50`；這些值會隨外部網站內容與掃描時點變動，只是歷史驗證證據，不是產品契約。
+
+Deferred scope 保持不變：`P12-2B` robots-advertised sitemap、`P12-2C` direct sitemap start、`P12-3` limited-discovery warning、`MAINT-1` external 429 interpretation 與 Dynamic Render 均未納入 P12-2A，狀態為 deferred。

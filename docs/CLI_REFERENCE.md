@@ -149,7 +149,7 @@ P8b 會把 `new`、`previousError`、`policyMismatch`、`ttlExpired` 與 `unstab
 
 P8c 的 `--changed-only` 只復用 `known` 且符合 policy match、TTL valid、非 previous error、非 unstable redirect 的 status result。`requireBody: true` 的頁面 crawl 不會復用舊結果。
 
-P8d 的 `--sitemap` 會自動啟用 incremental summary，支援本地檔案、`file://` 與 HTTP(S) sitemap。HTTP(S) sitemap 讀取會走既有 URL security policy；遠端 sitemap index 只會讀 same-origin HTTP(S) child sitemap，不會讀取 `file://` child。
+P8d 的 `--sitemap` 是使用者明確提供的 sitemap input，具有優先權，並會自動啟用 incremental summary；它支援本地檔案、`file://` 與 HTTP(S) sitemap。HTTP(S) sitemap 讀取會走既有 URL security policy；遠端 sitemap index 只會讀 same-origin HTTP(S) child sitemap，不會讀取 `file://` child。自動探索不會改寫 `options.sitemap`，也不會因此啟用 incremental mode。
 
 P8d 會對同時存在於 current inventory 與 sitemap 的 URL 加入 priority signal：`lastmod` 較 state 中前次值新時提高 priority，未變時降低 priority；仍不會因 sitemap 跳過檢查。
 
@@ -157,7 +157,13 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
 
 ### Static Discovery Resilience
 
-當起始頁完成靜態解析後沒有產生任何額外 same-origin crawlable page，工具會自動嘗試一個保守的 HTML site-map / site-navigation fallback。此 fallback 只會檢查最多 6 個 same-origin 慣例路徑：
+工具會先完成一般靜態探索。只有起始頁沒有產生任何額外 same-origin crawlable page、未提供明確 `--sitemap`，且 `maxDepth` / `maxPages` 仍允許繼續探索時，才會嘗試唯一的自動 XML 候選：
+
+- `<start-origin>/sitemap.xml`
+
+這個自動候選沿用既有 P8d sitemap loader、URL security / SSRF policy、`urlset` / `sitemapindex` parser、same-origin page-like seed filtering、`--sitemap-max-urls`、`maxDepth`、`maxPages` 與一般 crawler pipeline。只有實際產生至少一個可用 seed 才會接受；它不會改寫 `options.sitemap`，也不會假裝使用者提供了 `--sitemap`。
+
+若 `/sitemap.xml` 不存在、無法使用或沒有可用 seed，工具才接續既有保守的 HTML site-map / site-navigation fallback。HTML fallback 最多檢查 6 個 same-origin 慣例路徑：
 
 - `<start-prefix>/siteinformation/sitemap`
 - `<start-prefix>/sitemap`
@@ -166,7 +172,7 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
 - `/sitemap`
 - `/site-map`
 
-`<start-prefix>` 只取起始路徑的第一段，例如 `/zh-tw/page` 會使用 `/zh-tw`。候選頁必須是 successful HTML response，且內容至少包含一個新的 same-origin page-like 連結，才會被加入一般 page queue；後續仍由既有 HTML extraction、URL security policy、`maxDepth`、`maxPages`、inventory 與 report pipeline 處理。這不是 XML sitemap/P8d，也不會使用 Browser rendering。
+`<start-prefix>` 只取起始路徑的第一段，例如 `/zh-tw/page` 會使用 `/zh-tw`。HTML 候選頁必須是 successful HTML response，且內容至少包含一個新的 same-origin page-like 連結，才會被加入一般 page queue；後續仍由既有 HTML extraction、URL security policy、`maxDepth`、`maxPages`、inventory 與 report pipeline 處理。兩層 fallback 都沒有 hostname 特例，也不會使用 Browser rendering 或 Dynamic Render。
 
 ### 輸出與診斷
 

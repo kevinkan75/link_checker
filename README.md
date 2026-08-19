@@ -4,9 +4,9 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.2.0`
+目前正式版本：`v1.3.0`
 
-v1.2.0 新增保守的網站導覽補充探索：當首頁找不到可繼續掃描的站內頁面時，工具會嘗試少量同站的網站導覽或網站地圖頁面。這可改善部分大量使用 JavaScript 或首頁連結較少網站的探索範圍，不需執行瀏覽器，也不代表能完整涵蓋整個網站。
+v1.3.0 擴充保守的 Static Discovery Resilience：工具仍先執行一般靜態探索；若起始頁未產生額外同站可爬頁面，且使用者未提供明確的 `--sitemap`，工具會嘗試同站慣例路徑 `/sitemap.xml`。接受的 XML sitemap 會沿用既有 sitemap 與 crawler pipeline 建立 seed；若 XML 不存在、無法使用或沒有可用 seed，既有的保守 HTML sitemap fallback 仍可接續。此功能不執行 Browser、headless 或 Dynamic Render，也不代表掃描已完整涵蓋整個網站。
 
 ## 適用情境
 
@@ -22,7 +22,7 @@ v1.2.0 新增保守的網站導覽補充探索：當首頁找不到可繼續掃�
 
 ### 使用 portable 版本
 
-1. 從 [v1.2.0 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.2.0/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.3.0 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.3.0/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 

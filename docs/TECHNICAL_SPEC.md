@@ -569,7 +569,8 @@ P8d-2 新增 sitemap priority signal，但仍只影響 current inventory 內的 
 
 P8d-3 新增 sitemap 保守 seed：
 
-- 只在明確使用 `--sitemap` 時啟用。
+- 明確使用 `--sitemap` 時，仍由 worker 啟動前的既有 explicit path 載入與 seed，並具有自動探索的優先權。
+- P12-2A 的自動 `/sitemap.xml` 只在 empty initial frontier 時呼叫同一組 loader、parser 與 seed decision；不建立第二套 sitemap pipeline。
 - 只 seed same-origin、page-like sitemap URL。
 - seed depth 固定為 `1`，受 `maxDepth` 控制；`maxDepth: 0` 不 seed。
 - 受 `maxPages` 與 `--sitemap-max-urls` 控制。
@@ -578,7 +579,21 @@ P8d-3 新增 sitemap 保守 seed：
 - `summary.incremental.sitemap.seed` 記錄 enabled、depth、attempted、seeded、ignored 與 ignoredByReason。
 - 遠端 sitemap index child 只接受 same-origin HTTP(S) URL；`file://` 或本機路徑 child 會被忽略並記錄 warning。
 
-### 7.8 Static Discovery Resilience HTML site-map fallback
+### 7.8 Static Discovery Resilience fallback chain
+
+Production ordering 固定為：
+
+```text
+normal static discovery
+-> empty initial same-origin frontier
+-> conventional XML <start-origin>/sitemap.xml fallback
+-> existing P8d load / parse / seed pipeline
+-> existing HTML sitemap fallback when XML is not accepted
+```
+
+明確 `--sitemap` 保留既有 pre-worker path 並抑制自動 conventional probe；`options.sitemap` 只表示 explicit input。自動 XML 只有在 depth-0 起始頁完成既有 HTML extraction、SPA payload extraction 與 site link rules 後仍無額外 same-origin crawlable page，且 `maxDepth` / `maxPages` 尚有額度時，才嘗試唯一候選 `<start-origin>/sitemap.xml`。
+
+自動 XML 透過既有 sitemap fetch/security、`urlset` / `sitemapindex` parser、child constraints、`sitemapMaxUrls` 與 seed decision。只有 existing seed plan 實際產生 `seeded > 0` 才提交 sitemap state 並停止 fallback chain；404、unsupported XML、redirect boundary rejection 或 zero usable seed 不進入一般 checked / broken results，並接續 HTML fallback。自動來源不會啟用 incremental mode 或 state write。
 
 HTML site-map fallback 是保守的靜態 discovery 補強，不屬於 P8d XML sitemap，也不啟用 Browser / Dynamic Render。觸發條件是起始頁 `depth=0` 完成既有 HTML extraction、SPA payload extraction 與 site link rules 後，沒有額外 same-origin crawlable page 被排入一般 page queue。
 
@@ -596,6 +611,8 @@ Phase 1 只產生固定、去重後最多 6 個 same-origin 慣例候選：
 此 fallback 共用 `maxDepth` 與 `maxPages`。`maxDepth: 0` 不 fetch / enqueue 候選；`maxDepth: 1` 可 crawl 被接受的候選頁，但不再 crawl 其子頁；`maxDepth >= 2` 時其子頁依現有規則繼續排程。若一般起始頁 discovery 已產生任何額外 crawlable page，fallback 狀態為 `not_needed`。
 
 報告會在 `summary.discoveryFallback.htmlSitemap` 記錄最小診斷資訊：`status`、`reason`、`attempted`、`candidateLimit`、`candidatesTried`、`accepted`、`acceptedUrl` 與 `linksDiscovered`。未被接受的候選 probe 不會保留為一般 checked / broken link 結果；URL 輸出仍套用既有 sensitive query redaction。
+
+自動 XML 診斷位於 additive `summary.discoveryFallback.xmlSitemap`，欄位為 `status`、`reason`、`attempted`、`candidateLimit`、`candidatesTried`、`accepted`、`acceptedUrl`、`sitemapType`、`urlsDiscovered` 與 `urlsSeeded`。`acceptedUrl` 套用既有 sensitive-query redaction；XML 接受後，HTML 診斷為 `not_needed / xml_sitemap_accepted`。這項 additive summary 不改變 report schema，`REPORT_SCHEMA_VERSION` 維持 `1.3.0`。
 
 Report 會記錄：
 

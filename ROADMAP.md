@@ -1,19 +1,20 @@
 # 開發路線圖
 
-更新日期：2026-08-16
+更新日期：2026-08-19
 
 本文件只保留目前狀態、近期維護主線、下一步候選與決策邊界。已完成階段與 `v1.0.4` 詳細狀態請看 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md)，更早期里程碑請看 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
 
 ## 目前狀態
 
-- 最新正式版本：`v1.2.0`。
+- 最新正式版本：`v1.3.0`。
 - 目前沒有阻擋正式版使用的已知 release gate 項目。
 - 既有 production 靜態掃描流程仍是目前支援主線；Dynamic Render 研究已保存，但不是 release blocker。
-- 目前產品開發優先方向仍是 `STATIC_DISCOVERY_RESILIENCE`；HTML Sitemap Fallback Phase 1 已完成，後續聚焦真實網站相容性 / 弱 frontier 證據、robots-advertised sitemap 機會與「掃描覆蓋可能不完整」提示。
+- 目前產品開發優先方向仍是 `STATIC_DISCOVERY_RESILIENCE`；P12-1 HTML Sitemap Fallback 與 P12-2A conventional XML sitemap fallback 已完成，後續聚焦真實網站相容性 / 弱 frontier 證據、robots-advertised sitemap 機會與「掃描覆蓋可能不完整」提示。
 - 主 GUI 預設檢查外部連結；CLI 仍維持保守預設，需要 `--external` 才檢查外部連結。
 - 三個 GUI 功能頁是「連結檢查」、「外部連結分析」、「報告分析」。
 - `404 / 410` 二次確認會保存錯誤頁的瀏覽器端導向輔助證據，主 GUI 與 Report Analyzer 會顯示「瀏覽器端導向」提示。
 - Portable launcher 簽章狀態以 build manifest 為準；散布前仍需以 SHA256 / manifest 驗證 zip。
+- `v1.3.0` minor release 在 empty initial crawl frontier 時，會保守嘗試同站 `/sitemap.xml`，並沿用既有 P8d sitemap 與 crawler pipeline。
 - `v1.2.0` minor release 新增 empty initial crawl frontier 的保守 HTML site-map / site-navigation fallback，沿用既有 crawler、安全與 report pipeline。
 - `v1.1.1` patch release 聚焦 GUI 掃描狀態易用性：狀態提示、同型 URL 提醒、整體進度重新設計，以及初步盤點提醒文案。
 
@@ -61,7 +62,7 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 
 目前產品優先方向：Static Discovery Resilience / real-site compatibility。
 
-HTML Sitemap Fallback Phase 1 已補上 empty initial crawl frontier 的第一個通用 fallback。下一步只保留真實網站相容性 / 弱 frontier 證據、robots-advertised sitemap 機會與不完整覆蓋提示等研究方向；所有新增 seed 仍必須走既有 canonicalization、URL security policy、crawl scope、scheduler / rate controls、HTTP validation 與 report pipeline，不建立第二套 crawler。
+P12-1 HTML Sitemap Fallback 與 P12-2A conventional XML sitemap fallback 已補上 empty initial crawl frontier 的兩層通用 fallback。下一步只保留真實網站相容性 / 弱 frontier 證據、P12-2B robots-advertised sitemap 與 P12-3 不完整覆蓋提示等候選方向；所有新增 seed 仍必須走既有 canonicalization、URL security policy、crawl scope、scheduler / rate controls、HTTP validation 與 report pipeline，不建立第二套 crawler。
 
 以下項目只作為後續版本候選，不代表已授權或承諾實作。
 
@@ -73,6 +74,15 @@ HTML Sitemap Fallback Phase 1 已補上 empty initial crawl frontier 的第一�
 | 更完整的 release page template | 降低每次發版人工漏項 | 應包含 artifact、SHA256、簽章狀態與 smoke 結果 |
 | Report Analyzer 大型檔案體驗改善 | 讓大型 report 的人工檢視更順 | 優先沿用 NDJSON sidecar，不急著改主契約 |
 | 更細的 external risk governance 欄位 | 方便外連治理與交辦 | 需避免把工具膨脹成完整治理平台 |
+
+### v1.3.0 已完成：Conventional XML Sitemap Fallback
+
+- 只在起始頁完成正常靜態探索、沒有額外 same-origin crawlable page、未提供明確 `--sitemap`，且 `maxDepth` / `maxPages` 尚有額度時啟用。
+- 唯一自動候選是同站 `/sitemap.xml`；不猜測其他名稱、語系路徑或 hostname 特例。
+- XML 載入、`urlset` / `sitemapindex` parsing、安全政策、same-origin filtering、seed decision、inventory 與 page queue 全部沿用既有 P8d / crawler pipeline。
+- 只有實際產生可用 seed 才接受 XML fallback；找不到、無法使用或 zero usable seed 時，接續既有 P12-1 HTML fallback。
+- 新增 additive `summary.discoveryFallback.xmlSitemap` 診斷；report schema 維持 `1.3.0`。
+- 不引入 Browser / Playwright；Dynamic Render 維持 deferred。
 
 ### v1.2.0 已完成：HTML Sitemap Fallback Phase 1
 
