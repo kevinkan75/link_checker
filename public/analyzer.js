@@ -41,6 +41,9 @@ const ut1ApplyButton = document.querySelector("#ut1-apply-button");
 const ut1DownloadButton = document.querySelector("#ut1-download-button");
 const ut1CategoryTable = document.querySelector("#ut1-category-table");
 
+const sessionHeaderName = "X-Link-Checker-Session";
+const sessionTokenPromise = loadSessionToken().catch(() => "");
+
 startSessionHeartbeat();
 
 const UT1_COMMON_CATEGORIES = new Set([
@@ -175,15 +178,33 @@ let linkListState = {
 };
 
 function startSessionHeartbeat() {
-  const send = () => fetch("/api/session/heartbeat", {
-    method: "POST",
-    cache: "no-store",
-    keepalive: true,
-  }).catch(() => {});
+  const send = async () => {
+    const token = await sessionTokenPromise;
+    if (!token) {
+      return;
+    }
+    return fetch("/api/session/heartbeat", {
+      method: "POST",
+      cache: "no-store",
+      keepalive: true,
+      headers: {
+        [sessionHeaderName]: token,
+      },
+    }).catch(() => {});
+  };
 
   send();
   setInterval(send, 30000);
   window.addEventListener("pagehide", send);
+}
+
+async function loadSessionToken() {
+  const response = await fetch("/api/session", { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.sessionToken) {
+    throw new Error(data.error || "Unable to load local GUI session");
+  }
+  return data.sessionToken;
 }
 
 pickLinksButton.addEventListener("click", () => {

@@ -35,6 +35,9 @@ const sourceList = document.querySelector("#source-list");
 const domainList = document.querySelector("#domain-list");
 const linksTable = document.querySelector("#links-table");
 
+const sessionHeaderName = "X-Link-Checker-Session";
+const sessionTokenPromise = loadSessionToken().catch(() => "");
+
 startSessionHeartbeat();
 
 const ISSUE_LABELS = {
@@ -92,15 +95,33 @@ let brokenListState = {
 };
 
 function startSessionHeartbeat() {
-  const send = () => fetch("/api/session/heartbeat", {
-    method: "POST",
-    cache: "no-store",
-    keepalive: true,
-  }).catch(() => {});
+  const send = async () => {
+    const token = await sessionTokenPromise;
+    if (!token) {
+      return;
+    }
+    return fetch("/api/session/heartbeat", {
+      method: "POST",
+      cache: "no-store",
+      keepalive: true,
+      headers: {
+        [sessionHeaderName]: token,
+      },
+    }).catch(() => {});
+  };
 
   send();
   setInterval(send, 30000);
   window.addEventListener("pagehide", send);
+}
+
+async function loadSessionToken() {
+  const response = await fetch("/api/session", { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.sessionToken) {
+    throw new Error(data.error || "Unable to load local GUI session");
+  }
+  return data.sessionToken;
 }
 
 reportFileInput.addEventListener("change", loadReportFile);
