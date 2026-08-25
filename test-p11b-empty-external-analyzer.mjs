@@ -8,7 +8,7 @@ function assert(condition, message) {
   }
 }
 
-const analyzerJs = readFileSync("public/analyzer.js", "utf8");
+const analyzerJs = readFileSync("public/analyzer.js", "utf8").replace(/\r\n?/g, "\n");
 
 assert(
   analyzerJs.includes("if (items.length === 0) {\n    return [];\n  }"),
