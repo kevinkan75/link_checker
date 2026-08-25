@@ -65,6 +65,7 @@ const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 const DOCUMENT_ACCEPT_HEADER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 const GENERIC_ACCEPT_HEADER = "*/*";
 const ACCEPT_ENCODING_HEADER = "gzip, deflate";
+const RESPONSE_ABORT_CLEANUP = Symbol("linkCheckerResponseAbortCleanup");
 const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
 const SPA_LINK_MODES = new Set(["auto", "off", "strict"]);
 const TRACKING_QUERY_KEYS = new Set(["fbclid", "gclid", "msclkid", "yclid"]);
@@ -698,6 +699,7 @@ class LinkChecker {
     this.stopped = false;
     this.stoppedByUser = false;
     this.stopReason = null;
+    this.activeRequestControllers = new Set();
     this.runStartedAt = null;
     this.robotsTxt = buildInitialRobotsTxtSummary(this.startOrigin, this.options);
     this.scanPolicy = buildScanPolicy(this.robotsTxt, this.options);
@@ -768,6 +770,53 @@ class LinkChecker {
     this.stopped = true;
     this.stopReason = reason;
     this.stoppedByUser = reason === "stopped_by_user";
+    const stopError = createStopAbortError(reason);
+    for (const controller of this.activeRequestControllers) {
+      if (!controller.signal.aborted) {
+        controller.abort(stopError);
+      }
+    }
+  }
+
+  createRequestController() {
+    const controller = new AbortController();
+    this.activeRequestControllers.add(controller);
+    if (this.stopped && !controller.signal.aborted) {
+      controller.abort(createStopAbortError(this.stopReason || "stopped_by_user"));
+    }
+    return {
+      controller,
+      cleanup: () => {
+        this.activeRequestControllers.delete(controller);
+      },
+    };
+  }
+
+  makeFetchOptions(overrides = {}, scheduler = this.hostScheduler) {
+    return {
+      timeoutMs: this.options.timeoutMs,
+      retryCount: this.options.retryCount,
+      maxRedirects: this.options.maxRedirects,
+      longRedirectThreshold: this.options.longRedirectThreshold,
+      userAgent: this.options.userAgent,
+      acceptLanguage: this.options.acceptLanguage,
+      preferGet: this.options.preferGet,
+      canonicalStrategy: this.options.canonicalStrategy,
+      legacyTls: this.options.legacyTls,
+      maxHtmlBytes: this.options.maxHtmlBytes,
+      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+      connectionOptions: this.connectionOptions,
+      agents: this.agents,
+      securityPolicy: this.securityPolicy,
+      retryAfterMaxMs: this.options.retryAfterMaxMs,
+      protectionBodyHash: this.options.protectionBodyHash,
+      scheduleRequest: (requestUrl, task) => scheduler.run(requestUrl, task),
+      onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result, scheduler),
+      createAbortController: () => this.createRequestController(),
+      isStopped: () => this.stopped,
+      ...overrides,
+    };
   }
 
   async inspectRobotsTxt() {
@@ -779,30 +828,14 @@ class LinkChecker {
 
     const robotsUrl = new URL("/robots.txt", this.startOrigin).toString();
     try {
-      const result = await fetchUrl(robotsUrl, {
+      const result = await fetchUrl(robotsUrl, this.makeFetchOptions({
         requireBody: true,
         forceGet: true,
-        timeoutMs: this.options.timeoutMs,
         retryCount: 0,
-        maxRedirects: this.options.maxRedirects,
-        longRedirectThreshold: this.options.longRedirectThreshold,
-        userAgent: this.options.userAgent,
-        acceptLanguage: this.options.acceptLanguage,
         referer: this.startUrl,
         preferGet: true,
-        canonicalStrategy: this.options.canonicalStrategy,
-        legacyTls: this.options.legacyTls,
         maxHtmlBytes: Math.min(this.options.maxHtmlBytes, 256 * 1024),
-        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-        connectionOptions: this.connectionOptions,
-        agents: this.agents,
-        securityPolicy: this.securityPolicy,
-        retryAfterMaxMs: this.options.retryAfterMaxMs,
-        protectionBodyHash: this.options.protectionBodyHash,
-        scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
-        onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
-      });
+      }));
       this.robotsTxt = buildRobotsTxtSummary(robotsUrl, result, this.options);
     } catch (error) {
       this.robotsTxt = buildRobotsTxtFetchErrorSummary(robotsUrl, error, this.options);
@@ -2159,32 +2192,20 @@ class LinkChecker {
   async fetchWithCache(url, requireBody) {
     this.reporter?.requestQueued(url, requireBody || this.options.preferGet ? "GET" : "HEAD");
     const referer = this.getRequestReferer(url);
-    const result = await fetchUrl(url, {
+    const result = await fetchUrl(url, this.makeFetchOptions({
       requireBody,
-      timeoutMs: this.options.timeoutMs,
-      retryCount: this.options.retryCount,
-      maxRedirects: this.options.maxRedirects,
-      longRedirectThreshold: this.options.longRedirectThreshold,
-      userAgent: this.options.userAgent,
-      acceptLanguage: this.options.acceptLanguage,
       referer,
-      preferGet: this.options.preferGet,
-      canonicalStrategy: this.options.canonicalStrategy,
-      legacyTls: this.options.legacyTls,
-      maxHtmlBytes: this.options.maxHtmlBytes,
-      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-      connectionOptions: this.connectionOptions,
-      agents: this.agents,
-      securityPolicy: this.securityPolicy,
-      retryAfterMaxMs: this.options.retryAfterMaxMs,
-      protectionBodyHash: this.options.protectionBodyHash,
-      scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
-      onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
-    });
+    }));
+
+    if (isStopCancelledResult(result)) {
+      return result;
+    }
 
     if (this.shouldConfirmWithHomepageFallback(url, result, requireBody)) {
       const homepageFallback = await this.confirmWithHomepageFallback(url);
+      if (isStopCancelledResult(homepageFallback)) {
+        return homepageFallback;
+      }
       if (homepageFallback.ok) {
         this.setResultForUrl(url, homepageFallback);
         this.reporter?.requestFinished(homepageFallback);
@@ -2194,6 +2215,9 @@ class LinkChecker {
 
     if (this.shouldConfirmWithSourceGet(url, result)) {
       const confirmed = await this.confirmWithSourceGet(url);
+      if (isStopCancelledResult(confirmed)) {
+        return confirmed;
+      }
       if (confirmed.ok) {
         this.setResultForUrl(url, confirmed);
         this.reporter?.requestFinished(confirmed);
@@ -2203,6 +2227,9 @@ class LinkChecker {
 
     if (!result.ok && result.status === 404) {
       const fallbackResult = await this.confirmWithFallbackUrls(url, result);
+      if (isStopCancelledResult(fallbackResult)) {
+        return fallbackResult;
+      }
       if (fallbackResult !== result && fallbackResult.ok) {
         this.setResultForUrl(url, fallbackResult);
         this.reporter?.requestFinished(fallbackResult);
@@ -2224,30 +2251,15 @@ class LinkChecker {
 
   async confirmWithHomepageFallback(url) {
     for (const fallbackUrl of getHomepageFallbackUrls(url)) {
-      const fallbackResult = await fetchUrl(fallbackUrl, {
+      const fallbackResult = await fetchUrl(fallbackUrl, this.makeFetchOptions({
         requireBody: true,
         forceGet: true,
-        timeoutMs: this.options.timeoutMs,
-        retryCount: this.options.retryCount,
-        maxRedirects: this.options.maxRedirects,
-        longRedirectThreshold: this.options.longRedirectThreshold,
-        userAgent: this.options.userAgent,
-        acceptLanguage: this.options.acceptLanguage,
         referer: url,
-        preferGet: this.options.preferGet,
-        canonicalStrategy: this.options.canonicalStrategy,
-        legacyTls: this.options.legacyTls,
-        maxHtmlBytes: this.options.maxHtmlBytes,
-        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-        connectionOptions: this.connectionOptions,
-        agents: this.agents,
-        securityPolicy: this.securityPolicy,
-        retryAfterMaxMs: this.options.retryAfterMaxMs,
-        protectionBodyHash: this.options.protectionBodyHash,
-        scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
-        onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
-      });
+      }));
+
+      if (isStopCancelledResult(fallbackResult)) {
+        return fallbackResult;
+      }
 
       if (fallbackResult.ok) {
         return {
@@ -2278,30 +2290,15 @@ class LinkChecker {
         continue;
       }
 
-      const result = await fetchUrl(url, {
+      const result = await fetchUrl(url, this.makeFetchOptions({
         requireBody: false,
         forceGet: true,
-        timeoutMs: this.options.timeoutMs,
         retryCount: 0,
-        maxRedirects: this.options.maxRedirects,
-        longRedirectThreshold: this.options.longRedirectThreshold,
-        userAgent: this.options.userAgent,
-        acceptLanguage: this.options.acceptLanguage,
         referer: source.page,
-        preferGet: this.options.preferGet,
-        canonicalStrategy: this.options.canonicalStrategy,
-        legacyTls: this.options.legacyTls,
-        maxHtmlBytes: this.options.maxHtmlBytes,
-        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-        connectionOptions: this.connectionOptions,
-        agents: this.agents,
-        securityPolicy: this.securityPolicy,
-        retryAfterMaxMs: this.options.retryAfterMaxMs,
-        protectionBodyHash: this.options.protectionBodyHash,
-        scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
-        onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
-      });
+      }));
+      if (isStopCancelledResult(result)) {
+        return result;
+      }
       result.confirmedWithReferer = source.page;
       if (result.ok) {
         return result;
@@ -2324,30 +2321,15 @@ class LinkChecker {
         }
 
         const referer = sameOrigin(source.page, fallbackUrl) || this.options.externalReferer ? source.page : null;
-        const fallbackResult = await fetchUrl(fallbackUrl, {
+        const fallbackResult = await fetchUrl(fallbackUrl, this.makeFetchOptions({
           requireBody: false,
           forceGet: true,
-          timeoutMs: this.options.timeoutMs,
           retryCount: 0,
-          maxRedirects: this.options.maxRedirects,
-          longRedirectThreshold: this.options.longRedirectThreshold,
-          userAgent: this.options.userAgent,
-          acceptLanguage: this.options.acceptLanguage,
           referer,
-          preferGet: this.options.preferGet,
-          canonicalStrategy: this.options.canonicalStrategy,
-          legacyTls: this.options.legacyTls,
-          maxHtmlBytes: this.options.maxHtmlBytes,
-          maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-          maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-          connectionOptions: this.connectionOptions,
-          agents: this.agents,
-          securityPolicy: this.securityPolicy,
-          retryAfterMaxMs: this.options.retryAfterMaxMs,
-          protectionBodyHash: this.options.protectionBodyHash,
-          scheduleRequest: (requestUrl, task) => this.hostScheduler.run(requestUrl, task),
-          onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
-        });
+        }));
+        if (isStopCancelledResult(fallbackResult)) {
+          return fallbackResult;
+        }
         fallbackResult.normalizedFrom = url;
         fallbackResult.normalizationFallback = true;
         fallbackResult.confirmedWithReferer = referer;
@@ -2477,30 +2459,26 @@ class LinkChecker {
     }
 
     const referer = this.getConfirmationReferer(result.url);
-    const confirmed = await fetchUrl(result.url, {
+    const confirmed = await fetchUrl(result.url, this.makeFetchOptions({
       requireBody: false,
       forceGet: true,
-      timeoutMs: this.options.timeoutMs,
       retryCount: 0,
-      maxRedirects: this.options.maxRedirects,
-      longRedirectThreshold: this.options.longRedirectThreshold,
       userAgent: BROWSER_USER_AGENT,
-      acceptLanguage: this.options.acceptLanguage,
       referer,
       preferGet: true,
-      canonicalStrategy: this.options.canonicalStrategy,
-      legacyTls: this.options.legacyTls,
-      maxHtmlBytes: this.options.maxHtmlBytes,
-      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-      connectionOptions: this.connectionOptions,
-      agents: this.agents,
-      securityPolicy: this.securityPolicy,
-      retryAfterMaxMs: this.options.retryAfterMaxMs,
-      protectionBodyHash: this.options.protectionBodyHash,
-      scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
-      onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result, this.confirmationScheduler),
-    });
+    }, this.confirmationScheduler));
+
+    if (isStopCancelledResult(confirmed)) {
+      result.confirmation = {
+        ...result.confirmation,
+        checked: false,
+        outcome: "needs_review",
+        clientRedirectEvidence: createClientRedirectEvidence("stopped"),
+        reason: "stopped",
+      };
+      result.needsReview = true;
+      return;
+    }
 
     const outcome = getConfirmationOutcome(confirmed);
     const clientRedirectEvidence = await this.buildClientRedirectEvidence(result, confirmed, referer);
@@ -2536,30 +2514,22 @@ class LinkChecker {
       };
     }
 
-    const target = await fetchUrl(evidence.targetUrl, {
+    const target = await fetchUrl(evidence.targetUrl, this.makeFetchOptions({
       requireBody: false,
       forceGet: true,
-      timeoutMs: this.options.timeoutMs,
       retryCount: 0,
-      maxRedirects: this.options.maxRedirects,
-      longRedirectThreshold: this.options.longRedirectThreshold,
       userAgent: BROWSER_USER_AGENT,
-      acceptLanguage: this.options.acceptLanguage,
       referer: confirmed.finalUrl || result.url || referer,
       preferGet: true,
-      canonicalStrategy: this.options.canonicalStrategy,
-      legacyTls: this.options.legacyTls,
-      maxHtmlBytes: this.options.maxHtmlBytes,
-      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-      connectionOptions: this.connectionOptions,
-      agents: this.agents,
-      securityPolicy: this.securityPolicy,
-      retryAfterMaxMs: this.options.retryAfterMaxMs,
-      protectionBodyHash: this.options.protectionBodyHash,
-      scheduleRequest: (requestUrl, task) => this.confirmationScheduler.run(requestUrl, task),
-      onRetryAfter: (requestUrl, cooldownMs, result) => this.applyRetryAfterCooldown(requestUrl, cooldownMs, result, this.confirmationScheduler),
-    });
+    }, this.confirmationScheduler));
+
+    if (isStopCancelledResult(target)) {
+      return {
+        ...evidence,
+        targetChecked: false,
+        reason: "stopped",
+      };
+    }
 
     return {
       ...evidence,
@@ -3371,30 +3341,17 @@ async function readSitemapSource(source, checker) {
   const warnings = [];
   const maxBytes = checker.options.maxHtmlBytes;
   if (sourceType === "url") {
-    const result = await fetchUrl(source, {
+    const result = await fetchUrl(source, checker.makeFetchOptions({
       requireBody: true,
       forceGet: true,
-      timeoutMs: checker.options.timeoutMs,
       retryCount: 0,
-      maxRedirects: checker.options.maxRedirects,
-      longRedirectThreshold: checker.options.longRedirectThreshold,
-      userAgent: checker.options.userAgent,
-      acceptLanguage: checker.options.acceptLanguage,
       referer: checker.startUrl,
       preferGet: true,
-      canonicalStrategy: checker.options.canonicalStrategy,
-      legacyTls: checker.options.legacyTls,
       maxHtmlBytes: maxBytes,
-      maxBodyPreviewBytes: checker.options.maxBodyPreviewBytes,
-      maxDownloadProbeBytes: checker.options.maxDownloadProbeBytes,
-      connectionOptions: checker.connectionOptions,
-      agents: checker.agents,
-      securityPolicy: checker.securityPolicy,
-      retryAfterMaxMs: checker.options.retryAfterMaxMs,
-      protectionBodyHash: checker.options.protectionBodyHash,
-      scheduleRequest: (requestUrl, task) => checker.hostScheduler.run(requestUrl, task),
-      onRetryAfter: (requestUrl, cooldownMs, result) => checker.applyRetryAfterCooldown(requestUrl, cooldownMs, result),
-    });
+    }));
+    if (isStopCancelledResult(result)) {
+      throw createStopAbortError(checker.stopReason || "stopped_by_user");
+    }
     if (!result.ok) {
       throw new Error(`Sitemap URL returned ${result.status || result.issueType || "error"}`);
     }
@@ -4245,6 +4202,8 @@ async function fetchUrl(url, {
   protectionBodyHash = DEFAULTS.protectionBodyHash,
   scheduleRequest,
   onRetryAfter,
+  createAbortController,
+  isStopped,
 }) {
   const started = performance.now();
   let result = null;
@@ -4271,9 +4230,14 @@ async function fetchUrl(url, {
       protectionBodyHash,
       scheduleRequest,
       started,
+      createAbortController,
+      isStopped,
     });
     result.attempts = attempt + 1;
-    const canRetry = attempt < retryCount && shouldRetryResult(result);
+    if (isStopCancelledResult(result)) {
+      return result;
+    }
+    const canRetry = !isStopped?.() && attempt < retryCount && shouldRetryResult(result);
     const retryAfterCooldownMs = applyRetryAfterCooldown(result, {
       retryAfterMaxMs,
       onRetryAfter,
@@ -4312,6 +4276,8 @@ async function fetchUrlOnce(url, {
   protectionBodyHash,
   scheduleRequest,
   started,
+  createAbortController,
+  isStopped,
 }) {
   try {
     if (requireBody) {
@@ -4334,6 +4300,7 @@ async function fetchUrlOnce(url, {
         readBody: true,
         scheduleRequest,
         started,
+        createAbortController,
       });
     }
 
@@ -4357,6 +4324,7 @@ async function fetchUrlOnce(url, {
         readBody: false,
         scheduleRequest,
         started,
+        createAbortController,
       });
     }
 
@@ -4379,6 +4347,7 @@ async function fetchUrlOnce(url, {
       readBody: false,
       scheduleRequest,
       started,
+      createAbortController,
     });
     if (head.ok || !shouldFallbackFromHeadToGet(head)) {
       return head;
@@ -4403,8 +4372,17 @@ async function fetchUrlOnce(url, {
       readBody: false,
       scheduleRequest,
       started,
+      createAbortController,
     });
   } catch (error) {
+    if (isStopAbortError(error) || isStopped?.()) {
+      return buildStopCancelledResult(url, {
+        method: requireBody || forceGet || preferGet ? "GET" : "HEAD",
+        canonicalStrategy,
+        started,
+        reason: error.stopReason || "stopped_by_user",
+      });
+    }
     const cause = getErrorCause(error);
     return {
       url,
@@ -4797,6 +4775,7 @@ async function request(url, method, {
   readBody,
   scheduleRequest,
   started,
+  createAbortController,
 }) {
   let currentUrl = url;
   let currentMethod = method;
@@ -4829,6 +4808,7 @@ async function request(url, method, {
       legacyTls,
       connectionOptions,
       agents,
+      createAbortController,
     }));
 
     if (isRedirectStatus(response.status)) {
@@ -4952,9 +4932,15 @@ async function rawRequest(url, method, {
   legacyTls,
   connectionOptions,
   agents,
+  createAbortController,
 }) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const requestController = createAbortController?.() || createStandaloneRequestController();
+  const { controller, cleanup } = requestController;
+  const timer = setTimeout(() => {
+    if (!controller.signal.aborted) {
+      controller.abort(createAbortError());
+    }
+  }, timeoutMs);
   const headers = buildRequestHeaders(url, {
     userAgent,
     acceptLanguage,
@@ -4962,19 +4948,30 @@ async function rawRequest(url, method, {
     connectionOptions,
   });
 
+  let response = null;
   try {
     if (legacyTls) {
-      return await legacyTlsRequest(url, method, { timeoutMs, headers, agents });
+      response = await legacyTlsRequest(url, method, { timeoutMs, headers, agents, signal: controller.signal });
+      return attachResponseAbortCleanup(response, cleanup);
     }
 
-    return await fetch(url, {
+    response = await fetch(url, {
       method,
       redirect: "manual",
       signal: controller.signal,
       headers,
     });
+    return attachResponseAbortCleanup(response, cleanup);
+  } catch (error) {
+    if (isStopAbortError(controller.signal.reason)) {
+      throw controller.signal.reason;
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
+    if (!response) {
+      cleanup();
+    }
   }
 }
 
@@ -4999,11 +4996,16 @@ function getAcceptHeaderForUrl(url) {
   return kind.page ? DOCUMENT_ACCEPT_HEADER : GENERIC_ACCEPT_HEADER;
 }
 
-function legacyTlsRequest(url, method, { timeoutMs, headers, agents }) {
+function legacyTlsRequest(url, method, { timeoutMs, headers, agents, signal }) {
   const parsed = new URL(url);
   const client = parsed.protocol === "http:" ? http : https;
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(getAbortSignalReason(signal));
+      return;
+    }
+
     const requestOptions = {
       method,
       headers,
@@ -5015,14 +5017,40 @@ function legacyTlsRequest(url, method, { timeoutMs, headers, agents }) {
       requestOptions.ciphers = "DEFAULT@SECLEVEL=0";
     }
 
-    const request = client.request(url, requestOptions, (response) => {
-      resolve(new LegacyResponse(url, response));
+    let settled = false;
+    let request = null;
+    let responseStream = null;
+    const cleanup = () => {
+      signal?.removeEventListener?.("abort", onAbort);
+    };
+    const settle = (fn, value, { keepAbortListener = false } = {}) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (!keepAbortListener) {
+        cleanup();
+      }
+      fn(value);
+    };
+    const onAbort = () => {
+      const reason = getAbortSignalReason(signal);
+      responseStream?.destroy(reason);
+      request?.destroy(reason);
+    };
+
+    request = client.request(url, requestOptions, (response) => {
+      responseStream = response;
+      settle(resolve, attachResponseAbortCleanup(new LegacyResponse(url, response), cleanup), {
+        keepAbortListener: true,
+      });
     });
 
+    signal?.addEventListener?.("abort", onAbort, { once: true });
     request.on("timeout", () => {
       request.destroy(createAbortError());
     });
-    request.on("error", reject);
+    request.on("error", (error) => settle(reject, error));
     request.end();
   });
 }
@@ -5143,6 +5171,86 @@ function createAbortError() {
   return error;
 }
 
+function createStopAbortError(reason = "stopped_by_user") {
+  const error = new Error("Request cancelled because the scan was stopped");
+  error.name = "LinkCheckerStopError";
+  error.code = "ERR_LINK_CHECKER_STOPPED";
+  error.stopReason = reason;
+  return error;
+}
+
+function isStopAbortError(error) {
+  return error?.code === "ERR_LINK_CHECKER_STOPPED";
+}
+
+function createStandaloneRequestController() {
+  const controller = new AbortController();
+  return {
+    controller,
+    cleanup: () => {},
+  };
+}
+
+function getAbortSignalReason(signal) {
+  return signal?.reason instanceof Error ? signal.reason : createAbortError();
+}
+
+function attachResponseAbortCleanup(response, cleanup) {
+  const existing = response?.[RESPONSE_ABORT_CLEANUP];
+  Object.defineProperty(response, RESPONSE_ABORT_CLEANUP, {
+    value: () => {
+      if (typeof existing === "function") {
+        existing();
+      }
+      cleanup();
+    },
+    configurable: true,
+  });
+  return response;
+}
+
+function cleanupResponseAbort(response) {
+  const cleanup = response?.[RESPONSE_ABORT_CLEANUP];
+  if (typeof cleanup === "function") {
+    cleanup();
+    delete response[RESPONSE_ABORT_CLEANUP];
+  }
+}
+
+function buildStopCancelledResult(url, { method, canonicalStrategy, started, reason }) {
+  return {
+    url,
+    canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
+    checkedAt: new Date().toISOString(),
+    ok: false,
+    status: null,
+    method,
+    finalUrl: null,
+    contentType: null,
+    contentLength: null,
+    cacheHeaders: emptyCacheHeaders(),
+    wafHeaders: {},
+    blockedReason: null,
+    blockedRuleId: null,
+    bodySignature: null,
+    suspectedWaf: false,
+    suspectedBot: false,
+    redirected: false,
+    redirectCount: 0,
+    redirectChain: [],
+    redirectType: "none",
+    redirectIssues: [],
+    redirectLabels: [],
+    elapsedMs: Math.round(performance.now() - started),
+    cancelledByStop: true,
+    stopReason: reason,
+  };
+}
+
+function isStopCancelledResult(result) {
+  return result?.cancelledByStop === true;
+}
+
 async function buildResponseResult(response, {
   url,
   method,
@@ -5159,67 +5267,71 @@ async function buildResponseResult(response, {
   maxRedirects,
   longRedirectThreshold,
 }) {
-  const contentType = response.headers.get("content-type");
-  const retryAfter = parseRetryAfterHeader(response.headers.get("retry-after"));
-  const result = {
-    url,
-    canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
-    checkedAt: new Date().toISOString(),
-    ok: response.status < 400,
-    status: response.status,
-    method,
-    finalMethod: currentMethod,
-    finalUrl: response.url,
-    contentType,
-    contentLength: parseContentLength(response.headers),
-    cacheHeaders: extractCacheHeaders(response.headers),
-    retryAfter,
-    server: response.headers.get("server"),
-    wafHeaders: extractWafHeaders(response.headers),
-    blockedReason: null,
-    blockedRuleId: extractBlockedRuleId(response.headers),
-    bodySignature: null,
-    suspectedWaf: false,
-    suspectedBot: false,
-    requestReferer: referer || null,
-    bodyBytesRead: 0,
-    bodyTruncated: false,
-    elapsedMs: Math.round(performance.now() - started),
-    error: null,
-  };
+  try {
+    const contentType = response.headers.get("content-type");
+    const retryAfter = parseRetryAfterHeader(response.headers.get("retry-after"));
+    const result = {
+      url,
+      canonicalUrl: canonicalizeCheckedUrl(url, canonicalStrategy),
+      checkedAt: new Date().toISOString(),
+      ok: response.status < 400,
+      status: response.status,
+      method,
+      finalMethod: currentMethod,
+      finalUrl: response.url,
+      contentType,
+      contentLength: parseContentLength(response.headers),
+      cacheHeaders: extractCacheHeaders(response.headers),
+      retryAfter,
+      server: response.headers.get("server"),
+      wafHeaders: extractWafHeaders(response.headers),
+      blockedReason: null,
+      blockedRuleId: extractBlockedRuleId(response.headers),
+      bodySignature: null,
+      suspectedWaf: false,
+      suspectedBot: false,
+      requestReferer: referer || null,
+      bodyBytesRead: 0,
+      bodyTruncated: false,
+      elapsedMs: Math.round(performance.now() - started),
+      error: null,
+    };
 
-  if (readBody) {
-    const body = await readResponseText(response, maxHtmlBytes);
-    result.body = body.text;
-    result.bodyBytesRead = body.bytesRead;
-    result.bodyTruncated = body.truncated;
-  } else if (!result.ok && isHtml(contentType)) {
-    const body = await readResponseText(response, maxBodyPreviewBytes);
-    result.diagnosticBody = body.text;
-    result.bodyBytesRead = body.bytesRead;
-    result.bodyTruncated = body.truncated;
-  } else {
-    const release = await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
-    result.bodyBytesRead = release.bytesRead;
-    result.bodyTruncated = release.truncated;
+    if (readBody) {
+      const body = await readResponseText(response, maxHtmlBytes);
+      result.body = body.text;
+      result.bodyBytesRead = body.bytesRead;
+      result.bodyTruncated = body.truncated;
+    } else if (!result.ok && isHtml(contentType)) {
+      const body = await readResponseText(response, maxBodyPreviewBytes);
+      result.diagnosticBody = body.text;
+      result.bodyBytesRead = body.bytesRead;
+      result.bodyTruncated = body.truncated;
+    } else {
+      const release = await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
+      result.bodyBytesRead = release.bytesRead;
+      result.bodyTruncated = release.truncated;
+    }
+
+    const signature = buildBodySignature(result.body || result.diagnosticBody || "", {
+      includeBodyHash: protectionBodyHash,
+    });
+    if (signature && (!result.ok || signature.matchedPatterns.length > 0)) {
+      result.bodySignature = signature;
+    }
+
+    applyRedirectMetadata(result, {
+      originalUrl: url,
+      redirectChain,
+      maxRedirects,
+      longRedirectThreshold,
+    });
+    applyResponseClassification(result, response.headers);
+    applyRedirectIssueClassification(result);
+    return result;
+  } finally {
+    cleanupResponseAbort(response);
   }
-
-  const signature = buildBodySignature(result.body || result.diagnosticBody || "", {
-    includeBodyHash: protectionBodyHash,
-  });
-  if (signature && (!result.ok || signature.matchedPatterns.length > 0)) {
-    result.bodySignature = signature;
-  }
-
-  applyRedirectMetadata(result, {
-    originalUrl: url,
-    redirectChain,
-    maxRedirects,
-    longRedirectThreshold,
-  });
-  applyResponseClassification(result, response.headers);
-  applyRedirectIssueClassification(result);
-  return result;
 }
 
 async function readResponseText(response, maxBytes) {
@@ -5271,11 +5383,11 @@ async function readResponseText(response, maxBytes) {
 }
 
 async function releaseResponseBody(response, { maxDrainBytes = 64 * 1024 } = {}) {
-  if (!response.body) {
-    return { bytesRead: 0, truncated: false };
-  }
-
   try {
+    if (!response.body) {
+      return { bytesRead: 0, truncated: false };
+    }
+
     const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
     if (Number.isFinite(contentLength) && contentLength <= maxDrainBytes) {
       await response.arrayBuffer();
@@ -5290,6 +5402,8 @@ async function releaseResponseBody(response, { maxDrainBytes = 64 * 1024 } = {})
   } catch {
     // Cleanup is best-effort; keep the original HTTP result intact.
     return { bytesRead: 0, truncated: false };
+  } finally {
+    cleanupResponseAbort(response);
   }
 }
 
