@@ -507,7 +507,7 @@ class ProgressReporter {
     const broken = brokenItems.length;
     const brokenByType = countBrokenByType(brokenItems);
     const parts = [
-      `Crawled ${this.checker.crawledPages.size}/${this.checker.options.maxPages} pages`,
+      `Crawled ${this.checker.crawledPageKeys.size}/${this.checker.options.maxPages} pages`,
       `Queued ${this.checker.pageQueue.length}`,
       `Validation ${this.checker.validationQueue.length}/${this.checker.activeValidationTasks}`,
       `Checked ${this.checker.results.size} URLs`,
@@ -607,7 +607,9 @@ class LinkChecker {
     });
     this.pageQueue = [{ url: this.startUrl, depth: 0 }];
     this.queuedPages = new Set([this.startUrl]);
+    this.queuedPageKeys = new Set([this.getPageKey(this.startUrl)]);
     this.crawledPages = new Set();
+    this.crawledPageKeys = new Set();
     this.validationQueue = [];
     this.activeValidationTasks = 0;
     this.validationError = null;
@@ -886,18 +888,18 @@ class LinkChecker {
     });
     summary.enabled = true;
     summary.depth = 1;
-    const queuedPages = new Set(this.queuedPages);
+    const queuedPageKeys = new Set(this.queuedPageKeys);
     const seeds = [];
     for (const entry of entries) {
       summary.attempted += 1;
-      const decision = this.getSitemapSeedDecision(entry, { queuedPages });
+      const decision = this.getSitemapSeedDecision(entry, { queuedPageKeys });
       if (!decision.ok) {
         recordSitemapSeedIgnored(summary, decision.reason);
         continue;
       }
 
       seeds.push({ entry, url: decision.url });
-      queuedPages.add(decision.url);
+      queuedPageKeys.add(decision.pageKey);
       summary.seeded += 1;
     }
     return { summary, seeds };
@@ -932,11 +934,11 @@ class LinkChecker {
     }
   }
 
-  getSitemapSeedDecision(entry, { queuedPages = this.queuedPages } = {}) {
+  getSitemapSeedDecision(entry, { queuedPageKeys = this.queuedPageKeys } = {}) {
     if (this.options.maxDepth < 1) {
       return { ok: false, reason: "max_depth" };
     }
-    if (queuedPages.size >= this.options.maxPages) {
+    if (queuedPageKeys.size >= this.options.maxPages) {
       return { ok: false, reason: "max_pages" };
     }
     let url;
@@ -951,10 +953,11 @@ class LinkChecker {
     if (!looksLikePage(url)) {
       return { ok: false, reason: "non_page_like" };
     }
-    if (queuedPages.has(url) || this.crawledPages.has(url)) {
+    const pageKey = this.getPageKey(url);
+    if (queuedPageKeys.has(pageKey) || this.crawledPageKeys.has(pageKey)) {
       return { ok: false, reason: "already_queued_or_crawled" };
     }
-    return { ok: true, url };
+    return { ok: true, url, pageKey };
   }
 
   async loadIncrementalInputs() {
@@ -1352,11 +1355,13 @@ class LinkChecker {
   }
 
   async processPage({ url, depth }) {
-    if (this.stopped || this.crawledPages.has(url) || this.crawledPages.size >= this.options.maxPages) {
+    const pageKey = this.getPageKey(url);
+    if (this.stopped || this.crawledPageKeys.has(pageKey) || this.crawledPageKeys.size >= this.options.maxPages) {
       return;
     }
 
     this.crawledPages.add(url);
+    this.crawledPageKeys.add(pageKey);
     this.currentPages.set(url, depth);
     this.reporter?.pageStarted(url, depth);
     try {
@@ -1426,8 +1431,7 @@ class LinkChecker {
           this.reporter?.externalSkipped(resolved, url);
         }
 
-        if (shouldCrawl) {
-          this.enqueuePage(resolved, depth + 1);
+        if (shouldCrawl && this.enqueuePage(resolved, depth + 1)) {
           crawlEnqueuedFromPage += 1;
         }
       }
@@ -1493,7 +1497,7 @@ class LinkChecker {
       });
       return false;
     }
-    if (this.queuedPages.size >= this.options.maxPages) {
+    if (this.queuedPageKeys.size >= this.options.maxPages) {
       this.updateXmlSitemapFallback({
         status: "skipped",
         reason: "max_pages",
@@ -1587,7 +1591,7 @@ class LinkChecker {
       return;
     }
 
-    if (this.queuedPages.size >= this.options.maxPages) {
+    if (this.queuedPageKeys.size >= this.options.maxPages) {
       this.discoveryFallback.htmlSitemap = {
         ...this.discoveryFallback.htmlSitemap,
         status: "skipped",
@@ -1648,15 +1652,16 @@ class LinkChecker {
         needsStatusCheck: true,
         needsBodyFetch: true,
       });
-      this.enqueuePage(candidate, 1);
-      this.discoveryFallback.htmlSitemap = {
-        ...this.discoveryFallback.htmlSitemap,
-        status: "accepted",
-        accepted: true,
-        acceptedUrl: candidate,
-        linksDiscovered: usefulLinks.length,
-      };
-      return;
+      if (this.enqueuePage(candidate, 1)) {
+        this.discoveryFallback.htmlSitemap = {
+          ...this.discoveryFallback.htmlSitemap,
+          status: "accepted",
+          accepted: true,
+          acceptedUrl: candidate,
+          linksDiscovered: usefulLinks.length,
+        };
+        return;
+      }
     }
 
     this.discoveryFallback.htmlSitemap = {
@@ -1688,7 +1693,8 @@ class LinkChecker {
         continue;
       }
       const canonical = this.getCanonicalKey(resolved);
-      if (this.inventory.has(canonical) || this.queuedPages.has(resolved) || this.crawledPages.has(resolved)) {
+      const pageKey = this.getPageKey(resolved);
+      if (this.inventory.has(canonical) || this.queuedPageKeys.has(pageKey) || this.crawledPageKeys.has(pageKey)) {
         continue;
       }
       useful.add(canonical);
@@ -1710,10 +1716,11 @@ class LinkChecker {
     if (!PAGE_NAVIGATION_TAGS.has(link.tag) && !isPayloadLink(link)) {
       return false;
     }
-    if (this.queuedPages.has(url) || this.crawledPages.has(url)) {
+    const pageKey = this.getPageKey(url);
+    if (this.queuedPageKeys.has(pageKey) || this.crawledPageKeys.has(pageKey)) {
       return false;
     }
-    if (this.queuedPages.size >= this.options.maxPages) {
+    if (this.queuedPageKeys.size >= this.options.maxPages) {
       return false;
     }
 
@@ -1749,9 +1756,19 @@ class LinkChecker {
   }
 
   enqueuePage(url, depth) {
+    const pageKey = this.getPageKey(url);
+    if (this.queuedPageKeys.has(pageKey) || this.crawledPageKeys.has(pageKey)) {
+      return false;
+    }
+    if (this.queuedPageKeys.size >= this.options.maxPages) {
+      return false;
+    }
+
     this.queuedPages.add(url);
+    this.queuedPageKeys.add(pageKey);
     this.pageQueue.push({ url, depth });
     this.reporter?.pageQueued(url, depth);
+    return true;
   }
 
   addSource(url, source) {
@@ -1792,6 +1809,10 @@ class LinkChecker {
 
   getCanonicalKey(url) {
     return canonicalizeCheckedUrl(url, this.options.canonicalStrategy);
+  }
+
+  getPageKey(url) {
+    return this.getCanonicalKey(url);
   }
 
   getResultCanonicalKey(result) {
@@ -2658,7 +2679,7 @@ class LinkChecker {
       scanPolicy: this.scanPolicy,
       compliance: this.compliance,
       summary: {
-        pagesCrawled: this.crawledPages.size,
+        pagesCrawled: this.crawledPageKeys.size,
         urlsChecked: checked.length,
         brokenLinks: broken.length,
         brokenByType: countBrokenByType(broken),
@@ -2791,7 +2812,7 @@ class LinkChecker {
     } else if (assetRatio > 0.7) {
       warnings.push("asset_dominant_scan");
     }
-    if (this.crawledPages.size <= 1 && (spaDetection?.stats?.urlLiteralCount || 0) >= 10) {
+    if (this.crawledPageKeys.size <= 1 && (spaDetection?.stats?.urlLiteralCount || 0) >= 10) {
       warnings.push("low_page_count_with_many_url_literals");
     }
     if (spaDetection?.detected && this.options.spaLinks === "off") {
