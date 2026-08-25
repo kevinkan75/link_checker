@@ -21,7 +21,9 @@
 ## 驗證慣例
 
 - 語法 gate 可用 `node --check` 檢查根目錄 `.mjs` 與 `public/*.js`。
-- 測試 gate 可執行全部 `test-*.mjs`。
+- Full regression 通常使用 `scripts/run-tests.ps1` 作為 canonical entry point。
+- 維護者不應在其他流程重複實作 `test-*.mjs` discovery logic。
+- 個別 `test-*.mjs` 仍可用於 targeted debugging。
 - GUI smoke 優先用本機 HTTP request 驗證 `/`、`/analyzer.html` 與 `/report-analyzer.html`，不需要自動開瀏覽器。
 - 需要啟動 GUI server 做 smoke 時，優先使用短生命週期流程，並明確設定 manual shutdown 或 `--idle-shutdown-ms`。
 - Portable smoke 應驗證 manual shutdown 與 idle shutdown。
@@ -29,6 +31,11 @@
 ## Release Gate 原則
 
 - Patch release 不應改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約，除非 release notes 明確說明。
+- Formal release flow 維持 `AUTOMATED PRECHECK -> MANUAL PUBLICATION -> AUTOMATED VERIFY`。
+- `scripts/release-preflight.ps1` 在 publication 前檢查 machine-checkable release prerequisites；任何非零 exit 都是 hard publication stop。
+- Publication 本身維持人工操作。
+- `scripts/release-verify.ps1` 在 publication 後執行 read-only verification。
+- 這兩個 release script 不建立 tag、不 push、不建立 GitHub Release、不上傳 assets，也不修復 gh authentication。
 - 正式 release 前必須重建 portable package，不能沿用舊 `dist` 產物。
 - `LinkChecker-portable.zip`、external manifest、package manifest 與 `.sha256` 必須對齊同一個 source commit。
 - Build manifest 的 `gitStatus` 應為空字串。

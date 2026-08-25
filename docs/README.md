@@ -4,7 +4,7 @@
 
 ## 使用與規格
 
-- [CLI_REFERENCE.md](CLI_REFERENCE.md)：CLI 參數、範例、cache、incremental、sitemap、rules 與 portable package 說明。
+- [CLI_REFERENCE.md](CLI_REFERENCE.md)：CLI 參數、範例、cache、incremental、sitemap、rules、portable package 與 formal-release verification 說明。
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)：核心流程、URL inventory、request policy、report schema、GUI API、Analyzer 契約與 release / packaging 技術細節。
 - [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：report-to-report diff 與 normalization 設計。
 - [JS_DYNAMIC_SCAN_PLAN.md](JS_DYNAMIC_SCAN_PLAN.md)：依賴 JavaScript 的動態網站掃描初步規劃、分階段方向與安全邊界。
@@ -20,6 +20,7 @@
 - [archive/PROJECT_ASSESSMENT_2026-07-18.md](archive/PROJECT_ASSESSMENT_2026-07-18.md)：2026-07-18 完整專案評估。
 - [archive/P9_GUI_ANALYZER_ASSESSMENT.md](archive/P9_GUI_ANALYZER_ASSESSMENT.md)：P9 GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入與 rules schema / trace 的評估及驗收紀錄。
 - [archive/P12_2A_XML_SITEMAP_FALLBACK_RECORD.md](archive/P12_2A_XML_SITEMAP_FALLBACK_RECORD.md)：P12-2A `/sitemap.xml` 自動 fallback 規劃、TYCG 實證與唯讀實作稽核。
+- [archive/MAINTENANCE_FOUNDATION_2026-08-25.md](archive/MAINTENANCE_FOUNDATION_2026-08-25.md)：Unified regression runner 與 release fail-fast automation 完成記錄。
 - [archive/README_2026-07-22_PRE_DOCS_REFRESH.md](archive/README_2026-07-22_PRE_DOCS_REFRESH.md)：本次整理前的根 README 快照。
 - [archive/ROADMAP_2026-07-22_PRE_DOCS_REFRESH.md](archive/ROADMAP_2026-07-22_PRE_DOCS_REFRESH.md)：本次整理前的根 ROADMAP 快照。
 

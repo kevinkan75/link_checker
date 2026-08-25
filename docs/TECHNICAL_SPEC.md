@@ -9,7 +9,7 @@ Local Link Checker 是一個本機執行的網站連結檢查工具。核心目�
 非目標：
 
 - 不繞過 WAF/Bot 防護。
-- 不預設啟用 headless browser render。
+- Dynamic Render / headless fallback 是保留研究但目前延後，不是 active product mainline。
 - 不保存完整 response body。
 - 不先導入資料庫、常駐服務或大型分散式架構。
 
@@ -747,7 +747,7 @@ P9b-4 第一版讓 Analyzer 可直接載入大型報告 sidecar。Report Analyze
 - CDN/WAF provider 與 body signature 規則庫可後續補強；`bodyHash` 已支援 `--protection-body-hash` opt-in，預設不輸出。
 - Asset skip / asset defer 應建立在 P7/P8 cache 與 incremental scan 之後。
 - 可增加更多 framework payload 支援，例如 Next.js `__NEXT_DATA__`。
-- `--render` headless fallback 應保持 opt-in。
+- Dynamic Render / headless fallback 目前延後；若未來恢復，必須維持 local、opt-in、bounded，並重用既有 safety / report pipeline。
 - 大量 URL 場景可將簡易排序升級為 binary heap / 完整 priority queue。
 
 ## 12. Release / Packaging
@@ -776,6 +776,24 @@ Build script 會重建：
 - `dist\LinkChecker-portable.zip`
 - `dist\LinkChecker-portable.build-manifest.json`
 - `dist\LinkChecker-portable.zip.sha256`
+
+Build、publication 與 verification 是分開的 release steps。Publication 維持人工操作；release automation 只做 machine-checkable precheck 與 read-only verification，不建立或修改 tag、GitHub Release 或 release assets。
+
+`scripts/release-preflight.ps1` 在 publication 前驗證：
+
+- source / version / report schema coherence
+- regression result
+- artifact、manifest 與 hash alignment
+- launcher / Node signature expectations
+- release tag / GitHub Release absence
+- publication prerequisites
+
+`scripts/release-verify.ps1` 在 publication 後驗證：
+
+- remote release tag
+- GitHub Release metadata
+- exact expected asset set
+- downloaded artifact SHA256
 
 Portable package 的安全與完整性原則：
 

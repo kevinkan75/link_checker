@@ -31,6 +31,7 @@
 | [P8_INCREMENTAL_SCAN_ANALYSIS.md](P8_INCREMENTAL_SCAN_ANALYSIS.md) | P8 | incremental scan、state、sitemap、reused result、GUI / Analyzer 呈現 |
 | [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md) | P9 | GUI usability 前置評估、GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入、rules schema / trace 與驗收紀錄 |
 | [P12_2A_XML_SITEMAP_FALLBACK_RECORD.md](P12_2A_XML_SITEMAP_FALLBACK_RECORD.md) | P12-2A | `/sitemap.xml` 自動 fallback 的規劃基線、TYCG 實證與唯讀實作路徑稽核 |
+| [MAINTENANCE_FOUNDATION_2026-08-25.md](MAINTENANCE_FOUNDATION_2026-08-25.md) | MAINT-FND-1 / MAINT-FND-2 | unified regression runner、release fail-fast automation 與 final integration / verification state |
 
 ## GUI、發布與站台案例
 
