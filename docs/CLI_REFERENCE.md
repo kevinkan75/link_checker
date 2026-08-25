@@ -210,6 +210,78 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 - `runtime\node.exe` 應保留有效 Authenticode 簽章；`Start Link Checker.exe` 的簽章狀態以 manifest 為準，可能是 `NotSigned`，也可能是 local self-signed。local self-signed 不是公開信任 code signing。
 - 若 package 內有 `LinkChecker-local-code-signing.cer`，它只應出現在 launcher 已成功 local self-signed 的 build，供內部手動信任或匯入流程使用；一般使用者不需要安裝，也不能用來取代 zip SHA256 / manifest 驗證。
 
+## 維護者：正式版本發布驗證
+
+正式發布仍採人工 publication：先準備並鎖定 source/version，另外執行 portable build，再記錄 source commit 與 artifact SHA256。publication 前必須執行 `scripts\release-preflight.ps1`，立即保存 exit code，且只允許 exit `0` 繼續：
+
+```powershell
+$preflightArgs = @{
+  Version = $version
+  ExpectedSourceCommit = $sourceCommit
+  ExpectedReportSchemaVersion = $reportSchemaVersion
+  ExpectedZipSha256 = $zipSha256
+  ExpectedExternalManifestSha256 = $externalManifestSha256
+  ExpectedPackageManifestSha256 = $packageManifestSha256
+  ExpectedLauncherSha256 = $launcherSha256
+  ExpectedNodeSha256 = $nodeSha256
+  ExpectedLauncherSignatureStatus = $launcherSignatureStatus
+  ExpectedNodeSignatureStatus = $nodeSignatureStatus
+}
+
+if ($nodeSignatureStatus -ne "NotSigned") {
+  $preflightArgs.ExpectedNodeSigner = $nodeSigner
+}
+
+& .\scripts\release-preflight.ps1 @preflightArgs
+$preflightExit = $LASTEXITCODE
+
+if ($preflightExit -ne 0) {
+  throw "Release preflight failed with exit code $preflightExit"
+}
+
+# Manual tag, push, release creation and asset upload may occur only here.
+```
+
+`ExpectedNodeSignatureStatus` 為 `NotSigned` 時必須省略 `ExpectedNodeSigner`；其餘已簽狀態必須明確提供預期 signer subject。
+
+**A NONZERO PREFLIGHT EXIT IS A HARD PUBLICATION STOP.** 不可忽略、覆寫或在未處理失敗原因前繼續建立 tag、push、建立 Release 或上傳資產。任何 partial publication state 都需要人工審查，不得由腳本自動刪除或修復。
+
+`release-preflight.ps1` 與 `release-verify.ps1` 只涵蓋可機器檢查的 release 條件；ROADMAP 要求的 launcher / GUI smoke、版本相關 real-site 或 manual smoke evidence，以及 release notes 仍需人工保存。Release notes 應持續列出 source commit、artifact SHA256、launcher / Node 簽章狀態與 smoke result。
+
+publication 完成後，在 Windows PowerShell 直接傳入陣列、布林值與 hashtable，執行唯讀驗證並要求 exit `0`：
+
+```powershell
+$expectedAssets = @(
+  "LinkChecker-portable.zip"
+  "LinkChecker-portable.zip.sha256"
+  "LinkChecker-portable.build-manifest.json"
+  "BUILD-MANIFEST.json"
+)
+$expectedAssetSha256 = @{
+  "LinkChecker-portable.zip" = $zipSha256
+  "LinkChecker-portable.zip.sha256" = $zipSha256FileSha256
+  "LinkChecker-portable.build-manifest.json" = $externalManifestSha256
+  "BUILD-MANIFEST.json" = $packageManifestSha256
+}
+
+& .\scripts\release-verify.ps1 `
+  -Version $version `
+  -ExpectedSourceCommit $sourceCommit `
+  -ExpectedTagType Annotated `
+  -ExpectedReleaseTitle $releaseTitle `
+  -ExpectedDraft $false `
+  -ExpectedPrerelease $false `
+  -ExpectedAssets $expectedAssets `
+  -ExpectedAssetSha256 $expectedAssetSha256
+
+$verifyExit = $LASTEXITCODE
+if ($verifyExit -ne 0) {
+  throw "Release verification failed with exit code $verifyExit"
+}
+```
+
+上例資產名稱只示範目前 portable 命名；每次 release 都必須重新明確鎖定 `ExpectedAssets` 與每個資產的 SHA256，不得從前一版推導。
+
 ## 規則檔格式
 
 P9c-1 起，三種規則檔都有對應 schema 作為公開契約與測試依據：
