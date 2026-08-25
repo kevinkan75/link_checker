@@ -21,6 +21,8 @@ const PUBLIC_DIR = join(ROOT_DIR, "public");
 const LOGS_DIR = join(ROOT_DIR, "logs");
 const DEFAULT_PORT = 8787;
 const HOST = "127.0.0.1";
+const SESSION_HEADER = "x-link-checker-session";
+const SESSION_TOKEN = randomUUID();
 const MAX_PORT_FALLBACK_ATTEMPTS = 20;
 const MAX_STORED_EVENTS = 10000;
 const DEFAULT_IDLE_CHECK_INTERVAL_MS = 30000;
@@ -1341,6 +1343,63 @@ function isLocalRequest(request) {
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
+function isLocalHostHeader(request) {
+  const rawHost = String(request.headers.host || "").trim().toLowerCase();
+  if (!rawHost) {
+    return false;
+  }
+
+  const hostname = rawHost.startsWith("[")
+    ? rawHost.slice(1, rawHost.indexOf("]"))
+    : rawHost.split(":")[0];
+  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
+}
+
+function isSameOriginRequest(request) {
+  const origin = request.headers.origin;
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "http:" && parsed.host.toLowerCase() === String(request.headers.host || "").toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+function isCrossSiteRequest(request) {
+  return String(request.headers["sec-fetch-site"] || "").toLowerCase() === "cross-site";
+}
+
+function requireLocalSession(request, { requireJson = false } = {}) {
+  if (!isLocalRequest(request) || !isLocalHostHeader(request)) {
+    throw httpError(403, "Local GUI API is only available from localhost");
+  }
+  if (!isSameOriginRequest(request) || isCrossSiteRequest(request)) {
+    throw httpError(403, "Cross-site GUI API requests are not allowed");
+  }
+  if (request.headers[SESSION_HEADER] !== SESSION_TOKEN) {
+    throw httpError(403, "Missing or invalid GUI session token");
+  }
+  if (requireJson) {
+    const contentType = String(request.headers["content-type"] || "").toLowerCase();
+    if (!contentType.split(";").map((part) => part.trim()).includes("application/json")) {
+      throw httpError(415, "Mutation request body must use application/json");
+    }
+  }
+}
+
+function requireLocalSessionEndpoint(request) {
+  if (!isLocalRequest(request) || !isLocalHostHeader(request)) {
+    throw httpError(403, "Local GUI session is only available from localhost");
+  }
+  if (!isSameOriginRequest(request) || isCrossSiteRequest(request)) {
+    throw httpError(403, "Cross-site GUI session requests are not allowed");
+  }
+}
+
 function recordClientHeartbeat() {
   lastClientSeenAt = Date.now();
   return {
@@ -1441,18 +1500,23 @@ async function serveStatic(request, response, pathname) {
 async function route(request, response) {
   const url = new URL(request.url, "http://127.0.0.1");
 
+  if (request.method === "GET" && url.pathname === "/api/session") {
+    requireLocalSessionEndpoint(request);
+    sendJson(response, 200, {
+      sessionHeader: "X-Link-Checker-Session",
+      sessionToken: SESSION_TOKEN,
+    });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/session/heartbeat") {
-    if (!isLocalRequest(request)) {
-      throw httpError(403, "Heartbeat is only available from localhost");
-    }
+    requireLocalSession(request);
     sendJson(response, 200, recordClientHeartbeat());
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/shutdown") {
-    if (!isLocalRequest(request)) {
-      throw httpError(403, "Shutdown is only available from localhost");
-    }
+    requireLocalSession(request);
     if (hasRunningWork()) {
       throw httpError(409, "Cannot shut down while a scan or queue is still running.");
     }
@@ -1470,6 +1534,7 @@ async function route(request, response) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/queue/items") {
+    requireLocalSession(request, { requireJson: true });
     const input = await readJsonBody(request);
     const items = addQueueItems(input);
     sendJson(response, 201, {
@@ -1480,6 +1545,7 @@ async function route(request, response) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/queue/start") {
+    requireLocalSession(request, { requireJson: true });
     const input = await readJsonBody(request);
     startQueue(input);
     sendJson(response, 200, serializeQueue());
@@ -1487,6 +1553,7 @@ async function route(request, response) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/queue/stop") {
+    requireLocalSession(request);
     stopQueue();
     sendJson(response, 200, serializeQueue());
     return;
@@ -1494,8 +1561,12 @@ async function route(request, response) {
 
   const queueItemMatch = /^\/api\/queue\/items\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);
   if (queueItemMatch) {
-    const item = queue.items.find((candidate) => candidate.id === queueItemMatch[1]);
     const action = queueItemMatch[2];
+    if (request.method === "POST" && action === "remove") {
+      requireLocalSession(request);
+    }
+
+    const item = queue.items.find((candidate) => candidate.id === queueItemMatch[1]);
     if (!item) {
       throw httpError(404, "Queue item not found");
     }
@@ -1519,6 +1590,7 @@ async function route(request, response) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/jobs") {
+    requireLocalSession(request, { requireJson: true });
     const input = await readJsonBody(request);
     validateStartUrl(input.url);
     const job = createJob(input);
@@ -1533,8 +1605,12 @@ async function route(request, response) {
 
   const jobMatch = /^\/api\/jobs\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);
   if (jobMatch) {
-    const job = jobs.get(jobMatch[1]);
     const action = jobMatch[2];
+    if (request.method === "POST" && action === "stop") {
+      requireLocalSession(request);
+    }
+
+    const job = jobs.get(jobMatch[1]);
     if (!job) {
       throw httpError(404, "Job not found");
     }

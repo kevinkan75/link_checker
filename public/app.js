@@ -90,6 +90,7 @@ const incrementalPriority = document.querySelector("#incremental-priority");
 const filterBar = document.querySelector("#filter-bar");
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const defaultUserAgent = `${browserUserAgent} LocalLinkChecker/1.0`;
+const sessionHeaderName = "X-Link-Checker-Session";
 const defaultSettings = {
   maxPages: "300",
   maxDepth: "3",
@@ -182,6 +183,7 @@ let activePreset = "balanced";
 let scanInProgress = false;
 let queueInProgress = false;
 let suppressNextUnloadWarning = false;
+const sessionTokenPromise = loadSessionToken();
 
 startSessionHeartbeat();
 installUnfinishedScanGuard();
@@ -237,7 +239,7 @@ stopButton.addEventListener("click", async () => {
   if (!currentJobId) {
     return;
   }
-  await fetch(`/api/jobs/${currentJobId}/stop`, { method: "POST" });
+  await mutationFetch(`/api/jobs/${currentJobId}/stop`, { method: "POST" });
   setState("stopping");
 });
 
@@ -287,7 +289,7 @@ shutdownButton.addEventListener("click", async () => {
   shutdownButton.textContent = "正在關閉";
 
   try {
-    const response = await fetch("/api/shutdown", { method: "POST" });
+    const response = await mutationFetch("/api/shutdown", { method: "POST" });
     if (response.status === 409) {
       const data = await response.json().catch(() => ({}));
       window.alert(data.error || "仍有掃描或佇列正在執行，請先停止後再關閉本機服務。");
@@ -312,7 +314,7 @@ addQueueButton.addEventListener("click", async () => {
 });
 
 startQueueButton.addEventListener("click", async () => {
-  await fetch("/api/queue/start", {
+  await mutationFetch("/api/queue/start", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -324,7 +326,7 @@ startQueueButton.addEventListener("click", async () => {
 });
 
 stopQueueButton.addEventListener("click", async () => {
-  await fetch("/api/queue/stop", { method: "POST" });
+  await mutationFetch("/api/queue/stop", { method: "POST" });
   await refreshQueue();
 });
 
@@ -364,7 +366,7 @@ filterBar.addEventListener("click", (event) => {
 });
 
 function startSessionHeartbeat() {
-  const send = () => fetch("/api/session/heartbeat", {
+  const send = () => mutationFetch("/api/session/heartbeat", {
     method: "POST",
     cache: "no-store",
     keepalive: true,
@@ -476,6 +478,24 @@ function applyPreset(name) {
   setActivePreset(name === "defaults" ? "balanced" : name);
   updateAdvancedSummary();
   validateAdvancedSettings({ showValid: false });
+}
+
+async function loadSessionToken() {
+  const response = await fetch("/api/session", { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.sessionToken) {
+    throw new Error(data.error || "無法取得本機工作階段");
+  }
+  return data.sessionToken;
+}
+
+async function mutationFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set(sessionHeaderName, await sessionTokenPromise);
+  return fetch(url, {
+    ...options,
+    headers,
+  });
 }
 
 function applySettings(settings) {
@@ -596,7 +616,7 @@ async function startCheck() {
   };
 
   try {
-    const response = await fetch("/api/jobs", {
+    const response = await mutationFetch("/api/jobs", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
@@ -655,7 +675,7 @@ async function addQueueItems() {
     return;
   }
 
-  const response = await fetch("/api/queue/items", {
+  const response = await mutationFetch("/api/queue/items", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -892,7 +912,7 @@ async function viewQueueReport(id) {
 }
 
 async function removeQueueItem(id) {
-  const response = await fetch(`/api/queue/items/${id}/remove`, { method: "POST" });
+  const response = await mutationFetch(`/api/queue/items/${id}/remove`, { method: "POST" });
   const data = await response.json();
   if (!response.ok) {
     statusTitle.textContent = data.error || "無法移除佇列項目";
