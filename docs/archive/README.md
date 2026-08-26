@@ -32,6 +32,7 @@
 | [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md) | P9 | GUI usability 前置評估、GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入、rules schema / trace 與驗收紀錄 |
 | [P12_2A_XML_SITEMAP_FALLBACK_RECORD.md](P12_2A_XML_SITEMAP_FALLBACK_RECORD.md) | P12-2A | `/sitemap.xml` 自動 fallback 的規劃基線、TYCG 實證與唯讀實作路徑稽核 |
 | [MAINTENANCE_FOUNDATION_2026-08-25.md](MAINTENANCE_FOUNDATION_2026-08-25.md) | MAINT-FND-1 / MAINT-FND-2 | unified regression runner、release fail-fast automation 與 final integration / verification state |
+| [MAINTENANCE_HARDENING_2026-08-26.md](MAINTENANCE_HARDENING_2026-08-26.md) | Maintenance hardening | focused crawler/GUI/frontend/report-diff maintenance hardening, completed fixes, and deferred report-diff findings |
 
 ## GUI、發布與站台案例
 
