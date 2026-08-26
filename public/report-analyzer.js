@@ -343,7 +343,7 @@ function analyzeReport(report) {
     domain: extractHostname(item.finalUrl || item.url),
   })).map((item) => ({
     ...item,
-    interpretation: normalizeInterpretation(item),
+    interpretation: normalizeInterpretation(item, report),
   })).map((item) => ({
     ...item,
     interpretationCategory: item.interpretation.category,
@@ -1272,7 +1272,7 @@ function hasIssueStatusMismatch(item) {
   return false;
 }
 
-function normalizeInterpretation(item) {
+function normalizeInterpretation(item, report) {
   const existing = item.interpretation;
   if (existing?.category) {
     return {
@@ -1283,6 +1283,8 @@ function normalizeInterpretation(item) {
 
   const issueType = item.issueType || inferIssueType(item);
   const confirmationOutcome = item.confirmation?.outcome;
+  const status = Number.parseInt(item.status, 10);
+  const externalLimited = isExternalLimitedResult(item, report);
   if (issueType === "redirect_to_error" || issueType === "too_many_redirects" || issueType === "redirect_loop") {
     return buildInterpretation("action_required");
   }
@@ -1291,7 +1293,7 @@ function normalizeInterpretation(item) {
       return buildInterpretation("action_required");
     }
     if (confirmationOutcome === "needs_review") {
-      return buildInterpretation("needs_review");
+      return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
     }
     return buildInterpretation("likely_problem");
   }
@@ -1300,16 +1302,35 @@ function normalizeInterpretation(item) {
     || issueType === "access_denied"
     || issueType === "timeout"
     || issueType === "network_error"
-    || item.status === 429
+    || status === 429
     || item.suspectedWaf
     || item.suspectedBot
   ) {
-    return buildInterpretation("needs_review");
+    return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
   }
   if (item.status >= 400 || issueType === "http_error" || issueType === "unknown_error") {
     return buildInterpretation("likely_problem");
   }
   return buildInterpretation("needs_review");
+}
+
+function isExternalLimitedResult(item, report) {
+  if (!item?.url || !report?.startUrl) {
+    return false;
+  }
+  const issueType = item.issueType || inferIssueType(item);
+  const status = Number.parseInt(item.status, 10);
+  if (!["protected", "access_denied", "timeout", "network_error", "http_error", "unknown_error"].includes(issueType)
+      && status !== 429
+      && !item.suspectedWaf
+      && !item.suspectedBot) {
+    return false;
+  }
+  try {
+    return new URL(item.url).origin !== new URL(report.startUrl).origin;
+  } catch {
+    return false;
+  }
 }
 
 function buildInterpretation(category) {
