@@ -6,7 +6,7 @@
 
 ## 目前狀態
 
-- 最新正式版本仍是 `v1.3.1`。
+- 最新正式版本：`v1.3.1`。
 - 目前沒有已知 release blocker。
 - Production 靜態掃描流程是目前支援的產品主線。
 - 目前靜態探索 baseline 包含 HTML sitemap fallback 與慣例 `/sitemap.xml` fallback。
