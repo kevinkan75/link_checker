@@ -424,13 +424,98 @@ function confidenceDecreased(oldSnapshot, newSnapshot) {
   return oldSnapshot?.confirmationNeedsReview === false && newSnapshot?.confirmationNeedsReview === true;
 }
 
+function getSnapshotAliases(snapshot) {
+  return ["canonicalUrl", "url"]
+    .map((field) => snapshot?.[field])
+    .filter((value) => typeof value === "string" && value.length > 0);
+}
+
+function snapshotsShareAlias(oldSnapshot, newSnapshot) {
+  const oldAliases = new Set(getSnapshotAliases(oldSnapshot));
+  return getSnapshotAliases(newSnapshot).some((value) => oldAliases.has(value));
+}
+
+function buildEntryPairs(oldByKey, newByKey) {
+  const pairs = [];
+  const pairedOldKeys = new Set();
+  const pairedNewKeys = new Set();
+  const oldKeys = [...oldByKey.keys()].sort();
+  const newKeys = [...newByKey.keys()].sort();
+
+  for (const key of oldKeys) {
+    if (!newByKey.has(key)) {
+      continue;
+    }
+    pairs.push({
+      oldEntry: oldByKey.get(key),
+      newEntry: newByKey.get(key)
+    });
+    pairedOldKeys.add(key);
+    pairedNewKeys.add(key);
+  }
+
+  const oldCandidates = new Map();
+  const newCandidates = new Map();
+  for (const oldKey of oldKeys) {
+    if (pairedOldKeys.has(oldKey)) {
+      continue;
+    }
+    const oldEntry = oldByKey.get(oldKey);
+    for (const newKey of newKeys) {
+      if (pairedNewKeys.has(newKey)) {
+        continue;
+      }
+      const newEntry = newByKey.get(newKey);
+      if (!snapshotsShareAlias(oldEntry.snapshot, newEntry.snapshot)) {
+        continue;
+      }
+      oldCandidates.set(oldKey, [...(oldCandidates.get(oldKey) || []), newKey]);
+      newCandidates.set(newKey, [...(newCandidates.get(newKey) || []), oldKey]);
+    }
+  }
+
+  for (const oldKey of oldKeys) {
+    if (pairedOldKeys.has(oldKey)) {
+      continue;
+    }
+    const candidates = oldCandidates.get(oldKey) || [];
+    if (candidates.length !== 1) {
+      continue;
+    }
+    const newKey = candidates[0];
+    if (pairedNewKeys.has(newKey) || (newCandidates.get(newKey) || []).length !== 1) {
+      continue;
+    }
+    pairs.push({
+      oldEntry: oldByKey.get(oldKey),
+      newEntry: newByKey.get(newKey)
+    });
+    pairedOldKeys.add(oldKey);
+    pairedNewKeys.add(newKey);
+  }
+
+  for (const oldKey of oldKeys) {
+    if (!pairedOldKeys.has(oldKey)) {
+      pairs.push({ oldEntry: oldByKey.get(oldKey), newEntry: null });
+    }
+  }
+  for (const newKey of newKeys) {
+    if (!pairedNewKeys.has(newKey)) {
+      pairs.push({ oldEntry: null, newEntry: newByKey.get(newKey) });
+    }
+  }
+
+  return pairs.sort((left, right) => {
+    const leftKey = (left.newEntry?.key ?? left.oldEntry.key).value;
+    const rightKey = (right.newEntry?.key ?? right.oldEntry.key).value;
+    return leftKey.localeCompare(rightKey);
+  });
+}
+
 function diffUrls(oldUrlsByKey, newUrlsByKey) {
   const changes = [];
-  const keys = Array.from(new Set([...oldUrlsByKey.keys(), ...newUrlsByKey.keys()])).sort();
 
-  for (const key of keys) {
-    const oldEntry = oldUrlsByKey.get(key);
-    const newEntry = newUrlsByKey.get(key);
+  for (const { oldEntry, newEntry } of buildEntryPairs(oldUrlsByKey, newUrlsByKey)) {
     const oldSnapshot = oldEntry?.snapshot;
     const newSnapshot = newEntry?.snapshot;
     const changeTypes = [];
@@ -522,11 +607,8 @@ function riskDecreased(oldSnapshot, newSnapshot) {
 
 function diffExternal(oldExternalByKey, newExternalByKey) {
   const changes = [];
-  const keys = Array.from(new Set([...oldExternalByKey.keys(), ...newExternalByKey.keys()])).sort();
 
-  for (const key of keys) {
-    const oldEntry = oldExternalByKey.get(key);
-    const newEntry = newExternalByKey.get(key);
+  for (const { oldEntry, newEntry } of buildEntryPairs(oldExternalByKey, newExternalByKey)) {
     const oldSnapshot = oldEntry?.snapshot;
     const newSnapshot = newEntry?.snapshot;
     const changeTypes = [];

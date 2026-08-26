@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,10 @@ function assertNoExtraProperties(value, allowed, label) {
 async function readJson(filePath) {
   const text = await readFile(filePath, "utf8");
   return JSON.parse(text.replace(/^\uFEFF/, ""));
+}
+
+async function writeJson(filePath, value) {
+  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 async function runReportDiff(oldReport, newReport, outputPath) {
@@ -198,6 +202,97 @@ function findChangeByKey(changes, canonicalUrl) {
   return changes.find((change) => change.key?.value === canonicalUrl);
 }
 
+async function runInlineReportDiff(tempDir, name, oldReport, newReport) {
+  const oldReportPath = path.join(tempDir, `${name}.old.json`);
+  const newReportPath = path.join(tempDir, `${name}.new.json`);
+  const outputPath = path.join(tempDir, `${name}.diff.json`);
+  await writeJson(oldReportPath, oldReport);
+  await writeJson(newReportPath, newReport);
+  await runReportDiff(oldReportPath, newReportPath, outputPath);
+  return readJson(outputPath);
+}
+
+function assertNoAddedRemoved(diff, label) {
+  assert(diff.summary.urlsAdded === 0, `${label}: should not report added URLs.`);
+  assert(diff.summary.urlsRemoved === 0, `${label}: should not report removed URLs.`);
+  assert(countChanges(diff.urlChanges, "added") === 0, `${label}: urlChanges should not include added.`);
+  assert(countChanges(diff.urlChanges, "removed") === 0, `${label}: urlChanges should not include removed.`);
+}
+
+async function assertAliasMatchCases(tempDir) {
+  const baseReport = {
+    schemaVersion: "1.3.0",
+    summary: {},
+    externalLinks: [],
+  };
+  const legacyUrl = "https://example.test/a?utm=1";
+  const canonicalUrl = "https://example.test/a";
+
+  const legacyToCanonical = await runInlineReportDiff(
+    tempDir,
+    "legacy-to-canonical",
+    {
+      ...baseReport,
+      checked: [{ url: legacyUrl, ok: true, status: 200 }],
+    },
+    {
+      ...baseReport,
+      checked: [{ url: legacyUrl, canonicalUrl, ok: true, status: 200 }],
+    },
+  );
+  assertNoAddedRemoved(legacyToCanonical, "legacy-to-canonical");
+  assert(legacyToCanonical.urlChanges.length === 0, "legacy-to-canonical should have no URL changes.");
+
+  const sameCanonical = await runInlineReportDiff(
+    tempDir,
+    "same-canonical",
+    {
+      ...baseReport,
+      checked: [{ url: legacyUrl, canonicalUrl, ok: true, status: 200 }],
+    },
+    {
+      ...baseReport,
+      checked: [{ url: legacyUrl, canonicalUrl, ok: false, status: 404, issueType: "not_found" }],
+    },
+  );
+  assertNoAddedRemoved(sameCanonical, "same-canonical");
+  assert(sameCanonical.summary.urlsChanged === 1, "same-canonical should keep existing changed behavior.");
+  assert(sameCanonical.summary.newIssues === 1, "same-canonical should keep existing newIssue behavior.");
+
+  const realDifferentUrl = await runInlineReportDiff(
+    tempDir,
+    "real-different-url",
+    {
+      ...baseReport,
+      checked: [{ url: "https://example.test/a", ok: true, status: 200 }],
+    },
+    {
+      ...baseReport,
+      checked: [{ url: "https://example.test/b", canonicalUrl: "https://example.test/b-canonical", ok: true, status: 200 }],
+    },
+  );
+  assert(realDifferentUrl.summary.urlsAdded === 1, "real-different-url should still report an added URL.");
+  assert(realDifferentUrl.summary.urlsRemoved === 1, "real-different-url should still report a removed URL.");
+
+  const ambiguousAlias = await runInlineReportDiff(
+    tempDir,
+    "ambiguous-alias",
+    {
+      ...baseReport,
+      checked: [{ url: legacyUrl, canonicalUrl, ok: true, status: 200 }],
+    },
+    {
+      ...baseReport,
+      checked: [
+        { url: legacyUrl, ok: true, status: 200 },
+        { url: canonicalUrl, canonicalUrl: "https://example.test/new-canonical", ok: true, status: 200 },
+      ],
+    },
+  );
+  assert(ambiguousAlias.summary.urlsAdded === 2, "ambiguous-alias should not guess between multiple alias candidates.");
+  assert(ambiguousAlias.summary.urlsRemoved === 1, "ambiguous-alias should leave the unmatched old URL removed.");
+}
+
 function assertSignal(diff, fixture, signal) {
   const urlSignals = new Set(["newIssue", "resolvedIssue", "confidenceIncreased", "confidenceDecreased"]);
   const externalSignals = new Set(["riskIncreased", "riskDecreased"]);
@@ -274,6 +369,9 @@ async function main() {
 
       console.log(`ok ${fixture.name}`);
     }
+
+    await assertAliasMatchCases(tempDir);
+    console.log("ok report-diff alias matching");
 
     if (pendingSignals.length > 0) {
       throw new Error(`Unexpected pending signal assertions: ${pendingSignals.join(", ")}`);
