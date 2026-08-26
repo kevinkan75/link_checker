@@ -220,6 +220,79 @@ function Test-VersionSurface {
     }
 }
 
+function Test-CodeSigningEku {
+    param([Parameter(Mandatory = $true)]$Certificate)
+
+    foreach ($extension in @($Certificate.Extensions)) {
+        if ($extension.Oid.Value -ne "2.5.29.37") { continue }
+        $enhancedKeyUsage = New-Object System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension $extension, $false
+        foreach ($oid in @($enhancedKeyUsage.EnhancedKeyUsages)) {
+            if ($oid.Value -ceq "1.3.6.1.5.5.7.3.3") {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Test-LocalSelfSignedUntrustedLauncher {
+    param(
+        [Parameter(Mandatory = $true)]$LauncherSignature,
+        [Parameter(Mandatory = $true)]$PackagedCertificate
+    )
+
+    if ($LauncherSignature.Status.ToString() -cne "UnknownError") {
+        throw "Launcher signature status is not UnknownError."
+    }
+
+    $signer = $LauncherSignature.SignerCertificate
+    if (-not $signer) {
+        throw "UnknownError launcher signature has no signer certificate."
+    }
+    if ($signer.Subject -cne $signer.Issuer) {
+        throw "UnknownError launcher signer is not self-signed."
+    }
+    if ($PackagedCertificate.Thumbprint -ine $signer.Thumbprint -or $PackagedCertificate.Subject -cne $signer.Subject) {
+        throw "Packaged certificate does not match launcher signer."
+    }
+
+    $now = Get-Date
+    if ($signer.NotBefore -gt $now -or $signer.NotAfter -lt $now) {
+        throw "UnknownError launcher signer certificate is not currently valid."
+    }
+    if (-not (Test-CodeSigningEku -Certificate $signer)) {
+        throw "UnknownError launcher signer certificate is missing Code Signing EKU."
+    }
+
+    $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
+    $chainBuildSucceeded = $chain.Build($signer)
+    if ($chainBuildSucceeded) {
+        throw "UnknownError launcher signer unexpectedly builds a trusted chain."
+    }
+
+    $chainStatuses = @($chain.ChainStatus | Where-Object {
+        $_.Status -ne [System.Security.Cryptography.X509Certificates.X509ChainStatusFlags]::NoError
+    })
+    if ($chainStatuses.Count -eq 0) {
+        throw "UnknownError launcher signer chain has no effective failure status."
+    }
+    foreach ($status in $chainStatuses) {
+        if ($status.Status -ne [System.Security.Cryptography.X509Certificates.X509ChainStatusFlags]::UntrustedRoot) {
+            throw "UnknownError launcher signer chain has unsupported status: $($status.Status)."
+        }
+    }
+
+    if ($chain.ChainElements.Count -eq 0) {
+        throw "UnknownError launcher signer chain is empty."
+    }
+    $lastCertificate = $chain.ChainElements[$chain.ChainElements.Count - 1].Certificate
+    if ($lastCertificate.Thumbprint -ine $signer.Thumbprint) {
+        throw "UnknownError launcher signer chain does not terminate at the self-signed signer."
+    }
+
+    return $true
+}
+
 function Get-RepositoryNameWithOwner {
     param([Parameter(Mandatory = $true)][string]$RemoteUrl)
     $match = [regex]::Match($RemoteUrl.Trim(), "github\.com[:/](?<repo>[^/\s]+/[^/\s]+?)(?:\.git)?$")
@@ -271,7 +344,8 @@ try {
     $semverPattern = "^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$"
     $sha1Pattern = "^[0-9a-fA-F]{40}$"
     $sha256Pattern = "^[0-9a-fA-F]{64}$"
-    $allowedSignatureStatuses = @("Valid", "NotSigned", "NotTrusted")
+    $allowedLauncherSignatureStatuses = @("Valid", "NotSigned", "NotTrusted", "UnknownError")
+    $allowedNodeSignatureStatuses = @("Valid", "NotSigned", "NotTrusted")
 
     if ($Version -match $semverPattern) { Set-Check "PARAM_VERSION" "PASS" }
     else { Set-Failure "PARAM_VERSION" "INVALID_INVOCATION" "Version must be SemVer core only." }
@@ -286,8 +360,8 @@ try {
     if (@($hashValues | Where-Object { $_ -notmatch $sha256Pattern }).Count -eq 0) { Set-Check "PARAM_HASHES" "PASS" }
     else { Set-Failure "PARAM_HASHES" "INVALID_INVOCATION" "Every expected SHA256 must contain exactly 64 hexadecimal characters." }
 
-    $signatureParametersValid = $allowedSignatureStatuses -contains $ExpectedLauncherSignatureStatus -and
-        $allowedSignatureStatuses -contains $ExpectedNodeSignatureStatus
+    $signatureParametersValid = $allowedLauncherSignatureStatuses -contains $ExpectedLauncherSignatureStatus -and
+        $allowedNodeSignatureStatuses -contains $ExpectedNodeSignatureStatus
     if ($ExpectedNodeSignatureStatus -eq "NotSigned") {
         $signatureParametersValid = $signatureParametersValid -and [string]::IsNullOrWhiteSpace($ExpectedNodeSigner)
     }
@@ -779,6 +853,9 @@ try {
                             [string]$packageManifest.artifacts.launcher.signature.signerSubject -cne $certificate.Subject -or
                             [string]$packageManifest.artifacts.launcher.signature.signerThumbprint -ine $certificate.Thumbprint) {
                             throw "Manifest launcher signer evidence does not match packaged certificate."
+                        }
+                        if ($ExpectedLauncherSignatureStatus -eq "UnknownError") {
+                            [void](Test-LocalSelfSignedUntrustedLauncher -LauncherSignature $launcherSignature -PackagedCertificate $certificate)
                         }
                     }
                     Set-Check "CERTIFICATE_LAUNCHER" "PASS"
