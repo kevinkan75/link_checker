@@ -155,6 +155,10 @@ function cleanArray(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : undefined;
 }
 
+function cleanStringSet(value) {
+  return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string"))].sort() : undefined;
+}
+
 function setDefined(target, key, value) {
   if (value !== undefined) {
     target[key] = value;
@@ -267,8 +271,8 @@ function projectExternal(item) {
     "governanceStatus",
     risk?.governanceStatus === null ? null : optionalString(risk?.governanceStatus)
   );
-  setDefined(externalRisk, "riskReasons", cleanArray(risk?.riskReasons));
-  setDefined(externalRisk, "matchedRules", cleanArray(risk?.matchedRules));
+  setDefined(externalRisk, "riskReasons", cleanStringSet(risk?.riskReasons));
+  setDefined(externalRisk, "matchedRules", cleanStringSet(risk?.matchedRules));
   setDefined(externalRisk, "needsReview", optionalBoolean(risk?.needsReview));
 
   if (Object.keys(externalRisk).length > 0) {

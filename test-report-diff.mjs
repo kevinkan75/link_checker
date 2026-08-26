@@ -293,6 +293,147 @@ async function assertAliasMatchCases(tempDir) {
   assert(ambiguousAlias.summary.urlsRemoved === 1, "ambiguous-alias should leave the unmatched old URL removed.");
 }
 
+async function assertExternalRiskArrayCases(tempDir) {
+  const baseReport = {
+    schemaVersion: "1.3.0",
+    summary: {},
+    checked: [],
+  };
+  const externalUrl = "https://external.example/resource";
+
+  const sameSetDifferentOrder = await runInlineReportDiff(
+    tempDir,
+    "external-risk-array-order",
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "medium",
+          governanceStatus: "needs_review",
+          riskReasons: ["short_url", "tracking"],
+          matchedRules: ["rule-b", "rule-a"],
+        },
+      }],
+    },
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "medium",
+          governanceStatus: "needs_review",
+          riskReasons: ["tracking", "short_url"],
+          matchedRules: ["rule-a", "rule-b"],
+        },
+      }],
+    },
+  );
+  assert(sameSetDifferentOrder.externalChanges.length === 0, "same external risk set in different order should not change.");
+
+  const sameSetWithDuplicates = await runInlineReportDiff(
+    tempDir,
+    "external-risk-array-duplicates",
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "medium",
+          governanceStatus: "needs_review",
+          riskReasons: ["short_url", "tracking"],
+          matchedRules: ["rule-a", "rule-b"],
+        },
+      }],
+    },
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "medium",
+          governanceStatus: "needs_review",
+          riskReasons: ["tracking", "short_url", "tracking"],
+          matchedRules: ["rule-b", "rule-a", "rule-b"],
+        },
+      }],
+    },
+  );
+  assert(sameSetWithDuplicates.externalChanges.length === 0, "duplicate external risk strings should not change the set.");
+
+  const realValueChange = await runInlineReportDiff(
+    tempDir,
+    "external-risk-array-real-change",
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "medium",
+          governanceStatus: "needs_review",
+          riskReasons: ["short_url", "tracking"],
+          matchedRules: ["rule-a", "rule-b"],
+        },
+      }],
+    },
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "medium",
+          governanceStatus: "needs_review",
+          riskReasons: ["short_url", "malware"],
+          matchedRules: ["rule-a", "rule-c"],
+        },
+      }],
+    },
+  );
+  assert(realValueChange.summary.externalRiskIncreased === 0, "external risk array value change alone should not change risk rank.");
+  assert(realValueChange.summary.externalRiskDecreased === 0, "external risk array value change alone should not change risk rank.");
+  assert(realValueChange.externalChanges.length === 1, "genuine external risk array value change should remain changed.");
+  assert(realValueChange.externalChanges[0].changeTypes.includes("changed"), "genuine external risk array value change should include changed.");
+
+  const riskRankChange = await runInlineReportDiff(
+    tempDir,
+    "external-risk-rank-change",
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "low",
+          governanceStatus: "unknown",
+          riskReasons: ["tracking"],
+          matchedRules: ["rule-a"],
+        },
+      }],
+    },
+    {
+      ...baseReport,
+      externalLinks: [{
+        url: externalUrl,
+        canonicalUrl: externalUrl,
+        externalRisk: {
+          riskLevel: "high",
+          governanceStatus: "needs_review",
+          riskReasons: ["tracking"],
+          matchedRules: ["rule-a"],
+        },
+      }],
+    },
+  );
+  assert(riskRankChange.summary.externalRiskIncreased === 1, "risk rank increase should remain classified.");
+  assert(riskRankChange.externalChanges[0].changeTypes.includes("riskIncreased"), "risk rank increase should include riskIncreased.");
+}
+
 function assertSignal(diff, fixture, signal) {
   const urlSignals = new Set(["newIssue", "resolvedIssue", "confidenceIncreased", "confidenceDecreased"]);
   const externalSignals = new Set(["riskIncreased", "riskDecreased"]);
@@ -372,6 +513,8 @@ async function main() {
 
     await assertAliasMatchCases(tempDir);
     console.log("ok report-diff alias matching");
+    await assertExternalRiskArrayCases(tempDir);
+    console.log("ok report-diff external risk arrays");
 
     if (pendingSignals.length > 0) {
       throw new Error(`Unexpected pending signal assertions: ${pendingSignals.join(", ")}`);
