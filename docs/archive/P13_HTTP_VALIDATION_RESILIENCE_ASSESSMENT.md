@@ -180,7 +180,7 @@ URL
 
 ### P13-3 Residual Redirect / Error-route Hardening — CONDITIONAL
 
-只有 P13-1 與 P13-2 完成並經 real-site regression 後，若仍有既有 redirect handling / confirmation pipeline 無法處理的 pathological cases，才進行本項。
+只有 P13-1、P13-2 與 P13-4 完成並經 real-site regression 後，若仍有既有 redirect handling / confirmation pipeline 無法處理的 pathological cases，才進行本項。P13-3 不是 P13-2 後自動開始的項目。
 
 可能的 residual case 例如：
 
@@ -196,7 +196,7 @@ HEAD
 - 現有 redirect loop、max redirects、`redirect_to_error`、manual redirect handling 等能力不可重寫。
 - 不因 URL path 名稱包含 `notfound` 就直接判定失效。
 - 仍以最終 HTTP evidence 為準。
-- 若 P13-1 / P13-2 已解決實站案例，P13-3 可以不進入實作。
+- 若 P13-1 / P13-2 / P13-4 已解決實站案例，P13-3 可以不進入實作。
 - 不加入單一 hostname hack。
 
 ### P13-4 Protection-aware Interpretation
@@ -382,16 +382,20 @@ Report-diff legacy hardening 與 public-trust code signing 也維持既有 defer
 
 目前建議順序：
 
-1. P12-3 Incomplete Coverage Notice。
-2. P13 HTTP Validation Resilience。
-3. P14 Result Interpretation & Management Handoff。
+1. P13 HTTP Validation Resilience。
+2. P14 Result Interpretation & Management Handoff。
 
-P13 內部建議順序：
+P12-3 Incomplete Coverage Notice 已完成；目前正式 implementation focus 進入 P13。
+
+P13 內部建議實作順序：
 
 1. P13-1 Extend Existing HEAD -> GET Fallback for Transport Failures。
 2. P13-2 Redirect-to-404/410 Confirmation。
-3. P13-3 Residual Redirect / Error-route Hardening — CONDITIONAL。
-4. P13-4 Protection-aware Interpretation。
-5. P13-5 Special Endpoint HEAD Recheck。
+3. P13-4 Protection-aware Interpretation。
+4. Real-site regression / decision gate。
+5. P13-3 Residual Redirect / Error-route Hardening — CONDITIONAL, only if residual evidence remains。
+6. P13-5 Special Endpoint HEAD Recheck。
+
+P13-1 / P13-2 / P13-4 是目前 evidence 支持的核心 correctness work。P13-3 是 evidence-gated residual work；P13-5 是 noise-reduction / special endpoint refinement。P13 子項編號是 planning identity，不是 mandatory execution order。
 
 P12-2B robots-advertised sitemap 保留為 evidence-required candidate，不排入近期優先主線。

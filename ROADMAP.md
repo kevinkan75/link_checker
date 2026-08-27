@@ -52,13 +52,16 @@ P13 是 P12 之後的正式後續 Phase，目標是提高 HTTP validation 可靠
 
 P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallback、retry / scheduler、redirect handling、404/410 confirmation、protection detection 與 interpretation pipeline；除非既有 abstraction 無法承接，不建立平行 validation / confirmation framework。多次桃園 real-site regression 顯示，單純降低 global concurrency 或增加 delay 並未穩定降低 HEAD transport uncertainty，因此後續優先 targeted adaptive validation，而不是把 global slowdown 當主要修正策略。
 
-建議優先順序：
+建議實作順序：
+
+P13 子項編號代表既有規劃識別，不強制等同實際 implementation sequence；conditional 項目應由 regression evidence 決定是否進入實作。
 
 1. P13-1 Extend Existing HEAD -> GET Fallback for Transport Failures：現行已具備 HEAD -> GET fallback；本階段只延伸 existing fallback predicate / fetch pipeline，讓 same-origin、page-like URL 的 HEAD `ConnectTimeout`、timeout、`network_error` 等 transport uncertainty 可做 targeted conservative GET retry，並沿用既有 scheduler、安全政策、Referer、redirect handling 與 HTTP classification。
 2. P13-2 Redirect-to-404/410 Confirmation：generalize 既有 404/410 confirmation candidate selection，讓 URL -> redirect -> final 404/410 進入 existing confirmation scheduler、browser-like UA、Referer logic、GET confirmation、client redirect evidence 與 `confirmed_missing` / `recovered` / `needs_review` outcome semantics。
-3. P13-3 Residual Redirect / Error-route Hardening — CONDITIONAL：只有 P13-1 / P13-2 完成並經 real-site regression 後仍有 pathological cases 時才實作；不重寫現有 manual redirect、redirect chain、redirect loop、max redirects 或 `redirect_to_error` handling，不因 `/notfound` 等 path 名稱直接判定失效。
-4. P13-4 Protection-aware Interpretation：僅做 interpretation precedence correction；沿用現有 WAF / Bot / Cloudflare detection、body signature、header evidence 與 protection metadata。若已有 confirmed missing evidence 可維持 actionable；若 final response 是 protection challenge 且沒有 confirmed missing evidence，external result 應進入 needs review / external limited，而非因 `redirect_to_error` precedence 直接成為 `action_required`。
-5. P13-5 Special Endpoint HEAD Recheck：優先利用既有 external-link category / `social` classification；social / share-like endpoint + HEAD 4xx 可評估 targeted GET recheck 或 `needs_review`。不得建立 Facebook-specific validation engine、不得把所有 external 4xx 降級，且 confirmed external GET 404/410 仍應可成為 actionable issue。
+3. P13-4 Protection-aware Interpretation：已有 reproduced evidence、scope 小；僅做 interpretation precedence correction，沿用現有 WAF / Bot / Cloudflare detection、body signature、header evidence 與 protection metadata，不新增 detector。若已有 confirmed missing evidence 可維持 actionable；若 final response 是 protection challenge 且沒有 confirmed missing evidence，external result 應進入 needs review / external limited，而非因 `redirect_to_error` precedence 直接成為 `action_required`，以提高 `action_required` / `external_limited` / `needs_review` 的可信度。
+4. Real-site regression / decision gate：完成 P13-1 / P13-2 / P13-4 後，以 real-site regression 判斷是否仍有既有 redirect handling / confirmation pipeline 無法處理的 pathological cases。
+5. P13-3 Residual Redirect / Error-route Hardening — CONDITIONAL：不是 P13-2 後自動開始；只有 P13-1 / P13-2 / P13-4 完成並經 real-site regression 後仍有 residual pathological cases 時才實作。不重寫現有 manual redirect、redirect chain、redirect loop、max redirects 或 `redirect_to_error` handling，不因 `/notfound` 等 path 名稱直接判定失效；若原實站案例已由 P13-1 / P13-2 / P13-4 解決，可直接 skip。
+6. P13-5 Special Endpoint HEAD Recheck：優先利用既有 external-link category / `social` classification；social / share-like endpoint + HEAD 4xx 可評估 targeted GET recheck 或 `needs_review`。不得建立 Facebook-specific validation engine、不得把所有 external 4xx 降級，且 confirmed external GET 404/410 仍應可成為 actionable issue。此項主要降低 social/share HEAD 4xx noise 與人工判讀，重要但不是 P13 核心 validation correctness blocker。
 
 ### P14 Result Interpretation & Management Handoff
 
