@@ -10,8 +10,8 @@
 - 目前沒有已知 release blocker。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P0-P11 已完成或已驗收；歷史狀態保存在 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) 與 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
-- P12 Static Discovery Resilience 已完成 P12-1 HTML sitemap fallback 與 P12-2A 慣例 `/sitemap.xml` fallback。
-- 近期 real-site evidence 顯示主要瓶頸已從 URL discovery 轉向 coverage/completion 提示與 HTTP validation reliability。
+- P12 Static Discovery Resilience 已完成 P12-1 HTML sitemap fallback、P12-2A 慣例 `/sitemap.xml` fallback 與 P12-3 incomplete coverage notice。
+- 近期 real-site evidence 顯示主要瓶頸已從 URL discovery / coverage notice 轉向 HTTP validation reliability；P13 是下一個正式 implementation phase。
 - 專案已有 canonical full regression 入口與 formal release validation foundation。
 
 ## 產品邊界
@@ -36,7 +36,7 @@ P12 保持既有名稱與範圍；後續只做 evidence-driven refinement，不�
 | --- | --- | --- |
 | P12-1 HTML Sitemap Fallback | DONE | 已完成；弱 initial frontier 時嘗試受限 HTML sitemap / site-navigation 候選。 |
 | P12-2A Conventional XML `/sitemap.xml` Fallback | DONE | 已完成；只在 no explicit sitemap + empty initial same-origin frontier 時嘗試同站慣例 `/sitemap.xml`，並沿用既有 sitemap pipeline。 |
-| P12-3 Incomplete Coverage Notice | NEXT | 下一個 Static Discovery 優先候選；清楚標示 run coverage / completion，不把它混同於 validation quality。 |
+| P12-3 Incomplete Coverage Notice | DONE | 重用既有 `runStatus`、page budget、sitemap seed 與 validation queue evidence；清楚分離 coverage / completion 與 `scanQuality`，不新增 discovery engine，不修改 report schema version。 |
 | P12-2B robots-advertised sitemap | CANDIDATE / EVIDENCE-REQUIRED | 保留候選；目前 real-site evidence 尚未證明它應排在 P12-3 前面，也不是已承諾實作。 |
 
 P12-3 規劃的 coverage reason 至少包含：

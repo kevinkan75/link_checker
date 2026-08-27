@@ -743,6 +743,7 @@ body.scan-idle .status-panel .pending-url-note,
 body.scan-idle .status-panel .page-discovery-note,
 body.scan-idle .status-panel .url-pattern-note,
 body.scan-idle .status-panel .scan-advice-note,
+body.scan-idle .status-panel .coverage-notice,
 body.scan-idle .status-panel .current-url,
 body.scan-idle .status-panel .metric-grid,
 body.scan-idle .status-panel .status-details,
@@ -786,6 +787,18 @@ body.scan-idle .results-layout {
   color: #7a4b0b;
   font-size: 13px;
   font-weight: 700;
+}
+
+.coverage-notice {
+  margin: 10px 0 8px;
+  border: 1px solid #dcc49d;
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: #fff8e8;
+  color: #7a4b0b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .url-pattern-note {

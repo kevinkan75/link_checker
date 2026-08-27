@@ -51,6 +51,7 @@ const pendingUrlNote = document.querySelector("#pending-url-note");
 const pageDiscoveryNote = document.querySelector("#page-discovery-note");
 const urlPatternNote = document.querySelector("#url-pattern-note");
 const scanAdviceNote = document.querySelector("#scan-advice-note");
+const coverageNotice = document.querySelector("#coverage-notice");
 const pages = document.querySelector("#pages");
 const checked = document.querySelector("#checked");
 const pendingUrls = document.querySelector("#pending-urls");
@@ -599,6 +600,7 @@ async function startCheck() {
   updatePageDiscoveryDisplay(0, maxPagesInput.value, 0);
   updateUrlPatternDisplay(null);
   updateScanAdvice(null);
+  updateCoverageNotice(null);
   updateActiveFilter();
   setProgressValue(0);
   showLogLocation(null);
@@ -863,6 +865,7 @@ function watchQueueItemObject(item, { manual }) {
   renderBrokenTable([]);
   resultSummary.textContent = "檢查中";
   updateIncrementalSummary(null);
+  updateCoverageNotice(null);
   showLogLocation(null);
   updateWatchingSite();
   closeEvents();
@@ -1321,6 +1324,7 @@ function renderReport(report) {
   updateRedirectBreakdown(summary.redirectByType || emptyRedirectBreakdown(), summary.redirects || 0);
   updateConfirmationBreakdown(summary.confirmation || (Array.isArray(report.checked) ? buildConfirmationBreakdown(report.checked) : buildConfirmationBreakdown(broken)));
   updateIncrementalSummary(summary.incremental || null);
+  updateCoverageNotice(buildCoverageNotice(report));
   updateActiveFilter();
 
   renderBrokenTableForReport(report);
@@ -1366,6 +1370,111 @@ function getReportUrlValidationProgress(report) {
     return 0;
   }
   return capIncompleteProgress((checkedTotal / totalKnownUrls) * 100);
+}
+
+function buildCoverageNotice(report) {
+  const coverage = deriveCoverageStatusForReport(report);
+  if (!coverage.incomplete) {
+    return null;
+  }
+  if (coverage.validation.incomplete) {
+    return "本次掃描未完整完成，目前結果僅包含已完成驗證的 URL，不應視為完整網站檢測結果。";
+  }
+  if (coverage.discovery.incomplete) {
+    return "本次已完成排定的 URL 驗證，但網站探索範圍受頁面上限或 sitemap seed 限制，結果可能未涵蓋完整網站。";
+  }
+  return "本次掃描可能未完整涵蓋網站內容，目前結果僅代表已探索及已完成驗證的 URL。";
+}
+
+function deriveCoverageStatusForReport(report) {
+  const existing = report?.summary?.coverage;
+  if (existing && typeof existing === "object" && Array.isArray(existing.reasons)) {
+    return {
+      incomplete: existing.incomplete === true || existing.status === "incomplete",
+      reasons: existing.reasons,
+      discovery: existing.discovery || { incomplete: false, reasons: [] },
+      validation: existing.validation || { incomplete: false, reasons: [] },
+    };
+  }
+
+  const summary = report?.summary || {};
+  const runStatus = report?.runStatus || {};
+  const reasons = [];
+  const discoveryReasons = [];
+  const validationReasons = [];
+  const pagesCrawled = Number(summary.pagesCrawled || 0);
+  const maxPages = Number(report?.options?.maxPages || 0);
+  const pendingPages = Number(runStatus.pendingPages || 0);
+  const pendingValidations = Number(runStatus.pendingValidations || 0);
+  const activeValidationTasks = Number(runStatus.activeValidationTasks || 0);
+  const sitemapSeed = summary.incremental?.sitemap?.seed || {};
+  const sitemapUrlCount = Number(summary.incremental?.sitemap?.urlCount || 0);
+  const fallbackSitemap = summary.discoveryFallback?.xmlSitemap || {};
+  const sitemapSeedTruncated = hasSitemapSeedTruncation({
+    discovered: sitemapUrlCount,
+    seeded: Number(sitemapSeed.seeded || 0),
+    ignoredByMaxPages: Number(sitemapSeed.ignoredByReason?.max_pages || 0) > 0,
+    pagesCrawled,
+    maxPages,
+  }) || hasSitemapSeedTruncation({
+    discovered: Number(fallbackSitemap.urlsDiscovered || 0),
+    seeded: Number(fallbackSitemap.urlsSeeded || 0),
+    ignoredByMaxPages: false,
+    pagesCrawled,
+    maxPages,
+  });
+
+  if (runStatus.stoppedByUser === true || runStatus.stopReason === "stopped_by_user") {
+    validationReasons.push("stopped_by_user");
+  }
+  if (runStatus.status !== "complete" && (pendingValidations + activeValidationTasks) > 0) {
+    validationReasons.push("validation_incomplete");
+  }
+  if (sitemapSeedTruncated) {
+    discoveryReasons.push("sitemap_seed_truncated");
+  }
+  if (
+    maxPages > 0
+    && pagesCrawled >= maxPages
+    && (
+      pendingPages > 0
+      || sitemapSeedTruncated
+      || Number(sitemapSeed.ignoredByReason?.max_pages || 0) > 0
+      || summary.discoveryFallback?.htmlSitemap?.reason === "max_pages"
+      || fallbackSitemap.reason === "max_pages"
+      || runStatus.stopReason === "max_pages"
+    )
+  ) {
+    discoveryReasons.push("max_pages_reached");
+  }
+
+  reasons.push(...new Set([...discoveryReasons, ...validationReasons]));
+  return {
+    incomplete: reasons.length > 0,
+    reasons,
+    discovery: { incomplete: discoveryReasons.length > 0, reasons: discoveryReasons },
+    validation: { incomplete: validationReasons.length > 0, reasons: validationReasons },
+  };
+}
+
+function hasSitemapSeedTruncation({ discovered, seeded, ignoredByMaxPages, pagesCrawled, maxPages }) {
+  if (!Number.isFinite(discovered) || !Number.isFinite(seeded) || discovered <= seeded) {
+    return false;
+  }
+  return ignoredByMaxPages || (maxPages > 0 && pagesCrawled >= maxPages && seeded <= maxPages);
+}
+
+function updateCoverageNotice(message) {
+  if (!coverageNotice) {
+    return;
+  }
+  if (!message) {
+    coverageNotice.hidden = true;
+    coverageNotice.textContent = "";
+    return;
+  }
+  coverageNotice.hidden = false;
+  coverageNotice.textContent = message;
 }
 
 function renderBrokenTableForReport(report) {

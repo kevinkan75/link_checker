@@ -2573,6 +2573,104 @@ class LinkChecker {
         };
       })
       .sort((a, b) => a.url.localeCompare(b.url));
+    const reportOptions = {
+      maxPages: this.options.maxPages,
+      maxDepth: this.options.maxDepth,
+      concurrency: this.options.concurrency,
+      perHostConcurrency: this.options.perHostConcurrency,
+      requestDelayMs: this.options.requestDelayMs,
+      requestDelayMinMs: this.options.requestDelayMinMs,
+      requestDelayMaxMs: this.options.requestDelayMaxMs,
+      retryAfterMaxMs: this.options.retryAfterMaxMs,
+      timeoutMs: this.options.timeoutMs,
+      retryCount: this.options.retryCount,
+      maxRedirects: this.options.maxRedirects,
+      longRedirectThreshold: this.options.longRedirectThreshold,
+      userAgent: this.options.userAgent,
+      acceptLanguage: this.options.acceptLanguage,
+      checkExternal: this.options.checkExternal,
+      preferGet: this.options.preferGet,
+      externalReferer: this.options.externalReferer,
+      conservativeMode: this.options.conservativeMode,
+      canonicalStrategy: this.options.canonicalStrategy,
+      legacyTls: this.options.legacyTls,
+      systemCa: this.options.systemCa,
+      confirm404: this.options.confirm404,
+      confirmationMaxUrls: this.options.confirmationMaxUrls,
+      confirmationMaxPerHost: this.options.confirmationMaxPerHost,
+      confirmationConcurrency: this.options.confirmationConcurrency,
+      confirmationPerHostConcurrency: this.options.confirmationPerHostConcurrency,
+      confirmationDelayMinMs: this.options.confirmationDelayMinMs,
+      confirmationDelayMaxMs: this.options.confirmationDelayMaxMs,
+      spaLinks: this.options.spaLinks,
+      redactSensitiveQuery: this.options.redactSensitiveQuery,
+      redactQueryKeys: this.options.redactQueryKeys,
+      maxHtmlBytes: this.options.maxHtmlBytes,
+      maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
+      maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
+      maxSourcesPerUrl: this.options.maxSourcesPerUrl,
+      maxRulesBytes: this.options.maxRulesBytes,
+      blockPrivateIp: this.options.blockPrivateIp,
+      allowLocalhost: this.options.allowLocalhost,
+      allowPrivateIp: this.options.allowPrivateIp,
+      cache: this.options.cache,
+      cacheFile: this.options.cacheFile,
+      cacheTtlHours: this.options.cacheTtlHours,
+      refreshCache: this.options.refreshCache,
+      incremental: this.options.incremental,
+      baselineReport: this.options.baselineReport,
+      stateFile: this.options.stateFile,
+      incrementalStateWrite: this.options.incrementalStateWrite,
+      changedOnly: this.options.changedOnly,
+      sitemap: this.options.sitemap,
+      sitemapMaxUrls: this.options.sitemapMaxUrls,
+      robotsTxt: this.options.robotsTxt,
+      authorizedScan: this.options.authorizedScan,
+      authorizationNote: this.options.authorizationNote,
+      protectionBodyHash: this.options.protectionBodyHash,
+      keepAlive: this.options.keepAlive,
+      maxSockets: this.options.maxSockets,
+      maxFreeSockets: this.options.maxFreeSockets,
+      keepAliveMsecs: this.options.keepAliveMsecs,
+      domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
+      externalRiskRulesSource: this.options.externalRiskRulesSource || null,
+      siteLinkRulesSource: this.options.siteLinkRulesSource || null,
+    };
+    const summary = {
+      pagesCrawled: this.crawledPageKeys.size,
+      urlsChecked: checked.length,
+      brokenLinks: broken.length,
+      brokenByType: countBrokenByType(broken),
+      interpretationByCategory: countInterpretationByCategory(checked),
+      redirects: countRedirected(checked),
+      redirectByType: countRedirectByType(checked),
+      skippedExternal: this.skippedExternal,
+      externalLinks: externalLinks.length,
+      externalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
+      externalByType: countExternalByType(externalLinks),
+      externalByCategory: countExternalByCategory(externalLinks),
+      externalRiskByLevel: countExternalRiskByLevel(externalLinks),
+      externalRiskByGovernanceStatus: countExternalRiskByGovernanceStatus(externalLinks),
+      externalRiskByDomain: summarizeExternalRiskDomains(externalLinks),
+      confirmation: countConfirmationByOutcome(checked),
+      pagesChecked: checkedByKind.pages,
+      contentLinksChecked: checkedByKind.content,
+      externalLinksChecked: checkedByKind.external,
+      documentsChecked: checkedByKind.documents,
+      mediaLinksChecked: checkedByKind.media,
+      assetsChecked: checkedByKind.assets,
+      nuxtAssetsChecked: checkedByKind.nuxtAssets,
+      checkedByKind,
+      inventorySummary,
+      discoveryFallback: this.discoveryFallback,
+      cache: this.buildCacheSummary(),
+      incremental: this.buildIncrementalSummary(),
+      spaDetection,
+      scanQuality,
+      robotsTxt: this.robotsTxt,
+      hostDiagnostics: this.buildHostDiagnostics(checked),
+    };
+    summary.coverage = deriveCoverageStatus({ runStatus, summary, options: reportOptions });
 
     const report = {
       schemaVersion: REPORT_SCHEMA_VERSION,
@@ -2582,106 +2680,11 @@ class LinkChecker {
       runStatus,
       startUrl: this.startUrl,
       rulesTrace: this.rulesTrace,
-      options: {
-        maxPages: this.options.maxPages,
-        maxDepth: this.options.maxDepth,
-        concurrency: this.options.concurrency,
-        perHostConcurrency: this.options.perHostConcurrency,
-        requestDelayMs: this.options.requestDelayMs,
-        requestDelayMinMs: this.options.requestDelayMinMs,
-        requestDelayMaxMs: this.options.requestDelayMaxMs,
-        retryAfterMaxMs: this.options.retryAfterMaxMs,
-        timeoutMs: this.options.timeoutMs,
-        retryCount: this.options.retryCount,
-        maxRedirects: this.options.maxRedirects,
-        longRedirectThreshold: this.options.longRedirectThreshold,
-        userAgent: this.options.userAgent,
-        acceptLanguage: this.options.acceptLanguage,
-        checkExternal: this.options.checkExternal,
-        preferGet: this.options.preferGet,
-        externalReferer: this.options.externalReferer,
-        conservativeMode: this.options.conservativeMode,
-        canonicalStrategy: this.options.canonicalStrategy,
-        legacyTls: this.options.legacyTls,
-        systemCa: this.options.systemCa,
-        confirm404: this.options.confirm404,
-        confirmationMaxUrls: this.options.confirmationMaxUrls,
-        confirmationMaxPerHost: this.options.confirmationMaxPerHost,
-        confirmationConcurrency: this.options.confirmationConcurrency,
-        confirmationPerHostConcurrency: this.options.confirmationPerHostConcurrency,
-        confirmationDelayMinMs: this.options.confirmationDelayMinMs,
-        confirmationDelayMaxMs: this.options.confirmationDelayMaxMs,
-        spaLinks: this.options.spaLinks,
-        redactSensitiveQuery: this.options.redactSensitiveQuery,
-        redactQueryKeys: this.options.redactQueryKeys,
-        maxHtmlBytes: this.options.maxHtmlBytes,
-        maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
-        maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
-        maxSourcesPerUrl: this.options.maxSourcesPerUrl,
-        maxRulesBytes: this.options.maxRulesBytes,
-        blockPrivateIp: this.options.blockPrivateIp,
-        allowLocalhost: this.options.allowLocalhost,
-        allowPrivateIp: this.options.allowPrivateIp,
-        cache: this.options.cache,
-        cacheFile: this.options.cacheFile,
-        cacheTtlHours: this.options.cacheTtlHours,
-        refreshCache: this.options.refreshCache,
-        incremental: this.options.incremental,
-        baselineReport: this.options.baselineReport,
-        stateFile: this.options.stateFile,
-        incrementalStateWrite: this.options.incrementalStateWrite,
-        changedOnly: this.options.changedOnly,
-        sitemap: this.options.sitemap,
-        sitemapMaxUrls: this.options.sitemapMaxUrls,
-        robotsTxt: this.options.robotsTxt,
-        authorizedScan: this.options.authorizedScan,
-        authorizationNote: this.options.authorizationNote,
-        protectionBodyHash: this.options.protectionBodyHash,
-        keepAlive: this.options.keepAlive,
-        maxSockets: this.options.maxSockets,
-        maxFreeSockets: this.options.maxFreeSockets,
-        keepAliveMsecs: this.options.keepAliveMsecs,
-        domainCategoryRulesSource: this.options.domainCategoryRulesSource || null,
-        externalRiskRulesSource: this.options.externalRiskRulesSource || null,
-        siteLinkRulesSource: this.options.siteLinkRulesSource || null,
-      },
+      options: reportOptions,
       securityPolicy: this.securityPolicy,
       scanPolicy: this.scanPolicy,
       compliance: this.compliance,
-      summary: {
-        pagesCrawled: this.crawledPageKeys.size,
-        urlsChecked: checked.length,
-        brokenLinks: broken.length,
-        brokenByType: countBrokenByType(broken),
-        interpretationByCategory: countInterpretationByCategory(checked),
-        redirects: countRedirected(checked),
-        redirectByType: countRedirectByType(checked),
-        skippedExternal: this.skippedExternal,
-        externalLinks: externalLinks.length,
-        externalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
-        externalByType: countExternalByType(externalLinks),
-        externalByCategory: countExternalByCategory(externalLinks),
-        externalRiskByLevel: countExternalRiskByLevel(externalLinks),
-        externalRiskByGovernanceStatus: countExternalRiskByGovernanceStatus(externalLinks),
-        externalRiskByDomain: summarizeExternalRiskDomains(externalLinks),
-        confirmation: countConfirmationByOutcome(checked),
-        pagesChecked: checkedByKind.pages,
-        contentLinksChecked: checkedByKind.content,
-        externalLinksChecked: checkedByKind.external,
-        documentsChecked: checkedByKind.documents,
-        mediaLinksChecked: checkedByKind.media,
-        assetsChecked: checkedByKind.assets,
-        nuxtAssetsChecked: checkedByKind.nuxtAssets,
-        checkedByKind,
-        inventorySummary,
-        discoveryFallback: this.discoveryFallback,
-        cache: this.buildCacheSummary(),
-        incremental: this.buildIncrementalSummary(),
-        spaDetection,
-        scanQuality,
-        robotsTxt: this.robotsTxt,
-        hostDiagnostics: this.buildHostDiagnostics(checked),
-      },
+      summary,
       broken,
       checked,
       externalLinks,
@@ -8064,6 +8067,135 @@ function countConfirmationByOutcome(items) {
   return counts;
 }
 
+function deriveCoverageStatus(reportLike = {}) {
+  const summary = reportLike.summary && typeof reportLike.summary === "object" ? reportLike.summary : {};
+  const runStatus = reportLike.runStatus && typeof reportLike.runStatus === "object" ? reportLike.runStatus : {};
+  const options = reportLike.options && typeof reportLike.options === "object" ? reportLike.options : {};
+  const discoveryReasons = [];
+  const validationReasons = [];
+  const details = buildCoverageDetails({ summary, runStatus, options });
+
+  if (runStatus.stoppedByUser === true || runStatus.stopReason === "stopped_by_user") {
+    validationReasons.push("stopped_by_user");
+  }
+
+  if (hasIncompleteValidationEvidence(runStatus)) {
+    validationReasons.push("validation_incomplete");
+  }
+
+  if (hasSitemapSeedTruncationEvidence({ summary, details })) {
+    discoveryReasons.push("sitemap_seed_truncated");
+  }
+
+  if (hasMaxPagesReachedEvidence({ summary, runStatus, details, discoveryReasons })) {
+    discoveryReasons.push("max_pages_reached");
+  }
+
+  const reasons = [...new Set([...discoveryReasons, ...validationReasons])];
+  return {
+    status: reasons.length > 0 ? "incomplete" : "complete",
+    incomplete: reasons.length > 0,
+    reasons,
+    discovery: {
+      status: discoveryReasons.length > 0 ? "incomplete" : "complete",
+      incomplete: discoveryReasons.length > 0,
+      reasons: [...new Set(discoveryReasons)],
+    },
+    validation: {
+      status: validationReasons.length > 0 ? "incomplete" : "complete",
+      incomplete: validationReasons.length > 0,
+      reasons: [...new Set(validationReasons)],
+    },
+    details,
+  };
+}
+
+function buildCoverageDetails({ summary, runStatus, options }) {
+  const sitemapPairs = getSitemapCoveragePairs(summary);
+  const discoveredCounts = sitemapPairs
+    .map((pair) => pair.discovered)
+    .filter((value) => Number.isFinite(value));
+  const seededCounts = sitemapPairs
+    .map((pair) => pair.seeded)
+    .filter((value) => Number.isFinite(value));
+
+  return {
+    pagesCrawled: toFiniteNumber(summary.pagesCrawled),
+    maxPages: toFiniteNumber(options.maxPages),
+    pendingPages: toFiniteNumber(runStatus.pendingPages),
+    pendingValidations: toFiniteNumber(runStatus.pendingValidations),
+    activeValidationTasks: toFiniteNumber(runStatus.activeValidationTasks),
+    sitemapDiscoveredUrls: discoveredCounts.length > 0 ? Math.max(...discoveredCounts) : null,
+    sitemapSeededUrls: seededCounts.length > 0 ? Math.max(...seededCounts) : null,
+    sitemapIgnoredByMaxPages: sitemapPairs.some((pair) => pair.ignoredByMaxPages),
+    pageBudgetStopEvidence: hasPageBudgetStopEvidence(summary),
+  };
+}
+
+function toFiniteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function hasIncompleteValidationEvidence(runStatus) {
+  const pendingValidations = toFiniteNumber(runStatus.pendingValidations);
+  const activeValidationTasks = toFiniteNumber(runStatus.activeValidationTasks);
+  return runStatus.status !== "complete" && (pendingValidations + activeValidationTasks) > 0;
+}
+
+function getSitemapCoveragePairs(summary) {
+  const pairs = [];
+  const sitemap = summary.incremental?.sitemap;
+  const sitemapSeed = sitemap?.seed;
+  if (sitemap && typeof sitemap === "object" && sitemapSeed && typeof sitemapSeed === "object") {
+    pairs.push({
+      discovered: toFiniteNumber(sitemap.urlCount),
+      seeded: toFiniteNumber(sitemapSeed.seeded),
+      ignoredByMaxPages: toFiniteNumber(sitemapSeed.ignoredByReason?.max_pages) > 0,
+    });
+  }
+
+  const xmlSitemap = summary.discoveryFallback?.xmlSitemap;
+  if (xmlSitemap && typeof xmlSitemap === "object") {
+    pairs.push({
+      discovered: toFiniteNumber(xmlSitemap.urlsDiscovered),
+      seeded: toFiniteNumber(xmlSitemap.urlsSeeded),
+      ignoredByMaxPages: false,
+    });
+  }
+
+  return pairs;
+}
+
+function hasSitemapSeedTruncationEvidence({ summary, details }) {
+  return getSitemapCoveragePairs(summary).some((pair) => {
+    if (pair.discovered <= pair.seeded) {
+      return false;
+    }
+    return pair.ignoredByMaxPages
+      || (details.maxPages > 0 && details.pagesCrawled >= details.maxPages && pair.seeded <= details.maxPages);
+  });
+}
+
+function hasMaxPagesReachedEvidence({ summary, runStatus, details, discoveryReasons }) {
+  if (details.maxPages <= 0 || details.pagesCrawled < details.maxPages) {
+    return false;
+  }
+
+  return details.pendingPages > 0
+    || details.sitemapIgnoredByMaxPages
+    || discoveryReasons.includes("sitemap_seed_truncated")
+    || hasPageBudgetStopEvidence(summary)
+    || runStatus.stopReason === "max_pages";
+}
+
+function hasPageBudgetStopEvidence(summary) {
+  const xmlSitemap = summary.discoveryFallback?.xmlSitemap;
+  const htmlSitemap = summary.discoveryFallback?.htmlSitemap;
+  return xmlSitemap?.reason === "max_pages"
+    || htmlSitemap?.reason === "max_pages";
+}
+
 function countRedirected(items) {
   return items.filter((item) => item.redirected).length;
 }
@@ -9217,6 +9349,10 @@ function printSummary(report) {
   if (summary.scanQuality?.warnings?.length > 0) {
     console.log(`Scan quality warnings: ${summary.scanQuality.warnings.join(", ")}`);
   }
+  if (summary.coverage?.incomplete) {
+    console.log(`Coverage notice: ${formatCoverageNotice(summary.coverage)}`);
+    console.log(`  reasons: ${summary.coverage.reasons.join(", ")}`);
+  }
   if (summary.hostDiagnostics?.warnings?.length > 0) {
     console.log(`Host diagnostics warnings: ${summary.hostDiagnostics.warnings.join(", ")}`);
   }
@@ -9292,6 +9428,16 @@ function printSummary(report) {
       console.log(`  and ${totalSources - 3} more source(s)`);
     }
   }
+}
+
+function formatCoverageNotice(coverage) {
+  if (coverage?.validation?.incomplete) {
+    return "This scan did not fully complete; results only represent URLs that finished validation.";
+  }
+  if (coverage?.discovery?.incomplete) {
+    return "Scheduled URL validation completed, but site discovery was limited by page or sitemap seed budgets.";
+  }
+  return "Results only represent discovered and validated URLs.";
 }
 
 async function main() {
@@ -9394,6 +9540,7 @@ export {
   applyConservativeDefaults,
   buildOutputManifest,
   canonicalizeUrl,
+  deriveCoverageStatus,
   evaluateUrlSecurity,
   isSystemCaEnabled,
   redactSensitiveQueryValue,

@@ -181,7 +181,7 @@ async function loadReportFile() {
     exportCsvButton.disabled = false;
     clearButton.disabled = false;
     setFileStatus(`${file.name} 已載入，大小 ${formatBytes(file.size)}。`, "ok");
-    setReportFlow("export", `${file.name} 已載入，${currentAnalysis.broken.length} 筆待判讀結果${currentAnalysis.runStatus.status === "complete" ? "" : "，報告未完整完成"}；可篩選或匯出`);
+    setReportFlow("export", `${file.name} 已載入，${currentAnalysis.broken.length} 筆待判讀結果${currentAnalysis.coverage.incomplete ? "，含掃描範圍提醒" : ""}；可篩選或匯出`);
   } catch (error) {
     currentAnalysis = null;
     exportCsvButton.disabled = true;
@@ -363,6 +363,7 @@ function analyzeReport(report) {
   return {
     report,
     runStatus,
+    coverage: deriveCoverageStatusForReport(report, summary, runStatus),
     incremental: normalizeIncrementalSummary(summary.incremental),
     metrics,
     broken: enrichedBroken,
@@ -426,7 +427,85 @@ function normalizeRunStatus(value) {
     failureReason: typeof value.failureReason === "string" ? value.failureReason : "",
     stopReason: typeof value.stopReason === "string" ? value.stopReason : "",
     completedAt: typeof value.completedAt === "string" ? value.completedAt : "",
+    pendingPages: toNumber(value.pendingPages, 0),
+    pendingValidations: toNumber(value.pendingValidations, 0),
+    activeValidationTasks: toNumber(value.activeValidationTasks, 0),
   };
+}
+
+function deriveCoverageStatusForReport(report, summary = report?.summary || {}, runStatus = normalizeRunStatus(report?.runStatus)) {
+  const existing = summary.coverage;
+  if (existing && typeof existing === "object" && Array.isArray(existing.reasons)) {
+    return {
+      incomplete: existing.incomplete === true || existing.status === "incomplete",
+      reasons: existing.reasons,
+      discovery: existing.discovery || { incomplete: false, reasons: [] },
+      validation: existing.validation || { incomplete: false, reasons: [] },
+    };
+  }
+
+  const reasons = [];
+  const discoveryReasons = [];
+  const validationReasons = [];
+  const pagesCrawled = toNumber(summary.pagesCrawled, 0);
+  const maxPages = toNumber(report?.options?.maxPages, 0);
+  const pendingPages = toNumber(runStatus.pendingPages, 0);
+  const pendingValidations = toNumber(runStatus.pendingValidations, 0);
+  const activeValidationTasks = toNumber(runStatus.activeValidationTasks, 0);
+  const sitemapSeed = summary.incremental?.sitemap?.seed || {};
+  const fallbackSitemap = summary.discoveryFallback?.xmlSitemap || {};
+  const sitemapSeedTruncated = hasSitemapSeedTruncation({
+    discovered: toNumber(summary.incremental?.sitemap?.urlCount, 0),
+    seeded: toNumber(sitemapSeed.seeded, 0),
+    ignoredByMaxPages: toNumber(sitemapSeed.ignoredByReason?.max_pages, 0) > 0,
+    pagesCrawled,
+    maxPages,
+  }) || hasSitemapSeedTruncation({
+    discovered: toNumber(fallbackSitemap.urlsDiscovered, 0),
+    seeded: toNumber(fallbackSitemap.urlsSeeded, 0),
+    ignoredByMaxPages: false,
+    pagesCrawled,
+    maxPages,
+  });
+
+  if (runStatus.stoppedByUser === true || runStatus.stopReason === "stopped_by_user") {
+    validationReasons.push("stopped_by_user");
+  }
+  if (runStatus.status !== "complete" && (pendingValidations + activeValidationTasks) > 0) {
+    validationReasons.push("validation_incomplete");
+  }
+  if (sitemapSeedTruncated) {
+    discoveryReasons.push("sitemap_seed_truncated");
+  }
+  if (
+    maxPages > 0
+    && pagesCrawled >= maxPages
+    && (
+      pendingPages > 0
+      || sitemapSeedTruncated
+      || toNumber(sitemapSeed.ignoredByReason?.max_pages, 0) > 0
+      || summary.discoveryFallback?.htmlSitemap?.reason === "max_pages"
+      || fallbackSitemap.reason === "max_pages"
+      || runStatus.stopReason === "max_pages"
+    )
+  ) {
+    discoveryReasons.push("max_pages_reached");
+  }
+
+  reasons.push(...new Set([...discoveryReasons, ...validationReasons]));
+  return {
+    incomplete: reasons.length > 0,
+    reasons,
+    discovery: { incomplete: discoveryReasons.length > 0, reasons: discoveryReasons },
+    validation: { incomplete: validationReasons.length > 0, reasons: validationReasons },
+  };
+}
+
+function hasSitemapSeedTruncation({ discovered, seeded, ignoredByMaxPages, pagesCrawled, maxPages }) {
+  if (!Number.isFinite(discovered) || !Number.isFinite(seeded) || discovered <= seeded) {
+    return false;
+  }
+  return ignoredByMaxPages || (maxPages > 0 && pagesCrawled >= maxPages && seeded <= maxPages);
 }
 
 function normalizeConfirmation(value) {
@@ -642,7 +721,7 @@ function resetSelect(select, label) {
 
 function renderAnalysis(analysis) {
   setReportEmptyStateVisible(false);
-  renderRunStatus(analysis.runStatus);
+  renderRunStatus(analysis.runStatus, analysis.coverage);
   renderIncrementalSummary(analysis.incremental);
   metricPages.textContent = formatNumber(analysis.metrics.pagesCrawled);
   metricChecked.textContent = formatNumber(analysis.metrics.urlsChecked);
@@ -818,7 +897,13 @@ function setReportFlow(stage, message) {
   });
 }
 
-function renderRunStatus(runStatus) {
+function renderRunStatus(runStatus, coverage) {
+  if (coverage?.incomplete) {
+    runStatusBanner.textContent = formatCoverageNotice(coverage);
+    runStatusBanner.hidden = false;
+    return;
+  }
+
   if (!runStatus || runStatus.status === "complete") {
     runStatusBanner.hidden = true;
     runStatusBanner.textContent = "";
@@ -843,6 +928,16 @@ function renderRunStatus(runStatus) {
     ? `${label}：${details.join("；")}。統計可能未涵蓋完整網站。`
     : `${label}：統計可能未涵蓋完整網站。`;
   runStatusBanner.hidden = false;
+}
+
+function formatCoverageNotice(coverage) {
+  if (coverage?.validation?.incomplete) {
+    return "本次掃描未完整完成，目前結果僅包含已完成驗證的 URL，不應視為完整網站檢測結果。";
+  }
+  if (coverage?.discovery?.incomplete) {
+    return "本次已完成排定的 URL 驗證，但網站探索範圍受頁面上限或 sitemap seed 限制，結果可能未涵蓋完整網站。";
+  }
+  return "本次掃描可能未完整涵蓋網站內容，目前結果僅代表已探索及已完成驗證的 URL。";
 }
 
 function renderIncrementalSummary(incremental) {
