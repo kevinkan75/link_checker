@@ -2161,7 +2161,7 @@ class LinkChecker {
     const keyParts = {
       canonicalUrlHash: hashLabel(this.getCanonicalKey(url)),
       canonicalStrategy: this.options.canonicalStrategy,
-      methodPolicy: this.options.preferGet ? "GET" : "HEAD",
+      methodPolicy: this.getStatusMethodPolicy(url),
       userAgentHash: hashLabel(this.options.userAgent),
       acceptLanguage: this.options.acceptLanguage,
       refererMode: getRefererMode(url, referer),
@@ -2195,6 +2195,11 @@ class LinkChecker {
     const result = await fetchUrl(url, this.makeFetchOptions({
       requireBody,
       referer,
+      adaptiveHeadGetEligible: this.isAdaptiveHeadGetEligible(url, {
+        requireBody,
+        forceGet: false,
+        preferGet: this.options.preferGet,
+      }),
     }));
 
     if (isStopCancelledResult(result)) {
@@ -2281,7 +2286,33 @@ class LinkChecker {
     return !result.ok
       && result.status === 404
       && result.method === "GET"
+      && !hasEquivalentAdaptiveSourceGet(result, sources, url)
       && sources.some((source) => sameOrigin(source.page, url));
+  }
+
+  getStatusMethodPolicy(url) {
+    if (this.options.preferGet) {
+      return "GET";
+    }
+    if (this.isAdaptiveHeadGetEligible(url, {
+      requireBody: false,
+      forceGet: false,
+      preferGet: false,
+    })) {
+      return "HEAD_ADAPTIVE_GET_V1";
+    }
+    return "HEAD";
+  }
+
+  isAdaptiveHeadGetEligible(url, { requireBody = false, forceGet = false, preferGet = false } = {}) {
+    if (requireBody || forceGet || preferGet) {
+      return false;
+    }
+    if (!this.isCrawlOrigin(url)) {
+      return false;
+    }
+    const kind = classifyUrlKind(url, { isExternal: false });
+    return kind.page === true && kind.content === true;
   }
 
   async confirmWithSourceGet(url) {
@@ -4207,14 +4238,17 @@ async function fetchUrl(url, {
   onRetryAfter,
   createAbortController,
   isStopped,
+  adaptiveHeadGetEligible = false,
 }) {
   const started = performance.now();
   let result = null;
+  let useAdaptiveGet = false;
+  let transportFallback = null;
 
   for (let attempt = 0; attempt <= retryCount; attempt += 1) {
     result = await fetchUrlOnce(url, {
       requireBody,
-      forceGet,
+      forceGet: forceGet || useAdaptiveGet,
       timeoutMs,
       maxRedirects,
       longRedirectThreshold,
@@ -4237,6 +4271,7 @@ async function fetchUrl(url, {
       isStopped,
     });
     result.attempts = attempt + 1;
+    attachTransportFallbackMetadata(result, transportFallback);
     if (isStopCancelledResult(result)) {
       return result;
     }
@@ -4248,6 +4283,13 @@ async function fetchUrl(url, {
 
     if (!canRetry) {
       return result;
+    }
+
+    if (!useAdaptiveGet && shouldSwitchHeadTransportToGet(result, {
+      adaptiveHeadGetEligible,
+    })) {
+      useAdaptiveGet = true;
+      transportFallback = buildTransportFallbackMetadata(result);
     }
 
     if (retryAfterCooldownMs === null) {
@@ -5671,10 +5713,73 @@ function shouldRetryResult(result) {
       "ECONNREFUSED",
       "ETIMEDOUT",
       "EAI_AGAIN",
+      "UND_ERR_CONNECT_TIMEOUT",
+      "UND_ERR_HEADERS_TIMEOUT",
+      "UND_ERR_SOCKET",
     ].includes(result.cause?.code);
   }
 
   return false;
+}
+
+function hasEquivalentAdaptiveSourceGet(result, sources = [], url) {
+  if (
+    result?.transportFallback?.activated !== true
+    || result.transportFallback.fromMethod !== "HEAD"
+    || result.transportFallback.toMethod !== "GET"
+    || result.method !== "GET"
+    || !result.requestReferer
+  ) {
+    return false;
+  }
+
+  return sources.some((source) => {
+    try {
+      return source.page === result.requestReferer
+        && sameOrigin(source.page, url);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function shouldSwitchHeadTransportToGet(result, { adaptiveHeadGetEligible = false } = {}) {
+  return adaptiveHeadGetEligible === true
+    && result?.method === "HEAD"
+    && result.status === null
+    && result.classification === "network_error"
+    && isHeadTransportFallbackTrigger(result);
+}
+
+function isHeadTransportFallbackTrigger(result) {
+  if (result?.issueType === "timeout") {
+    return true;
+  }
+
+  return [
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_HEADERS_TIMEOUT",
+    "UND_ERR_SOCKET",
+  ].includes(result?.cause?.code);
+}
+
+function buildTransportFallbackMetadata(triggerResult) {
+  return {
+    activated: true,
+    fromMethod: "HEAD",
+    toMethod: "GET",
+    triggerIssueType: triggerResult?.issueType || null,
+    triggerCauseCode: triggerResult?.cause?.code || null,
+  };
+}
+
+function attachTransportFallbackMetadata(result, metadata) {
+  if (result && metadata) {
+    result.transportFallback = { ...metadata };
+  }
+  return result;
 }
 
 function parseRetryAfterHeader(value, nowMs = Date.now()) {
