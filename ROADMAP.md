@@ -1,6 +1,6 @@
 # 開發路線圖
 
-更新日期：2026-08-26
+更新日期：2026-08-27
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
@@ -23,6 +23,7 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 - 保守處理外部網站限制、rate limit、WAF、Bot challenge、CAPTCHA、timeout 與 TLS 類結果，並明確標示需要人工確認。
 - 預設阻擋 private / localhost / metadata / reserved IP；內部掃描需明確開啟。
 - `report.json` 是主要資料契約；CSV 與 NDJSON sidecar 是交辦、分析與大型資料的輔助入口。
+- 跨次掃描的 status transition、confidence change 與 historical evidence comparison 優先由既有 `report-diff.mjs` 承接，不在 crawler core 建立第二套歷史狀態資料庫。
 - Site-specific 邏輯應放在 rules 檔，不要硬寫進 crawler hostname 特例。
 
 ## Current / Next
@@ -43,29 +44,31 @@ P12-3 規劃的 coverage reason 至少包含：
 - Discovery coverage：`max_pages_reached`、`sitemap_seed_truncated`。
 - Validation coverage：`validation_incomplete`、`stopped_by_user`。
 
-`scanQuality` 與 coverage / completion 是不同概念。已完成部分的 validation quality 可以正常，但整體 run 仍可能因 `maxPages`、sitemap seed truncation、pending validation 或 user stop 而 incomplete。
+`scanQuality`、run completion、validation completion 與 discovery coverage 是不同概念。`runStatus = complete` 只代表本次排定的 validation 已執行完畢，不代表整個網站 discovery coverage 完整；例如 `pagesCrawled` 達 `maxPages` 或 sitemap discovered URLs 大於 seeded URLs 時，即使 validation 已完成，仍應提示 coverage limitation。
 
 ### P13 HTTP Validation Resilience
 
-P13 是 P12 之後的正式後續 Phase，目標是提高 HTTP validation 可靠性，降低由 HEAD 行為、暫時性 network failure、特殊 redirect、WAF / Bot protection 造成的誤判與不必要人工判讀。Adaptive retry 優先於 global slowdown，不加入 hostname-specific workaround。
+P13 是 P12 之後的正式後續 Phase，目標是提高 HTTP validation 可靠性，降低由 HEAD 行為、暫時性 network failure、特殊 redirect、WAF / Bot protection 造成的誤判與不必要人工判讀。
+
+P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallback、retry / scheduler、redirect handling、404/410 confirmation、protection detection 與 interpretation pipeline；除非既有 abstraction 無法承接，不建立平行 validation / confirmation framework。多次桃園 real-site regression 顯示，單純降低 global concurrency 或增加 delay 並未穩定降低 HEAD transport uncertainty，因此後續優先 targeted adaptive validation，而不是把 global slowdown 當主要修正策略。
 
 建議優先順序：
 
-1. P13-1 Adaptive HEAD -> GET Validation：same-origin、page-like URL 的 HEAD `ConnectTimeout`、network error 或 ambiguous response，先做 targeted conservative GET retry；不把所有 URL 全面改成 GET，也不只靠降低全域 concurrency。
-2. P13-2 Redirect-to-404/410 Confirmation：擴充既有 confirmation pipeline，支援 URL -> redirect -> final 404/410 -> conservative confirmation -> `confirmed_missing` / `recovered` / `needs_review`。
-3. P13-3 Redirect / Error-route Validation Hardening：處理 `/notfound` 等 error-route repeated redirect；不因 path 名稱直接判定失效，依最終 HTTP evidence，必要時停止無意義 HEAD chain 並改用 GET confirmation。
-4. P13-4 Protection-aware Interpretation：修正 precedence；confirmed missing evidence 優先於 generic uncertainty，但 final response 若是 WAF / Bot / protection challenge 且沒有 confirmed missing evidence，外部連結應進入 needs review / external limited，而非直接 `action_required`。
-5. P13-5 Special Endpoint HEAD Recheck：針對 social / share-like endpoint 的 HEAD 4xx noise，評估 GET / browser-like confirmation 或轉入 `needs_review`；規則必須 generic，不以單一網域硬寫。
+1. P13-1 Extend Existing HEAD -> GET Fallback for Transport Failures：現行已具備 HEAD -> GET fallback；本階段只延伸 existing fallback predicate / fetch pipeline，讓 same-origin、page-like URL 的 HEAD `ConnectTimeout`、timeout、`network_error` 等 transport uncertainty 可做 targeted conservative GET retry，並沿用既有 scheduler、安全政策、Referer、redirect handling 與 HTTP classification。
+2. P13-2 Redirect-to-404/410 Confirmation：generalize 既有 404/410 confirmation candidate selection，讓 URL -> redirect -> final 404/410 進入 existing confirmation scheduler、browser-like UA、Referer logic、GET confirmation、client redirect evidence 與 `confirmed_missing` / `recovered` / `needs_review` outcome semantics。
+3. P13-3 Residual Redirect / Error-route Hardening — CONDITIONAL：只有 P13-1 / P13-2 完成並經 real-site regression 後仍有 pathological cases 時才實作；不重寫現有 manual redirect、redirect chain、redirect loop、max redirects 或 `redirect_to_error` handling，不因 `/notfound` 等 path 名稱直接判定失效。
+4. P13-4 Protection-aware Interpretation：僅做 interpretation precedence correction；沿用現有 WAF / Bot / Cloudflare detection、body signature、header evidence 與 protection metadata。若已有 confirmed missing evidence 可維持 actionable；若 final response 是 protection challenge 且沒有 confirmed missing evidence，external result 應進入 needs review / external limited，而非因 `redirect_to_error` precedence 直接成為 `action_required`。
+5. P13-5 Special Endpoint HEAD Recheck：優先利用既有 external-link category / `social` classification；social / share-like endpoint + HEAD 4xx 可評估 targeted GET recheck 或 `needs_review`。不得建立 Facebook-specific validation engine、不得把所有 external 4xx 降級，且 confirmed external GET 404/410 仍應可成為 actionable issue。
 
 ### P14 Result Interpretation & Management Handoff
 
-P14 不重新打開 P10；它承接 management-oriented presentation / handoff refinement。近期保留既有 technical interpretation enum 與 report contract。
+P14 不重新打開 P10；它承接 management-oriented presentation / handoff refinement。Management status 與 link scope 優先由既有 interpretation、source page、URL origin 與 external-link metadata 衍生；近期保留既有 technical interpretation enum 與 report contract，不新增 crawler-side management classification schema。
 
-- P14-1 Management Status Layer：在 UI / Analyzer 上新增管理層級「需處理」「需確認」「正常／可用」「品質提醒」。初步 mapping：`action_required` -> 需處理；`needs_review`、`external_limited`、`likely_problem` -> 需確認；`redirect_ok`、`ok` -> 正常／可用；`page_quality_notice` -> 品質提醒。
-- P14-2 Link Scope Dimension：管理狀態與 link scope 分開；scope 至少包含「全部」「本站」「外部連結」。External 本身不代表低優先級，已確認失效的外部連結仍可屬於需處理。
-- P14-3 GUI Summary / Live Snapshot：未來 GUI KPI 不只看 `brokenLinks` 或待判讀總數，應呈現需處理、需確認、正常／可用，並評估由 gui-server live snapshot 提供與 report 一致的 interpretation summary。
-- P14-4 Report Analyzer：第一層以管理行動分組，第二層區分本站 / 外部連結，第三層才呈現 HTTP status、network error、timeout、redirect、WAF / Bot、protection evidence 與 technical classification。
-- P14-5 CSV / Handoff Export：近期保留 `broken[]`、`broken.csv`、`broken.ndjson` 名稱與 contract；未來可增加「管理狀態」「連結範圍」等交辦友善欄位。
+- P14-1 Management Status Layer：在 UI / Analyzer 將既有 technical interpretation 衍生為「需處理」「需確認」「正常／可用」「品質提醒」。初步 mapping：`action_required` -> 需處理；`needs_review`、`external_limited`、`likely_problem` -> 需確認；`redirect_ok`、`ok` -> 正常／可用；`page_quality_notice` -> 品質提醒。不修改 existing interpretation enum，不把 `managementStatus` 加入 report schema 作為近期必要條件。
+- P14-2 Link Scope Dimension：由既有 result URL origin、source page origin 與 external-link metadata 衍生「全部」「本站」「外部連結」，不建立新的 scope detection engine。External 本身不代表低優先級，confirmed external failure 仍可屬於需處理。
+- P14-3 GUI Summary / Live Snapshot：完整 report 的 existing `interpretationByCategory` 繼續作為 authoritative summary；live GUI 優先重用同一 interpretation helper / mapping，避免 frontend 另算第二套分類邏輯，減少 core / GUI interpretation drift。
+- P14-4 Report Analyzer：既有 Analyzer 的 UX / grouping refinement，不建立新 Analyzer；第一層以 management action 分組，第二層區分本站 / 外部連結，第三層才呈現 HTTP status、network error、timeout、redirect、WAF / Bot、protection evidence 與 technical classification。
+- P14-5 CSV / Handoff Export：近期保留 `broken[]`、`broken.csv`、`broken.ndjson` 名稱與 contract；沿用 existing CSV exporter，只增加必要的「管理狀態」「連結範圍」等交辦欄位，不建立新的 handoff export format。
 
 較完整的 real-site evidence 與規劃理由保存在 [docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md)。
 
@@ -85,7 +88,7 @@ P14 不重新打開 P10；它承接 management-oriented presentation / handoff r
 | 項目 | Resume 條件 |
 | --- | --- |
 | Dynamic Render / headless fallback | 維持 deferred。只有當靜態 HTML、SPA / payload / static-signal extraction、慣例 XML sitemap fallback、HTML sitemap fallback 與其他安全 discovery 仍漏掉重要連結，且 browser runtime execution 明確補到重要連結時才恢復評估；目前桃園案例沒有支持恢復 headless priority 的證據。 |
-| Report-diff legacy / ambiguous input hardening | Duplicate-key policy 與 legacy / manual value normalization 暫緩；只有 real imported reports 或 report-contract requirements 需要政策決定時才恢復。期間維持 deterministic warnings，避免猜測。 |
+| Report-diff legacy / ambiguous input hardening | 維持 deferred；duplicate-key policy 與 legacy / manual value normalization 暫緩。跨次掃描比較仍優先沿用既有 `report-diff.mjs`，但不因此提升為 Current / Next。 |
 | Public-trust code signing | 需另行評估正式對外散布需求、憑證成本、簽章流程與長期維護責任。 |
 
 ## Maintenance Baseline
