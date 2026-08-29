@@ -2467,13 +2467,9 @@ class LinkChecker {
 
   isNotFoundConfirmationCandidate(result) {
     return !this.stopped
-      && !result.ok
-      && result.issueType === "not_found"
-      && (result.status === 404 || result.status === 410)
+      && isConfirmableMissingResult(result)
       && this.isCrawlOrigin(result.url)
-      && result.classification !== "protected"
-      && !result.suspectedWaf
-      && !result.suspectedBot;
+      && !hasMeaningfulProtectionEvidence(result);
   }
 
   async confirmNotFoundResult(result) {
@@ -7839,6 +7835,9 @@ function getIssueType(result) {
 }
 
 function getConfirmationOutcome(result) {
+  if (hasMeaningfulProtectionEvidence(result)) {
+    return "needs_review";
+  }
   if (result.ok) {
     return "recovered";
   }
@@ -7849,6 +7848,9 @@ function getConfirmationOutcome(result) {
 }
 
 function getConfirmationReason(result) {
+  if (hasMeaningfulProtectionEvidence(result)) {
+    return result.suspectedBot || result.protection?.suspectedBot ? "blocked_bot" : "blocked_waf";
+  }
   if (result.ok) {
     return "ok";
   }
@@ -7871,6 +7873,36 @@ function getConfirmationReason(result) {
     return "network_error";
   }
   return result.status ? `http_${result.status}` : "unknown";
+}
+
+function isConfirmableMissingResult(result) {
+  return isDirectMissingResult(result) || isRedirectMissingResult(result);
+}
+
+function isDirectMissingResult(result) {
+  return !result?.ok
+    && result.issueType === "not_found"
+    && (result.status === 404 || result.status === 410);
+}
+
+function isRedirectMissingResult(result) {
+  return !result?.ok
+    && result.issueType === "redirect_to_error"
+    && result.redirected === true
+    && (result.status === 404 || result.status === 410)
+    && Array.isArray(result.redirectIssues)
+    && result.redirectIssues.includes("redirect_to_error");
+}
+
+function hasMeaningfulProtectionEvidence(result) {
+  return result?.classification === "protected"
+    || result?.issueType === "protected"
+    || result?.suspectedWaf === true
+    || result?.suspectedBot === true
+    || result?.protection?.suspectedWaf === true
+    || result?.protection?.suspectedBot === true
+    || Boolean(result?.blockedReason)
+    || Boolean(result?.protection?.blockedReason);
 }
 
 function createClientRedirectEvidence(reason, overrides = {}) {
@@ -8042,7 +8074,13 @@ function buildResultInterpretation(result, { startUrl = "" } = {}) {
   if (result.ok) {
     return buildInterpretation(result.redirected ? "redirect_ok" : "ok");
   }
-  if (issueType === "redirect_to_error" || issueType === "too_many_redirects" || issueType === "redirect_loop") {
+  if (issueType === "redirect_to_error") {
+    if (result.confirmation?.candidate === true && result.confirmation?.checked === true) {
+      return buildInterpretation(confirmationOutcome === "confirmed_missing" ? "action_required" : "needs_review");
+    }
+    return buildInterpretation("action_required");
+  }
+  if (issueType === "too_many_redirects" || issueType === "redirect_loop") {
     return buildInterpretation("action_required");
   }
   if (issueType === "not_found") {
