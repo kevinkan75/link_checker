@@ -11,7 +11,7 @@
 - Production 靜態掃描流程是目前支援的產品主線。
 - P0-P11 已完成或已驗收；歷史狀態保存在 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) 與 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
 - P12 Static Discovery Resilience 已完成 P12-1 HTML sitemap fallback、P12-2A 慣例 `/sitemap.xml` fallback 與 P12-3 incomplete coverage notice。
-- P13 HTTP Validation Resilience 已完成 P13-1 bounded adaptive HEAD -> GET transport fallback；目前下一個實作項目是 P13-2 Redirect-to-404/410 Confirmation。
+- P13 HTTP Validation Resilience 已完成 P13-1 bounded adaptive HEAD -> GET transport fallback 與 P13-2 Redirect-to-404/410 Confirmation；目前下一個建議實作項目是 P13-4 Protection-aware Interpretation。P13-3 維持 CONDITIONAL，是否實作應由 P13-4 後續 real-site regression evidence 決定。
 - 專案已有 canonical full regression 入口與 formal release validation foundation。
 
 ## 產品邊界
@@ -50,19 +50,23 @@ P12-3 已支援的 coverage reason 至少包含：
 
 P13 是 P12 之後的正式後續 Phase，目標是提高 HTTP validation 可靠性，降低由 HEAD 行為、暫時性 network failure、特殊 redirect、WAF / Bot protection 造成的誤判與不必要人工判讀。
 
-P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallback、retry / scheduler、redirect handling、404/410 confirmation、protection detection 與 interpretation pipeline；除非既有 abstraction 無法承接，不建立平行 validation / confirmation framework。多次桃園 real-site regression 顯示，單純降低 global concurrency 或增加 delay 並未穩定降低 HEAD transport uncertainty，因此後續優先 targeted adaptive validation，而不是把 global slowdown 當主要修正策略。
+P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallback、retry / scheduler、redirect handling、404/410 confirmation、protection detection 與 interpretation pipeline；除非既有 abstraction 無法承接，不建立平行 validation / confirmation framework。多次桃園 real-site regression 顯示，單純降低 global concurrency 或增加 delay 並未穩定降低 HEAD transport uncertainty，因此後續仍以 targeted evidence-driven validation / interpretation 修正為主，而不是把 global slowdown 當主要修正策略。
 
 目前狀態：
 
 | 項目 | 狀態 | 邊界 |
 | --- | --- | --- |
 | P13-1 Extend Existing HEAD -> GET Fallback for Transport Failures | DONE | 已完成 bounded adaptive HEAD -> GET transport fallback；只適用 eligible same-origin page-like HEAD-first validation，沿用既有 retry budget、scheduler、redirect、安全政策與 Referer，並以 additive `transportFallback` evidence 與 adaptive method cache policy 保持相容；不建立平行 validation engine，既有 HTTP-response fallback 仍是獨立路徑。 |
-| P13-2 Redirect-to-404/410 Confirmation | NEXT | Generalize 既有 404/410 confirmation candidate selection，讓 URL -> redirect -> final 404/410 進入 existing confirmation scheduler、browser-compatible UA、Referer logic、GET confirmation、client redirect evidence 與 `confirmed_missing` / `recovered` / `needs_review` outcome semantics。 |
-| P13-3 Residual Redirect / Error-route Hardening | CONDITIONAL | 只有 P13-2 完成並經 real-site regression 後仍有既有 redirect / confirmation pipeline 無法處理的 pathological cases 時才進入；不重寫 manual redirect、redirect loop、max redirects 或 `redirect_to_error` handling，不因 `/notfound` path 名稱直接判定失效，不加入 hostname-specific workaround。 |
-| P13-4 Protection-aware Interpretation | PLANNED / FOLLOW-UP | Scope 限定為 interpretation precedence correction only；沿用既有 WAF / Bot / Cloudflare detection、body signature、header evidence 與 protection metadata，不新增 detector。 |
+| P13-2 Redirect-to-404/410 Confirmation | DONE | 已 generalize 既有 404/410 confirmation candidate selection，使 eligible URL -> redirect -> final 404/410 進入 existing confirmation scheduler、GET confirmation、Referer、client redirect evidence 與既有 `confirmed_missing` / `recovered` / `needs_review` outcome semantics；confirmation outcome 會尊重既有 protection uncertainty，`redirect_to_error` interpretation 亦會使用 formal confirmation evidence。不建立第二套 confirmation framework，report schema version 未修改。 |
+| P13-3 Residual Redirect / Error-route Hardening | CONDITIONAL | 只有 P13-2、P13-4 完成並經 real-site regression 後，若仍有既有 redirect / confirmation pipeline 無法處理的 pathological cases，才進入本項；不重寫 manual redirect、redirect loop、max redirects 或 `redirect_to_error` handling，不因 `/notfound` path 名稱直接判定失效，不加入 hostname-specific workaround。 |
+| P13-4 Protection-aware Interpretation | NEXT | Scope 限定為 interpretation precedence correction only；沿用既有 WAF / Bot / Cloudflare detection、body signature、header evidence 與 protection metadata，不新增 detector。P13-2 完成後，現階段優先處理已有 real-site evidence 支持的 protection / redirect interpretation precedence 問題。 |
 | P13-5 Special Endpoint HEAD Recheck | PLANNED / FOLLOW-UP | 優先利用既有 external-link category / `social` classification；不得建立 Facebook-specific validation engine，不把所有 external 4xx 降級，confirmed external GET 404/410 仍應可成為 actionable issue。 |
 
 P13-1 implementation 已完成；focused tests、canonical regression 與 real-site request-path regression 已通過。實站 activated transport recovery effectiveness 仍是 observational / pending：既有 TYCG targeted regression 沒有重新觸發 adaptive transport fallback，觀察到的是既有 HTTP-response / redirect fallback 路徑，因此不把 real-site effectiveness 寫成已證明，也不把它列為 P13-1 完成 blocker。
+
+P13-2 implementation 已完成；focused tests、canonical regression（40/40）與 targeted real-site regression 均通過。既有 TYCG baseline 所抽取的 20 個 eligible redirect-to-404/410 samples 均進入 formal confirmation，20/20 再確認為 `confirmed_missing`，semantic mismatch 為 0。real-site 本次未自然觀察到 recovered 或 protection case；相關路徑已由 deterministic local tests 驗證。
+
+P13 目前 5 個規劃子項中已有 2 項 DONE（item-count completion rate 40%）；P13-4 為下一個建議項目，P13-3 維持 conditional。
 
 P13 子項編號代表既有規劃識別，不強制等同實際 implementation sequence；conditional 項目應由 regression evidence 決定是否進入實作。
 
