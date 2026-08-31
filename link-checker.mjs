@@ -8078,6 +8078,9 @@ function buildResultInterpretation(result, { startUrl = "" } = {}) {
     if (result.confirmation?.candidate === true && result.confirmation?.checked === true) {
       return buildInterpretation(confirmationOutcome === "confirmed_missing" ? "action_required" : "needs_review");
     }
+    if (hasMeaningfulProtectionEvidence(result)) {
+      return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
+    }
     return buildInterpretation("action_required");
   }
   if (issueType === "too_many_redirects" || issueType === "redirect_loop") {
