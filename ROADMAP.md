@@ -78,13 +78,26 @@ P13 子項編號代表既有規劃識別，不強制等同實際 implementation 
 
 ### P14 Result Interpretation & Management Handoff
 
-P14 不重新打開 P10；它承接 management-oriented presentation / handoff refinement。Management status 與 link scope 優先由既有 interpretation、source page、URL origin 與 external-link metadata 衍生；近期保留既有 technical interpretation enum 與 report contract，不新增 crawler-side management classification schema。
+狀態：`PLANNED / SCOPE REDUCED / IMPLEMENTATION PAUSED`。
 
-- P14-1 Management Status Layer：在 UI / Analyzer 將既有 technical interpretation 衍生為「需處理」「需確認」「正常／可用」「品質提醒」。初步 mapping：`action_required` -> 需處理；`needs_review`、`external_limited`、`likely_problem` -> 需確認；`redirect_ok`、`ok` -> 正常／可用；`page_quality_notice` -> 品質提醒。不修改 existing interpretation enum，不把 `managementStatus` 加入 report schema 作為近期必要條件。
-- P14-2 Link Scope Dimension：由既有 result URL origin、source page origin 與 external-link metadata 衍生「全部」「本站」「外部連結」，不建立新的 scope detection engine。External 本身不代表低優先級，confirmed external failure 仍可屬於需處理。
-- P14-3 GUI Summary / Live Snapshot：完整 report 的 existing `interpretationByCategory` 繼續作為 authoritative summary；live GUI 優先重用同一 interpretation helper / mapping，避免 frontend 另算第二套分類邏輯，減少 core / GUI interpretation drift。
-- P14-4 Report Analyzer：既有 Analyzer 的 UX / grouping refinement，不建立新 Analyzer；第一層以 management action 分組，第二層區分本站 / 外部連結，第三層才呈現 HTTP status、network error、timeout、redirect、WAF / Bot、protection evidence 與 technical classification。
-- P14-5 CSV / Handoff Export：近期保留 `broken[]`、`broken.csv`、`broken.ndjson` 名稱與 contract；沿用 existing CSV exporter，只增加必要的「管理狀態」「連結範圍」等交辦欄位，不建立新的 handoff export format。
+P14 不重新打開 P10 或 P13；它是小範圍的 management presentation / handoff refinement，不是 crawler correctness 或額外 validation work。最新 TYCG real-site evidence 顯示，目前 technical validation 與 interpretation 已足以支援現階段產品；剩餘較高價值缺口主要在 operator presentation 與 handoff。
+
+最新 TYCG evidence：
+
+- `2,939` URLs checked；`21` `action_required`。
+- `57` review-oriented results（`14` `external_limited` + `43` `likely_problem`）。
+- scan execution complete；discovery coverage incomplete，原因為 `sitemap_seed_truncated` 與 `max_pages_reached`。
+
+縮減後優先順序：
+
+1. **Coverage Context**：重用既有 `coverage.status`、`coverage.reasons`、`coverage.details`，清楚區分 scan execution completion 與 discovery coverage completeness，避免將「scan complete」表達為全站完整涵蓋。
+2. **Management Summary**：重用既有 interpretation 作為 presentation aggregation：`action_required` 為「需處理」；`needs_review`、`external_limited`、`likely_problem` 為「需確認」；`ok`、`redirect_ok` 為「正常／目前可用」；`page_quality_notice` 為「品質提醒」。不建立新的 crawler classification 或 schema contract。
+3. **Link Scope**：重用 URL / origin / external-link evidence 呈現「本站」與「外部連結」，協助判斷責任與交辦路徑；不建立 crawler-side scope engine。
+4. **Report Analyzer Reuse**：只在能降低 operator review effort 時，重用相同 management presentation model，以「management status -> internal / external -> technical detail」呈現；不建立新 Analyzer。
+
+目前延後（`DEFERRED / EVIDENCE-REQUIRED`）：新的 `managementStatus` report/schema layer、report schema version change、CSV / handoff export expansion、新 crawler validation logic、新 technical classification enums、HEAD / GET behavior changes、social-platform-specific validation、WAF / Bot detection expansion，以及 Dynamic Render / headless browser activation。
+
+P14 目標是讓非技術承辦人能快速判斷需處理與需確認項目、本站或外部責任，以及 scan coverage 是否完整。Implementation 目前暫停；本步僅完成 documentation decision，後續 implementation 必須另行 review 與明確 activation。
 
 較完整的 real-site evidence 與規劃理由保存在 [docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md)。
 
