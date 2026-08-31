@@ -1,6 +1,6 @@
 # 開發路線圖
 
-更新日期：2026-08-29
+更新日期：2026-08-31
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
@@ -12,6 +12,7 @@
 - P0-P11 已完成或已驗收；歷史狀態保存在 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) 與 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
 - P12 Static Discovery Resilience 已完成 P12-1 HTML sitemap fallback、P12-2A 慣例 `/sitemap.xml` fallback 與 P12-3 incomplete coverage notice。
 - P13 HTTP Validation Resilience 已完成 P13-1 bounded adaptive HEAD -> GET transport fallback、P13-2 Redirect-to-404/410 Confirmation 與 P13-4 Protection-aware Interpretation。P13-3 Necessity Review 已完成，結論為 SKIPPED / NOT REQUIRED：現有 evidence 沒有發現未被既有邏輯處理的 residual pathological redirect / error-route case；只有出現新的可重現 evidence 才 reopen。P13-5 Necessity Review 亦完成，結論為 SKIPPED / NOT REQUIRED：沒有證明可通用的 bounded request-level recovery path。依目前 evidence，P13 已無待執行 implementation 項目。
+- P14 Result Interpretation & Management Handoff 已完成 scope review，依最新 TYCG real-site evidence 縮減為小範圍 management presentation / handoff refinement；目前 implementation 暫停，後續須另行 review 與明確 activation。
 - 專案已有 canonical full regression 入口與 formal release validation foundation。
 
 ## 產品邊界
@@ -88,7 +89,7 @@ P14 不重新打開 P10 或 P13；它是小範圍的 management presentation / h
 - `57` review-oriented results（`14` `external_limited` + `43` `likely_problem`）。
 - scan execution complete；discovery coverage incomplete，原因為 `sitemap_seed_truncated` 與 `max_pages_reached`。
 
-縮減後優先順序：
+P14 後續如經 review 明確 activation，優先評估順序：
 
 1. **Coverage Context**：重用既有 `coverage.status`、`coverage.reasons`、`coverage.details`，清楚區分 scan execution completion 與 discovery coverage completeness，避免將「scan complete」表達為全站完整涵蓋。
 2. **Management Summary**：重用既有 interpretation 作為 presentation aggregation：`action_required` 為「需處理」；`needs_review`、`external_limited`、`likely_problem` 為「需確認」；`ok`、`redirect_ok` 為「正常／目前可用」；`page_quality_notice` 為「品質提醒」。不建立新的 crawler classification 或 schema contract。
@@ -99,7 +100,7 @@ P14 不重新打開 P10 或 P13；它是小範圍的 management presentation / h
 
 P14 目標是讓非技術承辦人能快速判斷需處理與需確認項目、本站或外部責任，以及 scan coverage 是否完整。Implementation 目前暫停；本步僅完成 documentation decision，後續 implementation 必須另行 review 與明確 activation。
 
-較完整的 real-site evidence 與規劃理由保存在 [docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md)。
+P13 HTTP validation 相關的既有 real-site evidence 與歷史判斷保存在 [docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md)；本次 P14 scope decision 以本節所列最新 TYCG evidence 為目前決策依據。
 
 ## Future Candidates
 
