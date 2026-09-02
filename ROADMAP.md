@@ -12,7 +12,7 @@
 - P0-P11 已完成或已驗收；歷史狀態保存在 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) 與 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。
 - P12 Static Discovery Resilience 已完成 P12-1 HTML sitemap fallback、P12-2A 慣例 `/sitemap.xml` fallback 與 P12-3 incomplete coverage notice。
 - P13 HTTP Validation Resilience 已完成 P13-1 bounded adaptive HEAD -> GET transport fallback、P13-2 Redirect-to-404/410 Confirmation 與 P13-4 Protection-aware Interpretation。P13-3 Necessity Review 已完成，結論為 SKIPPED / NOT REQUIRED：現有 evidence 沒有發現未被既有邏輯處理的 residual pathological redirect / error-route case；只有出現新的可重現 evidence 才 reopen。P13-5 Necessity Review 亦完成，結論為 SKIPPED / NOT REQUIRED：沒有證明可通用的 bounded request-level recovery path。依目前 evidence，P13 已無待執行 implementation 項目。
-- P14 Result Interpretation & Management Handoff 已完成 scope review，依最新 TYCG real-site evidence 縮減為小範圍 management presentation / handoff refinement；目前 implementation 暫停，後續須另行 review 與明確 activation。
+- P14 Result Interpretation & Management Handoff necessity review 已完成；Coverage Context、Management Summary 與 Report Analyzer workflow 已主要由既有功能承接，目前無 justified implementation item。僅保留「本站／外部」Link Scope filter 為 CANDIDATE / EVIDENCE-REQUIRED。
 - 專案已有 canonical full regression 入口與 formal release validation foundation。
 
 ## 產品邊界
@@ -79,28 +79,23 @@ P13 子項編號代表既有規劃識別，不強制等同實際 implementation 
 
 ### P14 Result Interpretation & Management Handoff
 
-狀態：`PLANNED / SCOPE REDUCED / IMPLEMENTATION PAUSED`。
+狀態：`NECESSITY REVIEW COMPLETE / NO CURRENT IMPLEMENTATION`。
 
-P14 不重新打開 P10 或 P13；它是小範圍的 management presentation / handoff refinement，不是 crawler correctness 或額外 validation work。最新 TYCG real-site evidence 顯示，目前 technical validation 與 interpretation 已足以支援現階段產品；剩餘較高價值缺口主要在 operator presentation 與 handoff。
+P14 necessity review 已完成。重新依產品定位、現有 GUI / Report Analyzer 能力與最新 TYCG real-site evidence 檢視後，原 P14 主要目標已大部分由既有功能承接，現階段沒有足夠效益支持另行啟動 P14 implementation phase。
 
-最新 TYCG evidence：
+| 項目 | 結論 | 邊界 |
+| --- | --- | --- |
+| Coverage Context | SATISFIED BY EXISTING IMPLEMENTATION | 既有 coverage status / reasons / details 已區分 scan execution completion 與 discovery coverage completeness。 |
+| Management Summary | SUBSTANTIALLY SATISFIED / NO CURRENT CHANGE REQUIRED | 既有七類 interpretation、labels、actions、counts、filters 與 interpretation-first display 已可承接；不建立新的 management aggregation/schema layer。 |
+| Link Scope | CANDIDATE / EVIDENCE-REQUIRED | 尚無獨立「全部／本站／外部」filter，但現有 URL/domain search、ranking、external-limited 與 External Link Analyzer 已提供部分責任判斷。 |
+| Report Analyzer Reuse | ALREADY PRESENT | 既有 workflow 已以待判讀、處理建議、來源頁／問題網域與 technical detail 支援交辦。 |
 
-- `2,939` URLs checked；`21` `action_required`。
-- `57` review-oriented results（`14` `external_limited` + `43` `likely_problem`）。
-- scan execution complete；discovery coverage incomplete，原因為 `sitemap_seed_truncated` 與 `max_pages_reached`。
+最新 TYCG evidence：`2,939` URLs checked；`21` `action_required`；`14` `external_limited`；`43` `likely_problem`；scan execution complete，但 discovery coverage incomplete（`sitemap_seed_truncated`、`max_pages_reached`）。
 
-P14 後續如經 review 明確 activation，優先評估順序：
+`P14_AS_SEPARATE_IMPLEMENTATION_PHASE = NOT_JUSTIFIED`
+`P14_IMPLEMENTATION_ITEMS_JUSTIFIED_NOW = 0`
 
-1. **Coverage Context**：重用既有 `coverage.status`、`coverage.reasons`、`coverage.details`，清楚區分 scan execution completion 與 discovery coverage completeness，避免將「scan complete」表達為全站完整涵蓋。
-2. **Management Summary**：重用既有 interpretation 作為 presentation aggregation：`action_required` 為「需處理」；`needs_review`、`external_limited`、`likely_problem` 為「需確認」；`ok`、`redirect_ok` 為「正常／目前可用」；`page_quality_notice` 為「品質提醒」。不建立新的 crawler classification 或 schema contract。
-3. **Link Scope**：重用 URL / origin / external-link evidence 呈現「本站」與「外部連結」，協助判斷責任與交辦路徑；不建立 crawler-side scope engine。
-4. **Report Analyzer Reuse**：只在能降低 operator review effort 時，重用相同 management presentation model，以「management status -> internal / external -> technical detail」呈現；不建立新 Analyzer。
-
-目前延後（`DEFERRED / EVIDENCE-REQUIRED`）：新的 `managementStatus` report/schema layer、report schema version change、CSV / handoff export expansion、新 crawler validation logic、新 technical classification enums、HEAD / GET behavior changes、social-platform-specific validation、WAF / Bot detection expansion，以及 Dynamic Render / headless browser activation。
-
-P14 目標是讓非技術承辦人能快速判斷需處理與需確認項目、本站或外部責任，以及 scan coverage 是否完整。Implementation 目前暫停；本步僅完成 documentation decision，後續 implementation 必須另行 review 與明確 activation。
-
-P13 HTTP validation 相關的既有 real-site evidence 與歷史判斷保存在 [docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md)；本次 P14 scope decision 以本節所列最新 TYCG evidence 為目前決策依據。
+不啟動 managementStatus/report schema、CSV contract、crawler validation/classification、HEAD/GET、social、WAF/Bot、new Analyzer 或 Dynamic Render 變更。詳見 [P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md](docs/archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md)。
 
 ## Future Candidates
 
@@ -108,6 +103,7 @@ P13 HTTP validation 相關的既有 real-site evidence 與歷史判斷保存在 
 
 | 項目 | 邊界 |
 | --- | --- |
+| Report Analyzer internal / external scope filter | `CANDIDATE / EVIDENCE-REQUIRED`。只有當實際承辦／交辦使用證明現有 interpretation filter、domain search / ranking 與 external-link analysis 不足以快速區分本站與外部責任時才恢復評估；優先 reuse start origin / URL evidence，不新增 crawler-side scope engine，也不修改 report schema。 |
 | GUI rules URL input | 讓使用者不必切 CLI 就能載入 site-specific rules；需保留安全提示、錯誤呈現與權限邊界。 |
 | Fragment / duplicate anchor optional check | 已有 real-site evidence 顯示 HTTP page 為 200 但 `#fragment` 目標不存在；定位為 future optional quality check，不影響目前 broken-link core judgment，優先度低於 P13 / P14。 |
 | Report Analyzer large-file UX improvement | 優先沿用 NDJSON sidecar，不急著改主契約。 |

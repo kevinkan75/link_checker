@@ -14,6 +14,7 @@
 
 ## 歸檔入口
 
+- [archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md](archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md)：P14 管理導向結果呈現與交辦 necessity review、既有能力稽核及最終 disposition。
 - [archive/README.md](archive/README.md)：歸檔文件索引。
 - [archive/CURRENT_STATE_2026-08-03.md](archive/CURRENT_STATE_2026-08-03.md)：2026-08-03 根 ROADMAP 收斂前的目前狀態、v1.0.4 摘要與已完成階段總覽。
 - [archive/ROADMAP_HISTORY.md](archive/ROADMAP_HISTORY.md)：P0-P5.5 已完成里程碑的詳細歷史。
