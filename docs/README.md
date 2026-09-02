@@ -14,6 +14,7 @@
 
 ## 歸檔入口
 
+- [archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md)：P13 HTTP Validation Resilience 最終 disposition、acceptance / real-site regression evidence 與收尾紀錄。
 - [archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md](archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md)：P14 管理導向結果呈現與交辦 necessity review、既有能力稽核及最終 disposition。
 - [archive/README.md](archive/README.md)：歸檔文件索引。
 - [archive/CURRENT_STATE_2026-08-03.md](archive/CURRENT_STATE_2026-08-03.md)：2026-08-03 根 ROADMAP 收斂前的目前狀態、v1.0.4 摘要與已完成階段總覽。

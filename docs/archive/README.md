@@ -32,6 +32,7 @@
 | [P9_GUI_ANALYZER_ASSESSMENT.md](P9_GUI_ANALYZER_ASSESSMENT.md) | P9 | GUI usability 前置評估、GUI / Analyzer 改善、NDJSON sidecar、Analyzer 匯入、rules schema / trace 與驗收紀錄 |
 | [P12_2A_XML_SITEMAP_FALLBACK_RECORD.md](P12_2A_XML_SITEMAP_FALLBACK_RECORD.md) | P12-2A | `/sitemap.xml` 自動 fallback 的規劃基線、TYCG 實證與唯讀實作路徑稽核 |
 | [P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md](P13_HTTP_VALIDATION_RESILIENCE_ASSESSMENT.md) | P12-3 / P13 / early P14 planning | v1.3.1 後 Static Discovery coverage notice、HTTP validation resilience 與 early P14 planning 的規劃整理 |
+| [P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md) | P13 | HTTP Validation Resilience final disposition、acceptance / real-site regression evidence、P13-3 / P13-5 skip decisions 與 closure boundary。 |
 | [P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md](P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md) | P14 | Result Interpretation & Management Handoff necessity review；確認 Coverage Context、Management Summary 與 Analyzer workflow 已主要由既有功能承接，僅保留 internal / external scope filter 為 evidence-required candidate。 |
 | [MAINTENANCE_FOUNDATION_2026-08-25.md](MAINTENANCE_FOUNDATION_2026-08-25.md) | MAINT-FND-1 / MAINT-FND-2 | unified regression runner、release fail-fast automation 與 final integration / verification state |
 | [MAINTENANCE_HARDENING_2026-08-26.md](MAINTENANCE_HARDENING_2026-08-26.md) | Maintenance hardening | focused crawler/GUI/frontend/report-diff maintenance hardening, completed fixes, and deferred report-diff findings |

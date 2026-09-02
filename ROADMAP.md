@@ -63,17 +63,9 @@ P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallb
 | P13-4 Protection-aware Interpretation | DONE | 已完成 interpretation precedence correction；沿用既有 WAF / Bot / Cloudflare detection、body / header protection evidence、protection metadata 與 `hasMeaningfulProtectionEvidence()`。當 `redirect_to_error` 同時存在 protection uncertainty 且沒有 formal `confirmed_missing` evidence 時，使用者判讀改為 `needs_review` / `external_limited`；P13-2 `confirmed_missing` -> `action_required` semantics 保持不變。未新增 detector，未修改 redirect engine、confirmation framework、report schema、GUI 或 dependencies。 |
 | P13-5 Special Endpoint HEAD Recheck | SKIPPED / NOT REQUIRED | Necessity Review 已完成；不得建立 Facebook-specific validation engine、不得擴充 generic 400 fallback 或將 social 400 一律降級，confirmed external GET 404/410 仍應可成為 actionable issue。只有新的可重現 evidence 證明通用且 bounded 的 request-level fix 才 reopen。 |
 
-P13-1 implementation 已完成；focused tests、canonical regression 與 real-site request-path regression 已通過。實站 activated transport recovery effectiveness 仍是 observational / pending：既有 TYCG targeted regression 沒有重新觸發 adaptive transport fallback，觀察到的是既有 HTTP-response / redirect fallback 路徑，因此不把 real-site effectiveness 寫成已證明，也不把它列為 P13-1 完成 blocker。
-
-P13-2 implementation 已完成；focused tests、canonical regression（40/40）與 targeted real-site regression 均通過。既有 TYCG baseline 所抽取的 20 個 eligible redirect-to-404/410 samples 均進入 formal confirmation，20/20 再確認為 `confirmed_missing`，semantic mismatch 為 0。real-site 本次未自然觀察到 recovered 或 protection case；相關路徑已由 deterministic local tests 驗證。
-
-P13-4 implementation 已完成；focused test、P13-2 regression 與 canonical regression（41/41）均通過。Targeted real-site regression 自然觀察到 1 個 protection / redirect precedence sample，修正後 interpretation 符合 `needs_review` / `external_limited` semantics，semantic mismatch 為 0；另抽查 P13-2 `confirmed_missing` real-site sample，仍維持 `action_required`，未發現 regression。
-
-P13-3 Necessity Review 已完成：reproducible candidates、generic candidates、user-impacting candidates 與符合全部 activation criteria 的 candidates 均為 0。`redirect -> 404/410` confirmation 屬 P13-2，redirect + protection precedence 屬 P13-4；social-share HEAD noise 屬 P13-5，original / final URL scope semantics 屬 P14 / later interpretation scope。P13-3 不啟動 implementation；只有新的可重現 evidence 才 reopen。
-
-P13-5 Necessity Review 已完成：三次 TYCG scans 的 120 個 social/share results 均為 HEAD 400；既有 generic HEAD -> GET fallback 不涵蓋 400。代表性 social/share URL 的 targeted replay 顯示 normal scanner GET 與 pure `BROWSER_USER_AGENT` GET 均為 400，未證明 bounded request-level recovery path。因此不啟動 implementation；generic 400 fallback expansion 與 social-specific downgrade semantics 均不受目前 evidence 支持。只有新的可重現 evidence 證明通用且 bounded 的 request-level fix 才 reopen。
-
 P13 status：3 DONE、2 SKIPPED / NOT REQUIRED、0 remaining implementation items。Implemented DONE = 3/5；disposition resolved = 5/5（3 DONE + 2 SKIPPED）。此 item-count / disposition count 不代表固定剩餘工作量，也不代表 skipped 項目已實作完成。
+
+P13 的 final acceptance、real-site regression、skip-decision evidence 與 reopen boundary，詳見 [docs/archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md)。
 
 P13 子項編號代表既有規劃識別，不強制等同實際 implementation sequence；conditional 項目應由 regression evidence 決定是否進入實作。
 
