@@ -17,7 +17,7 @@ assert(analyzerHtml.includes("待判讀結果"), "Report Analyzer should use han
 assert(analyzerHtml.includes("處理建議分類"), "Report Analyzer should use task-friendly interpretation wording.");
 assert(analyzerHtml.includes("技術狀態"), "Report Analyzer should describe HTTP status as supporting technical status.");
 assert(analyzerHtml.includes("匯出目前清單 CSV"), "Report Analyzer export action should refer to the visible list.");
-assert(analyzerHtml.includes("匯入單一 report.json"), "Report Analyzer should describe local file selection as importing instead of uploading.");
+assert(analyzerHtml.includes("一般請匯入 report.json"), "Report Analyzer should present report.json as the normal local import.");
 assert(!analyzerHtml.includes("上傳單一 report.json"), "Report Analyzer should not imply report files are uploaded.");
 assert(!analyzerJs.includes("metaBadge(formatInterpretationPriority(item.interpretation.severity), \"priority\")"), "Report Analyzer should not show unexplained priority badges in the visible list.");
 assert(
@@ -48,7 +48,7 @@ for (const column of [
   assert(analyzerJs.includes(column), `Report Analyzer CSV should include ${column}.`);
 }
 
-assert(readme.includes("| 使用者判讀 | 常見畫面或報告訊號 | 建議處理 |"), "README should document user-facing interpretation guidance.");
+assert(readme.includes("| 判讀分類 | 常見情況 | 建議處理 |"), "README should document user-facing interpretation guidance.");
 assert(readme.includes("待判讀結果"), "README should use handoff-oriented wording.");
 assert(readme.includes("404 / 410 二次確認"), "README should document 404/410 confirmation.");
 assert(readme.includes("瀏覽器端導向"), "README should explain client-side redirect evidence.");

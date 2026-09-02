@@ -165,41 +165,26 @@ CLI 預設只檢查站內連結；若要檢查外部連結，需加上 `--extern
 
 ## 輸出檔案
 
-GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。
-
-一般交辦最常用：
+GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。正常完成時只保留兩個檔案：
 
 | 檔案 | 用途 |
 | --- | --- |
 | `broken.csv` | 可用 Excel 開啟的待處理 / 待確認連結清單。 |
-| `external-links.csv` | 外部連結清單、分類與治理欄位。 |
-| `summary.json` | 本次掃描摘要。 |
 | `report.json` | 完整掃描結果，也是主要資料來源。 |
-| `events.log` | 執行過程紀錄，供追查使用。 |
 
-進階追溯或大型資料可再看：
-
-| 檔案 | 用途 |
-| --- | --- |
-| `manifest.json` | 輸出檔、工具版本與環境摘要。 |
-| `checked.ndjson` | 已檢查 URL sidecar，供大型資料輔助使用。 |
-| `broken.ndjson` | 壞連結 sidecar，可匯入報告分析。 |
-| `external-links.ndjson` | 外部連結 sidecar，可匯入外部連結分析。 |
-| `external-summary.json` | 外部連結網域與風險摘要。 |
-
-一般交辦優先看 `broken.csv` 與 `external-links.csv`；需要完整追溯時再看 `report.json`、`manifest.json` 與 sidecar。
+一般交辦請開啟 `broken.csv`；需要完整存查或重新分析時使用 `report.json`。若掃描未完整完成或失敗，工具只保留 `report.json` 與 `events.log` 供確認原因，不會產生可能被誤認為完整交辦清單的 `broken.csv`。
 
 ## 外部連結分析與報告分析
 
 ### 外部連結分析
 
-匯入 GUI 輸出的外連清單，整理外部網域、分類與治理狀態。
+匯入 GUI 輸出的 `report.json`，整理外部網域、分類與治理狀態。
 
-建議選檔順序：
+目前掃描的標準輸入是 `report.json`。仍可匯入舊有或另行取得的 `external-links.csv`、`external-links.ndjson`：
 
-1. 一般情境：選 `external-links.csv`。
-2. 大型資料：選 `external-links.ndjson`。
-3. 需要完整報告來源：選 `report.json`。
+1. 一般情境：選 `report.json`。
+2. 舊有外連清單：選 `external-links.csv`。
+3. 舊有或另行取得的 sidecar：選 `external-links.ndjson`。
 
 「風險規則與白名單」是可選進階設定。一般分析可以略過；只有要補充舊資料、未分類外連，或把已知可信任網域排除時才需要設定。
 
@@ -209,9 +194,9 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。
 
 ### 報告分析
 
-匯入 `report.json` 或 `broken.ndjson`，整理待判讀清單、處理建議、來源頁與問題網域排行。
+一般匯入 `report.json`，整理待判讀清單、處理建議、來源頁與問題網域排行。
 
-大型 report 建議優先用 `broken.ndjson` 匯入，以降低瀏覽器一次載入完整 JSON 的壓力。
+報告分析仍支援舊有或另行取得的 `broken.ndjson`；這是相容輸入，不是目前掃描的預設輸出。
 
 ## 安全與使用注意事項
 

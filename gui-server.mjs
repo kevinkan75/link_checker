@@ -11,7 +11,6 @@ import {
   REPORT_SCHEMA_VERSION,
   LinkChecker,
   applyConservativeDefaults,
-  buildOutputManifest,
   isSystemCaEnabled,
   redactSensitiveQueryValue,
 } from "./link-checker.mjs";
@@ -534,44 +533,17 @@ async function saveJobArtifacts(job) {
     job.logDir = logDir;
     job.logRelativePath = relative(ROOT_DIR, logDir);
 
-    const summary = buildLogSummary(job);
-    const externalSummary = buildExternalSummary(job.report);
-    const generatedFiles = [
-      { path: "summary.json", kind: "summary", schemaVersion: summary.schemaVersion || null },
-      { path: "report.json", kind: "report", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
-      { path: "broken.csv", kind: "csv", schemaVersion: null },
-      { path: "external-links.csv", kind: "csv", schemaVersion: null },
-      { path: "checked.ndjson", kind: "ndjson", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
-      { path: "broken.ndjson", kind: "ndjson", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
-      { path: "external-links.ndjson", kind: "ndjson", schemaVersion: job.report?.schemaVersion || summary.schemaVersion || null },
-      { path: "external-summary.json", kind: "external-summary", schemaVersion: externalSummary.schemaVersion || null },
-      { path: "events.log", kind: "log", schemaVersion: null },
-      { path: "README.txt", kind: "readme", schemaVersion: null },
-    ];
-    const manifest = buildOutputManifest({
-      generatedAt: summary.finishedAt,
-      startUrl: job.report?.startUrl || job.startUrl,
-      options: job.report?.options || job.options,
-      generatedFiles: [
-        ...generatedFiles,
-        { path: "manifest.json", kind: "manifest", schemaVersion: null },
-      ],
-    });
+    const artifactPlan = getJobArtifactPlan(job);
+    const summary = buildLogSummary(job, artifactPlan);
     job.artifactSummary = summary;
-    job.artifactManifest = manifest;
-    await Promise.all([
-      writeJsonFile(join(logDir, "summary.json"), summary),
-      writeJsonFile(join(logDir, "report.json"), job.report || summary),
-      writeFile(join(logDir, "broken.csv"), makeBrokenCsv(job.report?.broken || [], job.options), "utf8"),
-      writeFile(join(logDir, "external-links.csv"), makeExternalLinksCsv(job.report?.externalLinks || [], job.options), "utf8"),
-      writeFile(join(logDir, "checked.ndjson"), makeNdjson(job.report?.checked || []), "utf8"),
-      writeFile(join(logDir, "broken.ndjson"), makeNdjson(job.report?.broken || []), "utf8"),
-      writeFile(join(logDir, "external-links.ndjson"), makeNdjson(job.report?.externalLinks || []), "utf8"),
-      writeJsonFile(join(logDir, "external-summary.json"), externalSummary),
-      writeFile(join(logDir, "events.log"), makeEventsLog(job.events, job.options), "utf8"),
-      writeFile(join(logDir, "README.txt"), makeLogReadme(job, summary), "utf8"),
-      writeJsonFile(join(logDir, "manifest.json"), manifest),
-    ]);
+    job.artifactManifest = null;
+    const writes = [writeJsonFile(join(logDir, "report.json"), job.report || summary)];
+    if (artifactPlan.some((artifact) => artifact.path === "broken.csv")) {
+      writes.push(writeFile(join(logDir, "broken.csv"), makeBrokenCsv(job.report?.broken || [], job.options), "utf8"));
+    } else {
+      writes.push(writeFile(join(logDir, "events.log"), makeEventsLog(job.events, job.options), "utf8"));
+    }
+    await Promise.all(writes);
   } catch (error) {
     job.logError = error.message;
   }
@@ -597,7 +569,22 @@ async function createLogDirectory(job) {
   throw new Error("Unable to create a unique log directory.");
 }
 
-function buildLogSummary(job) {
+function getJobArtifactPlan(job) {
+  const reportSchemaVersion = job.report?.schemaVersion || REPORT_SCHEMA_VERSION;
+  if (job.state === "finished" && job.report?.runStatus?.status === "complete") {
+    return [
+      { path: "broken.csv", summaryKey: "brokenCsv", kind: "csv", schemaVersion: null },
+      { path: "report.json", summaryKey: "report", kind: "report", schemaVersion: reportSchemaVersion },
+    ];
+  }
+
+  return [
+    { path: "report.json", summaryKey: "report", kind: "report", schemaVersion: reportSchemaVersion },
+    { path: "events.log", summaryKey: "events", kind: "log", schemaVersion: null },
+  ];
+}
+
+function buildLogSummary(job, artifactPlan = getJobArtifactPlan(job)) {
   return {
     schemaVersion: job.report?.schemaVersion || REPORT_SCHEMA_VERSION,
     generator: job.report?.generator || null,
@@ -609,18 +596,7 @@ function buildLogSummary(job) {
     options: job.options,
     error: job.error,
     summary: job.report?.summary || null,
-    reportFiles: {
-      summary: "summary.json",
-      report: "report.json",
-      brokenCsv: "broken.csv",
-      externalLinksCsv: "external-links.csv",
-      checkedNdjson: "checked.ndjson",
-      brokenNdjson: "broken.ndjson",
-      externalLinksNdjson: "external-links.ndjson",
-      externalSummary: "external-summary.json",
-      events: "events.log",
-      manifest: "manifest.json",
-    },
+    reportFiles: Object.fromEntries(artifactPlan.map((artifact) => [artifact.summaryKey, artifact.path])),
   };
 }
 
@@ -628,56 +604,17 @@ async function writeJsonFile(path, data) {
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
-function makeNdjson(items) {
-  if (!Array.isArray(items) || items.length === 0) {
-    return "";
-  }
-  return `${items.map((item) => JSON.stringify(item)).join("\n")}\n`;
-}
-
 function makeBrokenCsv(items, options = DEFAULTS) {
   const rows = [[
     "判讀分類",
     "建議處理",
     "是否需人工確認",
-    "優先度",
     "問題網址",
     "來源頁",
     "連結文字",
     "HTTP 狀態",
-    "技術原因",
+    "檢查結果",
     "最終網址",
-    "確認結果",
-    "檢查時間",
-    "url",
-    "status",
-    "issueType",
-    "classification",
-    "checkedAt",
-    "canonicalUrl",
-    "method",
-    "finalUrl",
-    "contentLength",
-    "cacheControl",
-    "suspectedWaf",
-    "suspectedBot",
-    "blockedReason",
-    "confirmationEnabled",
-    "confirmationCandidate",
-    "confirmationChecked",
-    "confirmationOutcome",
-    "confirmationStatus",
-    "confirmationFinalUrl",
-    "confirmationCheckedAt",
-    "confirmationReferer",
-    "confirmationReason",
-    "needsReview",
-    "transientFailure",
-    "sourcePage",
-    "tag",
-    "attribute",
-    "text",
-    "diagnosis",
   ]];
 
   for (const item of items) {
@@ -688,49 +625,16 @@ function makeBrokenCsv(items, options = DEFAULTS) {
       const sourcePage = redactSensitiveQueryValue(source.page || "", options);
       const sourceText = redactSensitiveQueryValue(source.text || "", options);
       const finalUrl = redactSensitiveQueryValue(item.finalUrl || "", options);
-      const technicalReason = redactSensitiveQueryValue(formatCsvTechnicalReason(item), options);
       rows.push([
         interpretation.label,
         redactSensitiveQueryValue(interpretation.action, options),
         interpretation.needsManualReview ? "是" : "否",
-        formatCsvPriority(interpretation.severity),
         displayUrl,
         sourcePage,
         sourceText,
         item.status ?? "",
-        technicalReason,
+        redactSensitiveQueryValue(formatCsvCheckResult(item), options),
         finalUrl,
-        formatCsvConfirmationOutcome(item.confirmation?.outcome),
-        item.checkedAt || "",
-        displayUrl,
-        item.status ?? "",
-        item.issueType || "",
-        item.classification || "",
-        item.checkedAt || "",
-        redactSensitiveQueryValue(item.canonicalUrl || "", options),
-        item.method || "",
-        finalUrl,
-        item.contentLength ?? "",
-        item.cacheHeaders?.cacheControl || "",
-        item.suspectedWaf ? "yes" : "no",
-        item.suspectedBot ? "yes" : "no",
-        item.blockedReason || "",
-        item.confirmation?.enabled ? "yes" : "no",
-        item.confirmation?.candidate ? "yes" : "no",
-        item.confirmation?.checked ? "yes" : "no",
-        item.confirmation?.outcome || "",
-        item.confirmation?.status ?? "",
-        redactSensitiveQueryValue(item.confirmation?.finalUrl || "", options),
-        item.confirmation?.checkedAt || "",
-        redactSensitiveQueryValue(item.confirmation?.referer || "", options),
-        item.confirmation?.reason || "",
-        item.needsReview ? "yes" : "no",
-        item.transientFailure ? "yes" : "no",
-        sourcePage,
-        source.tag || "",
-        source.attribute || "",
-        sourceText,
-        redactSensitiveQueryValue(item.diagnosis || item.error || "", options),
       ]);
     }
   }
@@ -768,34 +672,40 @@ function getCsvInterpretation(item) {
   };
 }
 
-function formatCsvPriority(severity) {
+function formatCsvCheckResult(item) {
   const labels = {
-    high: "高",
-    medium: "中",
-    review: "需確認",
-    info: "資訊",
-    ok: "低",
-    notice: "提醒",
+    recovered: "二次確認時已恢復",
+    confirmed_missing: "二次確認後仍不存在",
+    needs_review: "二次確認時無法確認",
   };
-  return labels[severity] || "需確認";
-}
-
-function formatCsvConfirmationOutcome(outcome) {
-  const labels = {
-    skipped: "未確認",
-    recovered: "二次確認後正常",
-    confirmed_missing: "二次確認仍不存在",
-    needs_review: "需人工確認",
-  };
-  return labels[outcome] || outcome || "";
-}
-
-function formatCsvTechnicalReason(item) {
-  return [
-    item.issueType,
-    item.classification,
-    item.diagnosis || item.error,
-  ].filter(Boolean).join(" / ");
+  if (labels[item.confirmation?.outcome]) {
+    return labels[item.confirmation.outcome];
+  }
+  if (item.suspectedWaf || item.suspectedBot || item.classification === "protected" || item.issueType === "protected") {
+    return "網站防護可能阻擋自動檢查";
+  }
+  if (item.issueType === "timeout") {
+    return "連線逾時";
+  }
+  if (item.issueType === "network_error" || item.classification === "network_error") {
+    return "網路連線失敗";
+  }
+  if (item.issueType === "redirect_to_error") {
+    return item.status === 404 || item.status === 410 ? "轉址後頁面不存在" : "轉址後發生錯誤";
+  }
+  if (item.issueType === "redirect_loop") {
+    return "轉址循環";
+  }
+  if (item.issueType === "too_many_redirects") {
+    return "轉址次數過多";
+  }
+  if (item.issueType === "access_denied" || item.status === 403) {
+    return `外部網站拒絕存取${item.status ? `（HTTP ${item.status}）` : ""}`;
+  }
+  if (item.status) {
+    return `HTTP ${item.status}`;
+  }
+  return "無法完成自動檢查";
 }
 
 function makeExternalLinksCsv(items, options = DEFAULTS) {
@@ -867,137 +777,6 @@ function makeExternalLinksCsv(items, options = DEFAULTS) {
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }
 
-function buildExternalSummary(report) {
-  const externalLinks = report?.externalLinks || [];
-  return {
-    schemaVersion: report?.schemaVersion || REPORT_SCHEMA_VERSION,
-    generator: report?.generator || null,
-    totalLinks: externalLinks.length,
-    totalDomains: countUnique(externalLinks.map((item) => item.registrableDomain || item.hostname)),
-    byType: countByValue(externalLinks.map((item) => item.type || "unknown")),
-    byCategory: countCategories(externalLinks),
-    byRiskLevel: countByValue(externalLinks.map((item) => item.externalRisk?.riskLevel || "info")),
-    byGovernanceStatus: countByValue(externalLinks.map((item) => item.externalRisk?.governanceStatus || "unknown")),
-    domains: summarizeExternalDomains(externalLinks),
-    riskDomains: summarizeExternalRiskDomains(externalLinks),
-  };
-}
-
-function summarizeExternalDomains(items) {
-  const domains = new Map();
-  for (const item of items) {
-    const domain = item.registrableDomain || item.hostname || "";
-    if (!domain) {
-      continue;
-    }
-    if (!domains.has(domain)) {
-      domains.set(domain, {
-        domain,
-        linkCount: 0,
-        categories: new Set(),
-        types: new Set(),
-      });
-    }
-    const summary = domains.get(domain);
-    summary.linkCount += 1;
-    summary.types.add(item.type || "unknown");
-    for (const category of item.categories || []) {
-      summary.categories.add(category);
-    }
-  }
-
-  return [...domains.values()]
-    .map((item) => ({
-      domain: item.domain,
-      linkCount: item.linkCount,
-      types: [...item.types].sort(),
-      categories: [...item.categories].sort(),
-    }))
-    .sort((a, b) => b.linkCount - a.linkCount || a.domain.localeCompare(b.domain));
-}
-
-function summarizeExternalRiskDomains(items) {
-  const riskRank = {
-    high: 3,
-    medium: 2,
-    low: 1,
-    info: 0,
-  };
-  const domains = new Map();
-  for (const item of items) {
-    const domain = item.registrableDomain || item.hostname || "";
-    if (!domain) {
-      continue;
-    }
-    if (!domains.has(domain)) {
-      domains.set(domain, {
-        domain,
-        linkCount: 0,
-        sourceCount: 0,
-        highestRiskLevel: "info",
-        riskLevels: new Set(),
-        governanceStatuses: new Set(),
-        riskReasons: new Set(),
-        needsReview: false,
-      });
-    }
-    const summary = domains.get(domain);
-    const risk = item.externalRisk || {};
-    const riskLevel = risk.riskLevel || "info";
-    summary.linkCount += 1;
-    summary.sourceCount += item.sourceCount || item.sources?.length || 0;
-    summary.riskLevels.add(riskLevel);
-    summary.governanceStatuses.add(risk.governanceStatus || "unknown");
-    summary.needsReview = summary.needsReview || Boolean(risk.needsReview);
-    for (const reason of risk.riskReasons || []) {
-      summary.riskReasons.add(reason);
-    }
-    if ((riskRank[riskLevel] ?? 0) > (riskRank[summary.highestRiskLevel] ?? 0)) {
-      summary.highestRiskLevel = riskLevel;
-    }
-  }
-
-  return [...domains.values()]
-    .map((item) => ({
-      domain: item.domain,
-      linkCount: item.linkCount,
-      sourceCount: item.sourceCount,
-      highestRiskLevel: item.highestRiskLevel,
-      riskLevels: [...item.riskLevels].sort((a, b) => (riskRank[b] ?? 0) - (riskRank[a] ?? 0)),
-      governanceStatuses: [...item.governanceStatuses].sort(),
-      riskReasons: [...item.riskReasons].sort(),
-      needsReview: item.needsReview,
-    }))
-    .sort((a, b) => (
-      (riskRank[b.highestRiskLevel] ?? 0) - (riskRank[a.highestRiskLevel] ?? 0)
-      || b.linkCount - a.linkCount
-      || a.domain.localeCompare(b.domain)
-    ));
-}
-
-function countByValue(values) {
-  const counts = {};
-  for (const value of values) {
-    counts[value] = (counts[value] || 0) + 1;
-  }
-  return counts;
-}
-
-function countCategories(items) {
-  const counts = {};
-  for (const item of items) {
-    const categories = item.categories?.length ? item.categories : ["uncategorized"];
-    for (const category of categories) {
-      counts[category] = (counts[category] || 0) + 1;
-    }
-  }
-  return counts;
-}
-
-function countUnique(items) {
-  return new Set(items.filter(Boolean)).size;
-}
-
 function csvCell(value) {
   const text = String(value ?? "");
   return `"${text.replace(/"/g, "\"\"")}"`;
@@ -1024,36 +803,6 @@ function makeEventsLog(events, options = DEFAULTS) {
     })
     .join("\r\n")
     + (events.length ? "\r\n" : "");
-}
-
-function makeLogReadme(job, summary) {
-  const lines = [
-    "Link Checker log files",
-    "",
-    `Job ID: ${job.id}`,
-    `Start URL: ${redactSensitiveQueryValue(job.startUrl, job.options)}`,
-    `State: ${job.state}`,
-    `Created at: ${job.createdAt}`,
-    `Finished at: ${summary.finishedAt}`,
-    "",
-    "Files:",
-    "- summary.json: 檢查摘要與執行參數",
-    "- report.json: 完整 JSON 報告",
-    "- broken.csv: 交辦友善的待判讀清單，可用 Excel 開啟",
-    "- external-links.csv: External link inventory, usable in Excel",
-    "- checked.ndjson: Checked URL records, one JSON object per line",
-    "- broken.ndjson: Broken link records, one JSON object per line",
-    "- external-links.ndjson: External link records, one JSON object per line",
-    "- external-summary.json: External link summary by domain, type, and category",
-    "- events.log: 檢查過程事件紀錄",
-    "- manifest.json: Generated file manifest and schema/runtime metadata",
-  ];
-
-  if (job.error) {
-    lines.push("", `Error: ${job.error}`);
-  }
-
-  return `${lines.join("\r\n")}\r\n`;
 }
 
 function formatTimestampForFolder(value) {
@@ -1840,10 +1589,10 @@ export {
   buildCompletePayload,
   buildLogSummary,
   buildUrlPatternSummary,
+  getJobArtifactPlan,
   makeBrokenCsv,
   makeEventsLog,
   makeExternalLinksCsv,
-  makeNdjson,
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

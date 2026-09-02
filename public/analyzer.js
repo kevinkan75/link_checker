@@ -435,7 +435,7 @@ function getFileSizeProfile(file) {
   if (file.size >= FILE_SIZE_LARGE_BYTES) {
     return {
       level: "warn",
-      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器載入與分析可能會停頓。若是 GUI log 目錄輸出，建議優先使用 external-links.csv 或 external-links.ndjson。`,
+      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器載入與分析可能會停頓。可先縮小報告範圍；舊有或另行取得的 external-links.csv、external-links.ndjson 仍可匯入。`,
     };
   }
   if (file.size >= FILE_SIZE_WARN_BYTES) {
@@ -453,7 +453,7 @@ function getFileSizeProfile(file) {
 function makeImportError(kind, error, file) {
   let message;
   if (error instanceof RangeError || /allocation|memory|out of memory|maximum/i.test(error.message || "")) {
-    message = `${file.name} 太大，瀏覽器可能無法一次處理。請改用 external-links.csv / external-links.ndjson，或先縮小報告範圍。`;
+    message = `${file.name} 太大，瀏覽器可能無法一次處理。請先縮小報告範圍；舊有或另行取得的 external-links.csv、external-links.ndjson 仍可匯入。`;
   } else if (kind === "ndjson") {
     message = `${file.name} 不是可解析的 external-links.ndjson；請確認檔案是一行一筆 JSON object，且來源為 GUI log 目錄的 external-links.ndjson。${error.message}`;
   } else if (kind === "json" && error instanceof SyntaxError) {

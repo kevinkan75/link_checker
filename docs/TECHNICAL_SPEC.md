@@ -666,55 +666,46 @@ GUI server 是本機 HTTP server，不是遠端服務。主要 API：
 | `POST` | `/api/queue/stop` | 停止佇列。 |
 | `GET` | `/api/queue/items/:id/report` | 取得佇列項目的 report。 |
 
-GUI 完成後會保存：
+GUI 會依 scan run status 保存最小輸出：
 
-- `summary.json`
-- `report.json`
-- `broken.csv`
-- `events.log`
-- `external-links.csv`
-- `external-summary.json`
-- `manifest.json`
-- `checked.ndjson`
-- `broken.ndjson`
-- `external-links.ndjson`
+- `complete`：`broken.csv`、`report.json`。
+- `partial` 或 `failed`：`report.json`、`events.log`。
+
+`report.json` 持續是完整、正式的主契約；`events.log` 只保留未完整或失敗掃描的追查資訊。GUI 不再預設產生 summary、外連 CSV、NDJSON sidecar、external summary、README 或 per-scan manifest。
 
 CLI 使用 `--output <file>` 時會寫出指定 report，並在同目錄建立 `manifest.json`。
 
-`broken.csv` 是給承辦人交辦與存查使用的 Excel 友善輸出，會以 UTF-8 BOM 與 CRLF 寫出。P10b 起，前段欄位固定為：
+`broken.csv` 是給承辦人交辦與存查使用的 interpretation-first Excel 友善輸出，會以 UTF-8 BOM 與 CRLF 寫出。`complete` 掃描固定使用下列 9 欄：
 
 - `判讀分類`
 - `建議處理`
 - `是否需人工確認`
-- `優先度`
 - `問題網址`
 - `來源頁`
 - `連結文字`
 - `HTTP 狀態`
-- `技術原因`
+- `檢查結果`
 - `最終網址`
-- `確認結果`
-- `檢查時間`
 
-這些欄位直接使用 report item 的 `interpretation` 契約；原本的技術欄位仍保留在後段，供進一步追查與相容既有流程。
+其中判讀分類、建議處理與是否需人工確認直接使用 report item 的 `interpretation` 契約；完整技術欄位、confirmation 與 traceability 均保留在 `report.json`。
 
 ### 8.1 P9b 大型報告規劃註記
 
-目前 `report.json` 是完成後一次建立與寫出，仍是正式主契約。P9b 採納的方向是保留此契約，另以 NDJSON sidecar 支援大型報告處理。
+目前 `report.json` 是完成後一次建立與寫出，仍是正式主契約。P9b 的 NDJSON sidecar 是既有大型報告相容輸入，不是目前 GUI 的預設輸出。
 
-P9b-1 第一版已採「完成後派生 sidecar」，也就是掃描完成並建立正式 `report.json` 後，再由 `report.checked`、`report.broken`、`report.externalLinks` 產生：
+歷史 GUI 輸出曾在建立正式 `report.json` 後，由 `report.checked`、`report.broken`、`report.externalLinks` 派生：
 
 - `checked.ndjson`
 - `broken.ndjson`
 - `external-links.ndjson`
 
-GUI SSE complete event 會回傳輕量 summary / manifest / reportFiles / log path / reportUrl，不直接傳送完整 report，避免超大報告在使用者端一次解析或渲染時卡住。完整 `report.json` streaming parser、不斷線逐筆 append NDJSON、CLI sidecar 輸出設計都不列為 P9b-1 第一版範圍。
+GUI SSE complete event 會回傳輕量 summary / reportFiles / log path / reportUrl，不直接傳送完整 report，避免超大報告在使用者端一次解析或渲染時卡住。完整 `report.json` streaming parser、不斷線逐筆 append NDJSON、CLI sidecar 輸出設計都不列為 P9b-1 第一版範圍。
 
 P9b-2 第一版保護現有 Analyzer 匯入流程，不改 `report.json` 或 CSV 契約。Report Analyzer 與 External Link Analyzer 會在選檔 / 載入期間顯示檔案大小與狀態，暫停容易造成重複操作的控制項，並將 JSON / CSV / rules 匯入錯誤轉成可行訊息。NDJSON 匯入不列為 P9b-2 範圍，後續已由 P9b-4 補上；Web Worker 與 IndexedDB 仍留給更後段評估。
 
 P9b-3 第一版只降低前端列表 DOM 建立成本，不改排序、篩選或匯出資料範圍。Report Analyzer 待判讀清單與 External Link Analyzer 外連明細會初始顯示 200 筆，使用者可透過「載入更多」每次再展開 200 筆；CSV / JSON 匯出仍使用完整的目前篩選結果。
 
-P9b-4 第一版讓 Analyzer 可直接載入大型報告 sidecar。Report Analyzer 支援 `broken.ndjson`，載入後以 sidecar report model 呈現待判讀列表與可確定的待判讀數，並標示為 partial report，因為此檔不包含完整 checked / summary 資訊。External Link Analyzer 支援 `external-links.ndjson`，逐行解析後走既有 external link normalization / dedupe / risk analysis。`checked.ndjson` 匯入、跨 sidecar 合併、完整 streaming parser、Web Worker 與 IndexedDB 不列為 P9b-4 第一版範圍。
+P9b-4 第一版讓 Analyzer 可直接載入大型報告 sidecar。Report Analyzer 支援 `broken.ndjson`，載入後以 sidecar report model 呈現待判讀列表與可確定的待判讀數，並標示為 partial report，因為此檔不包含完整 checked / summary 資訊。External Link Analyzer 支援 `external-links.ndjson`，逐行解析後走既有 external link normalization / dedupe / risk analysis。這些 historical import capabilities 保留，但 current GUI scan 不會自動產生 NDJSON。`checked.ndjson` 匯入、跨 sidecar 合併、完整 streaming parser、Web Worker 與 IndexedDB 不列為 P9b-4 第一版範圍。
 
 ## 9. Exit Codes
 

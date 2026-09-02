@@ -1482,15 +1482,18 @@ function renderBrokenTableForReport(report) {
   const interpretationView = buildInterpretationView(report);
   renderBrokenTable(interpretationView.displayItems, {
     detailsDeferred: !hasBrokenDetails && interpretationView.displayTotal > 0,
+    completeHandoff: report?.runStatus?.status === "complete",
     totalBroken: interpretationView.displayTotal,
   });
 }
 
-function renderBrokenTable(broken, { detailsDeferred = false, totalBroken = broken.length } = {}) {
+function renderBrokenTable(broken, { detailsDeferred = false, completeHandoff = false, totalBroken = broken.length } = {}) {
   if (detailsDeferred) {
     renderBrokenEmptyState(
-      "判讀清單已保存到完整報告",
-      "為避免大型報告在完成瞬間卡住，這裡先顯示摘要；下載完整 report 或查看 log 目錄中的 broken.csv / broken.ndjson 可取得明細。",
+      completeHandoff ? "判讀清單已保存到完整報告" : "掃描結果未完整完成",
+      completeHandoff
+        ? "為避免大型報告在完成瞬間卡住，這裡先顯示摘要；下載完整 report.json，或查看 log 目錄中的 broken.csv 取得交辦明細。"
+        : "此結果不適合作為完整交辦清單；請下載 report.json 並查看 log 目錄中的 events.log 確認原因。",
     );
     return;
   }
