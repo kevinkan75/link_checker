@@ -6,7 +6,7 @@
 
 ## 目前狀態
 
-- 最新正式版本：`v1.3.1`。
+- 最新正式版本：`v1.4.0`。
 - 目前沒有已知 release blocker。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P0-P11 已完成或已驗收；歷史狀態保存在 [docs/archive/CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) 與 [docs/archive/ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md)。

@@ -4,7 +4,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.3.1`
+目前正式版本：`v1.4.0`
 
 ## 適合誰使用
 
@@ -52,7 +52,7 @@ Portable launcher 簽章狀態以 build manifest 為準，可能是未簽或 loc
 .\gui.cmd
 ```
 
-輸入網站 URL 後按「開始檢查」。完成後，GUI 會在 `logs/` 建立本次掃描資料夾，包含完整報告、CSV、摘要與執行紀錄。
+輸入網站 URL 後按「開始檢查」。完成後，GUI 會在 `logs/` 建立本次掃描資料夾；正常完成時保留 `broken.csv` 與 `report.json`，若掃描未完整完成或失敗則保留 `report.json` 與 `events.log`。
 
 GUI 的「連結檢查」使用較保守的日常掃描設定，並預設檢查外部連結。
 
