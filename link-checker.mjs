@@ -97,7 +97,7 @@ const PROTECTION_BODY_PATTERNS = [
   { id: "cloudflare_just_a_moment", text: "just a moment...", provider: "Cloudflare", reason: "cloudflare_browser_verification", suspectedWaf: true, suspectedBot: true, evidence: "Cloudflare browser verification page" },
   { id: "imperva_incapsula", text: "incapsula incident id", provider: "Imperva", reason: "imperva_block", suspectedWaf: true, suspectedBot: false, evidence: "Imperva/Incapsula block page" },
   { id: "sucuri_firewall", text: "sucuri website firewall", provider: "Sucuri", reason: "sucuri_firewall", suspectedWaf: true, suspectedBot: false, evidence: "Sucuri firewall page" },
-  { id: "captcha", text: "captcha", provider: null, reason: "captcha_or_challenge", suspectedWaf: false, suspectedBot: true, evidence: "CAPTCHA wording" },
+  { id: "captcha", text: "captcha", matchMode: "token", provider: null, reason: "captcha_or_challenge", suspectedWaf: false, suspectedBot: true, evidence: "CAPTCHA wording" },
   { id: "bot_verification", text: "bot verification", provider: null, reason: "bot_verification", suspectedWaf: false, suspectedBot: true, evidence: "Bot verification wording" },
   { id: "access_denied", text: "access denied", provider: null, reason: "access_denied_wording", suspectedWaf: false, suspectedBot: false, evidence: "Access denied wording" },
   { id: "request_blocked", text: "request blocked", provider: null, reason: "request_blocked_wording", suspectedWaf: true, suspectedBot: false, evidence: "Access denied wording" },
@@ -5571,7 +5571,7 @@ function buildBodySignature(body, { includeBodyHash = false } = {}) {
   const normalized = text.replace(/\s+/g, " ").trim();
   const lower = normalized.toLowerCase();
   const matchedPatterns = PROTECTION_BODY_PATTERNS
-    .filter((pattern) => lower.includes(pattern.text))
+    .filter((pattern) => matchesProtectionBodyPattern(lower, pattern))
     .map((pattern) => pattern.id);
 
   const signature = {
@@ -5586,6 +5586,28 @@ function buildBodySignature(body, { includeBodyHash = false } = {}) {
   }
 
   return signature;
+}
+
+function matchesProtectionBodyPattern(lowerBody, pattern) {
+  if (pattern.matchMode !== "token") {
+    return lowerBody.includes(pattern.text);
+  }
+
+  let index = lowerBody.indexOf(pattern.text);
+  while (index !== -1) {
+    const before = index === 0 ? "" : lowerBody[index - 1];
+    const afterIndex = index + pattern.text.length;
+    const after = afterIndex >= lowerBody.length ? "" : lowerBody[afterIndex];
+    if (!isProtectionTokenJoiner(before) && !isProtectionTokenJoiner(after)) {
+      return true;
+    }
+    index = lowerBody.indexOf(pattern.text, index + pattern.text.length);
+  }
+  return false;
+}
+
+function isProtectionTokenJoiner(value) {
+  return /[a-z0-9_-]/.test(value || "");
 }
 
 function sanitizeSnippet(value) {
@@ -6123,7 +6145,7 @@ function detectProtectionLayer(result, headers) {
   }
 
   for (const pattern of PROTECTION_BODY_PATTERNS) {
-    if (!body.includes(pattern.text)) {
+    if (!matchesProtectionBodyPattern(body, pattern)) {
       continue;
     }
     if (pattern.id === "cloudflare_just_a_moment" && !body.includes("cloudflare")) {
