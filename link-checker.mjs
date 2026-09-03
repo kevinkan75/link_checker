@@ -611,6 +611,7 @@ class LinkChecker {
     this.queuedPageKeys = new Set([this.getPageKey(this.startUrl)]);
     this.crawledPages = new Set();
     this.crawledPageKeys = new Set();
+    this.pageBudgetStopEvidence = false;
     this.validationQueue = [];
     this.activeValidationTasks = 0;
     this.validationError = null;
@@ -1754,11 +1755,16 @@ class LinkChecker {
     if (this.queuedPageKeys.has(pageKey) || this.crawledPageKeys.has(pageKey)) {
       return false;
     }
-    if (this.queuedPageKeys.size >= this.options.maxPages) {
+    if (!looksLikePage(url)) {
       return false;
     }
 
-    return looksLikePage(url);
+    if (this.queuedPageKeys.size >= this.options.maxPages) {
+      this.pageBudgetStopEvidence = true;
+      return false;
+    }
+
+    return true;
   }
 
   shouldExtractFrameworkLinks(spaDetection) {
@@ -1795,6 +1801,7 @@ class LinkChecker {
       return false;
     }
     if (this.queuedPageKeys.size >= this.options.maxPages) {
+      this.pageBudgetStopEvidence = true;
       return false;
     }
 
@@ -2699,7 +2706,13 @@ class LinkChecker {
       robotsTxt: this.robotsTxt,
       hostDiagnostics: this.buildHostDiagnostics(checked),
     };
-    summary.coverage = deriveCoverageStatus({ runStatus, summary, options: reportOptions, startPageFetchFailed });
+    summary.coverage = deriveCoverageStatus({
+      runStatus,
+      summary,
+      options: reportOptions,
+      startPageFetchFailed,
+      pageBudgetStopEvidence: this.pageBudgetStopEvidence,
+    });
 
     const report = {
       schemaVersion: REPORT_SCHEMA_VERSION,
@@ -8244,9 +8257,10 @@ function deriveCoverageStatus(reportLike = {}) {
   const runStatus = reportLike.runStatus && typeof reportLike.runStatus === "object" ? reportLike.runStatus : {};
   const options = reportLike.options && typeof reportLike.options === "object" ? reportLike.options : {};
   const startPageFetchFailed = reportLike.startPageFetchFailed === true || hasStartPageFetchFailureEvidence(reportLike);
+  const pageBudgetStopEvidence = reportLike.pageBudgetStopEvidence === true;
   const discoveryReasons = [];
   const validationReasons = [];
-  const details = buildCoverageDetails({ summary, runStatus, options });
+  const details = buildCoverageDetails({ summary, runStatus, options, pageBudgetStopEvidence });
 
   if (runStatus.stoppedByUser === true || runStatus.stopReason === "stopped_by_user") {
     validationReasons.push("stopped_by_user");
@@ -8287,7 +8301,7 @@ function deriveCoverageStatus(reportLike = {}) {
   };
 }
 
-function buildCoverageDetails({ summary, runStatus, options }) {
+function buildCoverageDetails({ summary, runStatus, options, pageBudgetStopEvidence = false }) {
   const sitemapPairs = getSitemapCoveragePairs(summary);
   const discoveredCounts = sitemapPairs
     .map((pair) => pair.discovered)
@@ -8305,7 +8319,7 @@ function buildCoverageDetails({ summary, runStatus, options }) {
     sitemapDiscoveredUrls: discoveredCounts.length > 0 ? Math.max(...discoveredCounts) : null,
     sitemapSeededUrls: seededCounts.length > 0 ? Math.max(...seededCounts) : null,
     sitemapIgnoredByMaxPages: sitemapPairs.some((pair) => pair.ignoredByMaxPages),
-    pageBudgetStopEvidence: hasPageBudgetStopEvidence(summary),
+    pageBudgetStopEvidence: pageBudgetStopEvidence || hasPageBudgetStopEvidence(summary),
   };
 }
 
@@ -8396,7 +8410,7 @@ function hasMaxPagesReachedEvidence({ summary, runStatus, details, discoveryReas
   return details.pendingPages > 0
     || details.sitemapIgnoredByMaxPages
     || discoveryReasons.includes("sitemap_seed_truncated")
-    || hasPageBudgetStopEvidence(summary)
+    || details.pageBudgetStopEvidence
     || runStatus.stopReason === "max_pages";
 }
 
