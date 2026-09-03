@@ -471,6 +471,38 @@ input:focus {
   flex: 0 0 auto;
 }
 
+.session-status-field {
+  align-self: stretch;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 12px;
+}
+
+.session-status-field strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.session-status-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.session-status-field .session-status-enabled {
+  color: #047857;
+}
+
+.session-status-field .session-status-disabled {
+  color: #b45309;
+}
+
 .option-toggle.caution-toggle {
   border-color: #dcc49d;
   background: #fffaf0;

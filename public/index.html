@@ -160,10 +160,11 @@
                     <span class="field-label">相容老舊 TLS <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="相容老舊 TLS 說明" aria-describedby="help-legacy-tls" data-help-trigger>?</span><span id="help-legacy-tls" class="help-tooltip" role="tooltip">用於老舊網站 TLS 相容性。一般情況不要開啟。</span></span></span>
                   </label>
 
-                  <label class="toggle-field option-toggle">
-                    <input id="system-ca" name="systemCa" type="checkbox">
-                    <span class="field-label">使用 Windows 憑證 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="使用 Windows 憑證說明" aria-describedby="help-system-ca" data-help-trigger>?</span><span id="help-system-ca" class="help-tooltip" role="tooltip">使用系統憑證庫，適合內部網站或自簽憑證環境。</span></span></span>
-                  </label>
+                  <div class="session-status-field option-toggle">
+                    <span class="field-label">Windows 系統憑證 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="Windows 系統憑證說明" aria-describedby="help-system-ca" data-help-trigger>?</span><span id="help-system-ca" class="help-tooltip" role="tooltip">此狀態由目前 Link Checker 執行期間決定，不是單次掃描設定。</span></span></span>
+                    <strong id="system-ca-status">讀取中</strong>
+                    <span id="system-ca-note" class="session-status-note">正在確認目前執行狀態。</span>
+                  </div>
 
                   <label class="toggle-field option-toggle">
                     <input id="authorized-scan" name="authorizedScan" type="checkbox">

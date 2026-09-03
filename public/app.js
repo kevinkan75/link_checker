@@ -18,7 +18,8 @@ const preferGetInput = document.querySelector("#prefer-get");
 const externalRefererInput = document.querySelector("#external-referer");
 const confirm404Input = document.querySelector("#confirm-404");
 const legacyTlsInput = document.querySelector("#legacy-tls");
-const systemCaInput = document.querySelector("#system-ca");
+const systemCaStatus = document.querySelector("#system-ca-status");
+const systemCaNote = document.querySelector("#system-ca-note");
 const authorizedScanInput = document.querySelector("#authorized-scan");
 const noRobotsInput = document.querySelector("#no-robots");
 const authorizationNoteInput = document.querySelector("#authorization-note");
@@ -111,7 +112,6 @@ const defaultSettings = {
   externalReferer: false,
   confirm404: true,
   legacyTls: false,
-  systemCa: false,
   authorizedScan: false,
   noRobots: false,
   authorizationNote: "",
@@ -184,6 +184,7 @@ let activePreset = "balanced";
 let scanInProgress = false;
 let queueInProgress = false;
 let suppressNextUnloadWarning = false;
+let sessionSystemCaEnabled = false;
 const sessionTokenPromise = loadSessionToken();
 
 startSessionHeartbeat();
@@ -219,7 +220,6 @@ presetButtons.forEach((button) => {
   preferGetInput,
   externalRefererInput,
   legacyTlsInput,
-  systemCaInput,
   authorizedScanInput,
   noRobotsInput,
   authorizationNoteInput,
@@ -487,7 +487,20 @@ async function loadSessionToken() {
   if (!response.ok || !data.sessionToken) {
     throw new Error(data.error || "無法取得本機工作階段");
   }
+  updateSystemCaStatus(data.systemCaEnabled === true);
   return data.sessionToken;
+}
+
+function updateSystemCaStatus(enabled) {
+  sessionSystemCaEnabled = enabled === true;
+  if (!systemCaStatus || !systemCaNote) {
+    return;
+  }
+  systemCaStatus.textContent = sessionSystemCaEnabled ? "已啟用" : "未啟用";
+  systemCaStatus.className = sessionSystemCaEnabled ? "session-status-enabled" : "session-status-disabled";
+  systemCaNote.textContent = sessionSystemCaEnabled
+    ? "此設定套用於目前 Link Checker 執行期間。"
+    : "如需使用 Windows 系統信任的憑證，請以系統憑證模式重新啟動 Link Checker。";
 }
 
 async function mutationFetch(url, options = {}) {
@@ -518,7 +531,6 @@ function applySettings(settings) {
   externalRefererInput.checked = settings.externalReferer;
   confirm404Input.checked = settings.confirm404;
   legacyTlsInput.checked = settings.legacyTls;
-  systemCaInput.checked = settings.systemCa;
   authorizedScanInput.checked = settings.authorizedScan;
   noRobotsInput.checked = settings.noRobots;
   authorizationNoteInput.value = settings.authorizationNote;
@@ -659,7 +671,6 @@ function getCheckOptions() {
     externalReferer: externalRefererInput.checked,
     confirm404: confirm404Input.checked,
     legacyTls: legacyTlsInput.checked,
-    systemCa: systemCaInput.checked,
     robotsTxt: !noRobotsInput.checked,
     authorizedScan: authorizedScanInput.checked,
     authorizationNote: authorizationNoteInput.value.trim(),

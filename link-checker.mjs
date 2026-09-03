@@ -4516,7 +4516,7 @@ function isCertificateChainError(cause) {
 function isSystemCaEnabled() {
   return runtimeSystemCaEnabled
     || process.execArgv.includes("--use-system-ca")
-    || /\b--use-system-ca\b/.test(process.env.NODE_OPTIONS || "");
+    || /(?:^|\s)--use-system-ca(?:\s|$)/.test(process.env.NODE_OPTIONS || "");
 }
 
 function canEnableSystemCaAtRuntime() {
@@ -4539,6 +4539,10 @@ function enableSystemCa() {
   tls.setDefaultCACertificates([...new Set(certificates)]);
   runtimeSystemCaEnabled = true;
   return true;
+}
+
+function shouldRestartWithSystemCa(options, systemCaEnabled = isSystemCaEnabled()) {
+  return options?.systemCa === true && !systemCaEnabled;
 }
 
 async function evaluateUrlSecurity(url, policy = normalizeSecurityPolicy(DEFAULTS), resolveHostname = dnsLookup) {
@@ -9593,7 +9597,7 @@ async function main() {
     return;
   }
 
-  if (parsed.options.systemCa && !isSystemCaEnabled() && !canEnableSystemCaAtRuntime()) {
+  if (shouldRestartWithSystemCa(parsed.options)) {
     process.exitCode = await restartWithSystemCa(process.argv.slice(2));
     return;
   }
@@ -9655,9 +9659,9 @@ async function main() {
   process.exitCode = report.runStatus?.status === "failed" ? 1 : (report.summary.brokenLinks > 0 ? 2 : 0);
 }
 
-function restartWithSystemCa(args) {
+function restartWithSystemCa(args, { entrypoint = process.argv[1], spawnCommand = spawn } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["--use-system-ca", process.argv[1], ...args], {
+    const child = spawnCommand(process.execPath, ["--use-system-ca", entrypoint, ...args], {
       cwd: process.cwd(),
       env: process.env,
       stdio: "inherit",
@@ -9690,6 +9694,8 @@ export {
   evaluateUrlSecurity,
   isSystemCaEnabled,
   redactSensitiveQueryValue,
+  restartWithSystemCa,
+  shouldRestartWithSystemCa,
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

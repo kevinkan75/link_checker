@@ -864,7 +864,7 @@ function parseJobOptions(input) {
     preferGet: Boolean(input.preferGet ?? baseOptions.preferGet),
     externalReferer: Boolean(input.externalReferer ?? baseOptions.externalReferer),
     legacyTls: Boolean(input.legacyTls ?? baseOptions.legacyTls),
-    systemCa: Boolean(input.systemCa ?? baseOptions.systemCa),
+    systemCa: isSystemCaEnabled(),
     blockPrivateIp: input.blockPrivateIp !== false,
     allowLocalhost: Boolean(input.allowLocalhost ?? baseOptions.allowLocalhost),
     allowPrivateIp: Boolean(input.allowPrivateIp ?? baseOptions.allowPrivateIp),
@@ -1254,6 +1254,7 @@ async function route(request, response) {
     sendJson(response, 200, {
       sessionHeader: "X-Link-Checker-Session",
       sessionToken: SESSION_TOKEN,
+      systemCaEnabled: isSystemCaEnabled(),
     });
     return;
   }
@@ -1556,7 +1557,7 @@ function printStartupSuccess(port, fallbackUsed) {
   console.log(`報告分析頁：http://127.0.0.1:${port}/report-analyzer.html`);
   console.log("");
   console.log("提醒：此命令視窗需保持開啟；關閉後 Link Checker 會停止。");
-  console.log(`系統憑證模式：${isSystemCaEnabled() ? "已啟用" : "未啟用"}，可在 GUI 的掃描設定中勾選。`);
+  console.log(`系統憑證模式：${isSystemCaEnabled() ? "已啟用" : "未啟用"}。使用 --system-ca 啟動可載入 Windows 系統信任憑證。`);
   if (idleShutdownMs) {
     console.log(`閒置自動關閉：已啟用；沒有開啟 GUI 頁面且沒有執行工作時，會在 ${idleShutdownMs}ms 後停止。`);
   }
