@@ -20,6 +20,7 @@ const confirm404Input = document.querySelector("#confirm-404");
 const legacyTlsInput = document.querySelector("#legacy-tls");
 const systemCaStatus = document.querySelector("#system-ca-status");
 const systemCaNote = document.querySelector("#system-ca-note");
+const systemCaRestartButton = document.querySelector("#system-ca-restart");
 const authorizedScanInput = document.querySelector("#authorized-scan");
 const noRobotsInput = document.querySelector("#no-robots");
 const authorizationNoteInput = document.querySelector("#authorization-note");
@@ -185,6 +186,7 @@ let scanInProgress = false;
 let queueInProgress = false;
 let suppressNextUnloadWarning = false;
 let sessionSystemCaEnabled = false;
+let systemCaRestarting = false;
 const sessionTokenPromise = loadSessionToken();
 
 startSessionHeartbeat();
@@ -310,6 +312,10 @@ shutdownButton.addEventListener("click", async () => {
   }
 });
 
+systemCaRestartButton?.addEventListener("click", async () => {
+  await restartWithSystemCa();
+});
+
 addQueueButton.addEventListener("click", async () => {
   await addQueueItems();
 });
@@ -422,6 +428,78 @@ function hasUnfinishedWork() {
   return scanInProgress || queueInProgress;
 }
 
+function updateSystemCaRestartButton() {
+  if (!systemCaRestartButton) {
+    return;
+  }
+  const shouldShow = !sessionSystemCaEnabled;
+  systemCaRestartButton.hidden = !shouldShow;
+  systemCaRestartButton.disabled = systemCaRestarting || hasUnfinishedWork();
+  systemCaRestartButton.textContent = systemCaRestarting
+    ? "正在重新啟動..."
+    : "重新啟動並使用 Windows 系統憑證";
+}
+
+async function restartWithSystemCa() {
+  if (sessionSystemCaEnabled || systemCaRestarting) {
+    return;
+  }
+  if (hasUnfinishedWork()) {
+    window.alert("目前有掃描工作進行中，請先停止或等待完成後再重新啟動。");
+    return;
+  }
+
+  systemCaRestarting = true;
+  if (systemCaNote) {
+    systemCaNote.textContent = "正在重新啟動 Link Checker...";
+  }
+  updateSystemCaRestartButton();
+
+  try {
+    const response = await mutationFetch("/api/restart-system-ca", {
+      method: "POST",
+      cache: "no-store",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 409) {
+      throw new Error(data.error || "目前有掃描工作進行中，請先停止或等待完成後再重新啟動。");
+    }
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+    if (data.status === "already_enabled" || data.systemCaEnabled === true) {
+      updateSystemCaStatus(true);
+      suppressNextUnloadWarning = true;
+      window.location.reload();
+      return;
+    }
+
+    await waitForSystemCaSession();
+    suppressNextUnloadWarning = true;
+    window.location.reload();
+  } catch (error) {
+    systemCaRestarting = false;
+    updateSystemCaStatus(sessionSystemCaEnabled);
+    window.alert(`重新啟動失敗：${error.message}\n\n請關閉 Link Checker 後，再使用系統憑證模式啟動。`);
+  }
+}
+
+async function waitForSystemCaSession({ attempts = 40, delayMs = 750 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      const response = await fetch("/api/session", { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.systemCaEnabled === true) {
+        return data;
+      }
+    } catch {
+      // The old local server is expected to disconnect briefly during restart.
+    }
+  }
+  throw new Error("等待 Link Checker 重新啟動逾時。");
+}
+
 function installHelpTooltips() {
   const closeAll = () => {
     for (const trigger of helpTriggers) {
@@ -500,7 +578,9 @@ function updateSystemCaStatus(enabled) {
   systemCaStatus.className = sessionSystemCaEnabled ? "session-status-enabled" : "session-status-disabled";
   systemCaNote.textContent = sessionSystemCaEnabled
     ? "此設定套用於目前 Link Checker 執行期間。"
-    : "如需使用 Windows 系統信任的憑證，請以系統憑證模式重新啟動 Link Checker。";
+    : "如網站在瀏覽器可正常開啟，但掃描出現憑證問題，可重新啟動 Link Checker 並使用 Windows 系統信任憑證。";
+  systemCaRestarting = false;
+  updateSystemCaRestartButton();
 }
 
 async function mutationFetch(url, options = {}) {
@@ -747,6 +827,7 @@ function renderQueue(queueState) {
   stopQueueButton.disabled = !isRunning;
   maxConcurrentSitesInput.disabled = isRunning;
   updateQueueButtonState(isRunning);
+  updateSystemCaRestartButton();
 
   const items = queueState?.items || [];
   if (items.length === 0) {
@@ -1275,6 +1356,7 @@ function setBusy(isBusy) {
   startButton.classList.toggle("is-running", isBusy);
   stopButton.classList.toggle("is-stop-ready", isBusy);
   startButton.setAttribute("aria-busy", String(isBusy));
+  updateSystemCaRestartButton();
 }
 
 function updateQueueButtonState(isRunning) {

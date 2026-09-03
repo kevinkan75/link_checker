@@ -503,6 +503,12 @@ input:focus {
   color: #b45309;
 }
 
+.session-status-action {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 8px 10px;
+}
+
 .option-toggle.caution-toggle {
   border-color: #dcc49d;
   background: #fffaf0;

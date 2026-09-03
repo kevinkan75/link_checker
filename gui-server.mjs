@@ -2,6 +2,7 @@
 
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -26,6 +27,7 @@ const MAX_PORT_FALLBACK_ATTEMPTS = 20;
 const MAX_STORED_EVENTS = 10000;
 const DEFAULT_IDLE_CHECK_INTERVAL_MS = 30000;
 const SHUTDOWN_FORCE_EXIT_MS = 3000;
+const RESTART_FORCE_CLOSE_CONNECTIONS_MS = 200;
 const jobs = new Map();
 const queue = {
   items: [],
@@ -41,6 +43,7 @@ let idleShutdownTimer = null;
 let idleShutdownMs = null;
 let lastClientSeenAt = Date.now();
 let shutdownStarted = false;
+let restartStarted = false;
 
 const MIME_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -1158,6 +1161,33 @@ function recordClientHeartbeat() {
   };
 }
 
+function hasRestartBlockingWork({
+  currentQueue = queue,
+  currentJobs = jobs,
+} = {}) {
+  if (
+    currentQueue.running
+    || currentQueue.stopRequested
+    || currentQueue.currentItemIds?.size > 0
+  ) {
+    return true;
+  }
+
+  if ((currentQueue.items || []).some((item) => (
+    item.state === "queued" || item.state === "running" || item.state === "stopping"
+  ))) {
+    return true;
+  }
+
+  for (const job of currentJobs.values()) {
+    if (job.state === "running" || job.state === "stopping") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function hasRunningWork() {
   if (queue.running || queue.stopRequested || queue.currentItemIds.size > 0) {
     return true;
@@ -1170,6 +1200,79 @@ function hasRunningWork() {
   }
 
   return false;
+}
+
+function getActiveServerPort() {
+  const address = activeServer?.address?.();
+  return address && typeof address === "object" ? address.port : null;
+}
+
+function buildSystemCaRestartPlan({
+  execPath = process.execPath,
+  serverScript = fileURLToPath(import.meta.url),
+  port = getActiveServerPort(),
+  currentIdleShutdownMs = idleShutdownMs,
+  env = process.env,
+} = {}) {
+  const parsedPort = Number(port);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1024 || parsedPort > 65535) {
+    throw httpError(500, "Cannot restart Link Checker because the current GUI port is unknown.");
+  }
+
+  const args = [
+    "--use-system-ca",
+    serverScript,
+    "--port",
+    String(parsedPort),
+  ];
+
+  if (Number.isFinite(currentIdleShutdownMs) && currentIdleShutdownMs > 0) {
+    args.push("--idle-shutdown-ms", String(Math.floor(currentIdleShutdownMs)));
+  } else {
+    args.push("--no-idle-shutdown");
+  }
+
+  return {
+    command: execPath,
+    args,
+    options: {
+      cwd: ROOT_DIR,
+      detached: true,
+      env: { ...env },
+      stdio: "ignore",
+      windowsHide: true,
+    },
+  };
+}
+
+function resolveSystemCaRestartRequest({
+  systemCaEnabled = isSystemCaEnabled(),
+  runningWork = hasRestartBlockingWork(),
+  restartPlanOptions = {},
+} = {}) {
+  if (systemCaEnabled) {
+    return {
+      status: "already_enabled",
+      accepted: false,
+      systemCaEnabled: true,
+    };
+  }
+
+  if (runningWork) {
+    return {
+      status: "busy",
+      accepted: false,
+      systemCaEnabled: false,
+      error: "目前有掃描工作進行中，請先停止或等待完成後再重新啟動。",
+    };
+  }
+
+  return {
+    status: "accepted",
+    accepted: true,
+    systemCaEnabled: false,
+    restartPlan: buildSystemCaRestartPlan(restartPlanOptions),
+  };
 }
 
 function beginShutdown(reason) {
@@ -1193,6 +1296,47 @@ function beginShutdown(reason) {
   }
 
   activeServer.close(() => process.exit(0));
+}
+
+function beginSystemCaRestart(plan) {
+  if (shutdownStarted || restartStarted) {
+    return;
+  }
+
+  restartStarted = true;
+  shutdownStarted = true;
+  if (idleShutdownTimer) {
+    clearInterval(idleShutdownTimer);
+    idleShutdownTimer = null;
+  }
+
+  console.log("Link Checker 正在重新啟動並使用 Windows 系統憑證。");
+
+  let relaunched = false;
+  const relaunch = () => {
+    if (relaunched) {
+      return;
+    }
+    relaunched = true;
+    try {
+      const child = spawn(plan.command, plan.args, plan.options);
+      child.unref?.();
+      process.exit(0);
+    } catch (error) {
+      console.error(`Link Checker 無法重新啟動：${error.message}`);
+      process.exit(1);
+    }
+  };
+
+  if (!activeServer) {
+    relaunch();
+    return;
+  }
+
+  activeServer.close(relaunch);
+  activeServer.closeIdleConnections?.();
+  setTimeout(() => activeServer?.closeAllConnections?.(), RESTART_FORCE_CLOSE_CONNECTIONS_MS).unref?.();
+  setTimeout(relaunch, SHUTDOWN_FORCE_EXIT_MS).unref?.();
 }
 
 function configureIdleShutdown(server, timeoutMs) {
@@ -1275,6 +1419,31 @@ async function route(request, response) {
       shuttingDown: true,
     });
     setTimeout(() => beginShutdown("manual shutdown requested"), 25).unref?.();
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/restart-system-ca") {
+    requireLocalSession(request);
+    const decision = resolveSystemCaRestartRequest();
+    if (decision.status === "busy") {
+      throw httpError(409, decision.error);
+    }
+    if (decision.status === "already_enabled") {
+      sendJson(response, 200, {
+        ok: true,
+        status: decision.status,
+        systemCaEnabled: true,
+      });
+      return;
+    }
+
+    sendJson(response, 202, {
+      ok: true,
+      status: decision.status,
+      restarting: true,
+      systemCaEnabled: false,
+    });
+    setTimeout(() => beginSystemCaRestart(decision.restartPlan), 25).unref?.();
     return;
   }
 
@@ -1589,11 +1758,14 @@ async function main() {
 export {
   buildCompletePayload,
   buildLogSummary,
+  buildSystemCaRestartPlan,
   buildUrlPatternSummary,
   getJobArtifactPlan,
+  hasRestartBlockingWork,
   makeBrokenCsv,
   makeEventsLog,
   makeExternalLinksCsv,
+  resolveSystemCaRestartRequest,
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

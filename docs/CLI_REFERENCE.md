@@ -466,7 +466,7 @@ node .\report-diff.mjs old-report.json new-report.json --output diff.json
 .\check-links.cmd https://example.com --system-ca
 ```
 
-CLI 使用 `--system-ca` 時會以 Node 原生 `--use-system-ca` 重新啟動檢查程序，讓憑證信任來源在 process level 生效。GUI 的系統憑證模式由目前 Link Checker 執行期間決定；使用 `.\gui.cmd --system-ca` 啟動可讓 GUI 一開始就載入系統根憑證，此參數可與其他 GUI 啟動參數併用，例如 `.\gui.cmd --port 8788 --system-ca`。
+CLI 使用 `--system-ca` 時會以 Node 原生 `--use-system-ca` 重新啟動檢查程序，讓憑證信任來源在 process level 生效。GUI 的系統憑證模式由目前 Link Checker 執行期間決定；若 GUI 顯示尚未啟用，可在 GUI 中重新啟動並使用 Windows 系統憑證。使用 `.\gui.cmd --system-ca` 啟動也可讓 GUI 一開始就載入系統根憑證，此參數可與其他 GUI 啟動參數併用，例如 `.\gui.cmd --port 8788 --system-ca`。
 
 ## Redirect 判讀
 
