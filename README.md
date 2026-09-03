@@ -28,7 +28,7 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 ### 使用 portable 版本
 
-1. 從 [v1.3.1 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.3.1/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.4.0 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.4.0/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 

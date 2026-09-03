@@ -1,6 +1,6 @@
 # 開發路線圖
 
-更新日期：2026-08-31
+更新日期：2026-09-03
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
@@ -23,7 +23,7 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 - 保持本機執行、localhost-only、可攜式散布與清楚安全邊界。
 - 保守處理外部網站限制、rate limit、WAF、Bot challenge、CAPTCHA、timeout 與 TLS 類結果，並明確標示需要人工確認。
 - 預設阻擋 private / localhost / metadata / reserved IP；內部掃描需明確開啟。
-- `report.json` 是主要資料契約；CSV 與 NDJSON sidecar 是交辦、分析與大型資料的輔助入口。
+- `report.json` 是主要資料契約，`broken.csv` 是目前一般交辦輸出；舊有或另行取得的 `external-links.csv` 與 `external-links.ndjson` 僅作為 Analyzer 相容匯入及資料分析的輔助入口，非目前預設掃描輸出。
 - 跨次掃描的 status transition、confidence change 與 historical evidence comparison 優先由既有 `report-diff.mjs` 承接，不在 crawler core 建立第二套歷史狀態資料庫。
 - Site-specific 邏輯應放在 rules 檔，不要硬寫進 crawler hostname 特例。
 
@@ -98,7 +98,7 @@ P14 necessity review 已完成。重新依產品定位、現有 GUI / Report Ana
 | Report Analyzer internal / external scope filter | `CANDIDATE / EVIDENCE-REQUIRED`。只有當實際承辦／交辦使用證明現有 interpretation filter、domain search / ranking 與 external-link analysis 不足以快速區分本站與外部責任時才恢復評估；優先 reuse start origin / URL evidence，不新增 crawler-side scope engine，也不修改 report schema。 |
 | GUI rules URL input | 讓使用者不必切 CLI 就能載入 site-specific rules；需保留安全提示、錯誤呈現與權限邊界。 |
 | Fragment / duplicate anchor optional check | 已有 real-site evidence 顯示 HTTP page 為 200 但 `#fragment` 目標不存在；定位為 future optional quality check，不影響目前 broken-link core judgment，優先度低於 P13 / P14。 |
-| Report Analyzer large-file UX improvement | 優先沿用 NDJSON sidecar，不急著改主契約。 |
+| Report Analyzer large-file UX improvement | 優先評估既有 NDJSON 相容輸入及現有 `report.json` 處理流程的 UX 改善；不因大型檔案需求恢復預設 NDJSON sidecar 輸出。只有實際效能或記憶體 evidence 顯示現行資料契約不足時，才重新評估輸出策略。 |
 | External-risk rule governance refinement | 強化外部風險規則來源、白名單與分類依據可追溯性；交辦呈現由 P14 承接，不擴張成完整治理平台。 |
 
 ## Deferred / Evidence-required
