@@ -4,7 +4,9 @@ import { readFile } from "node:fs/promises";
 import {
   buildSystemCaRestartPlan,
   hasRestartBlockingWork,
+  isGuiCmdWrapperOwned,
   resolveSystemCaRestartRequest,
+  SYSTEM_CA_RESTART_EXIT_CODE,
 } from "./gui-server.mjs";
 
 function assert(condition, message) {
@@ -23,10 +25,11 @@ function makeIdleQueue(overrides = {}) {
   };
 }
 
-function assertDefaultIdleRestartIsAccepted() {
+function assertSelfRelaunchRestartIsAccepted() {
   const decision = resolveSystemCaRestartRequest({
     systemCaEnabled: false,
     runningWork: false,
+    wrapperOwned: false,
     restartPlanOptions: {
       execPath: "C:/LinkChecker/runtime/node.exe",
       serverScript: "C:/LinkChecker/gui-server.mjs",
@@ -41,6 +44,8 @@ function assertDefaultIdleRestartIsAccepted() {
 
   assert(decision.status === "accepted", "Default idle session should accept system CA restart.");
   assert(decision.accepted === true, "Accepted restart should be marked accepted.");
+  assert(decision.restartMode === "self_relaunch", "Non-wrapper restart should keep self-relaunch mode.");
+  assert(decision.restartExitCode === null, "Non-wrapper restart should not request wrapper exit.");
   assert(decision.restartPlan.command === "C:/LinkChecker/runtime/node.exe", "Restart should use the server-selected executable.");
   assert(decision.restartPlan.args[0] === "--use-system-ca", "Restart should use process-level system CA activation.");
   assert(decision.restartPlan.args[1] === "C:/LinkChecker/gui-server.mjs", "Restart should relaunch the GUI server script.");
@@ -56,10 +61,32 @@ function assertDefaultIdleRestartIsAccepted() {
   );
 }
 
+function assertWrapperOwnedRestartUsesDedicatedExit() {
+  assert(isGuiCmdWrapperOwned({ LINK_CHECKER_GUI_WRAPPER: "cmd" }) === true, "CMD wrapper marker should be detected.");
+  assert(isGuiCmdWrapperOwned({ LINK_CHECKER_GUI_WRAPPER: "other" }) === false, "Unknown wrapper marker should not be treated as CMD-owned.");
+
+  const decision = resolveSystemCaRestartRequest({
+    systemCaEnabled: false,
+    runningWork: false,
+    wrapperOwned: true,
+    restartPlanOptions: {
+      execPath: "C:/LinkChecker/runtime/node.exe",
+      serverScript: "C:/LinkChecker/gui-server.mjs",
+      port: 8787,
+    },
+  });
+
+  assert(decision.status === "accepted", "Wrapper-owned idle session should accept system CA restart.");
+  assert(decision.restartMode === "wrapper_exit", "Wrapper-owned restart should use wrapper exit mode.");
+  assert(decision.restartExitCode === SYSTEM_CA_RESTART_EXIT_CODE, "Wrapper restart should expose the dedicated restart exit code.");
+  assert(!decision.restartPlan, "Wrapper-owned restart must not spawn a detached replacement process.");
+}
+
 function assertAlreadyEnabledDoesNotRestart() {
   const decision = resolveSystemCaRestartRequest({
     systemCaEnabled: true,
     runningWork: false,
+    wrapperOwned: true,
   });
 
   assert(decision.status === "already_enabled", "System CA session should report already enabled.");
@@ -77,10 +104,12 @@ function assertActiveJobBlocksRestart() {
   const decision = resolveSystemCaRestartRequest({
     systemCaEnabled: false,
     runningWork,
+    wrapperOwned: true,
   });
   assert(decision.status === "busy", "Active job restart should be rejected.");
   assert(decision.accepted === false, "Active job restart must not be accepted.");
   assert(!decision.restartPlan, "Active job restart must not build a restart plan.");
+  assert(!decision.restartExitCode, "Active job restart must not request wrapper exit.");
 }
 
 function assertQueueStateBlocksRestart() {
@@ -123,15 +152,20 @@ function assertNoArbitraryCommandInputs() {
 async function assertFrontendRestartControl() {
   const html = await readFile("public/index.html", "utf8");
   const app = await readFile("public/app.js", "utf8");
+  const wrapper = await readFile("gui.cmd", "utf8");
 
   assert(html.includes('id="system-ca-restart"'), "Default GUI session should render a system CA restart action.");
   assert(app.includes("/api/restart-system-ca"), "Frontend should call the dedicated system CA restart endpoint.");
   assert(app.includes("waitForSystemCaSession"), "Frontend should wait for the restarted system CA session.");
   assert(app.includes("hasUnfinishedWork()"), "Frontend should prevent restart while local work is unfinished.");
+  assert(wrapper.includes("LINK_CHECKER_GUI_WRAPPER=cmd"), "CMD wrapper should mark wrapper-owned GUI server sessions.");
+  assert(wrapper.includes('if "%GUI_EXIT_CODE%"=="75"'), "CMD wrapper should handle the dedicated system CA restart exit code.");
+  assert(wrapper.includes("goto runGui"), "CMD wrapper should relaunch in the same lifecycle loop.");
 }
 
 async function main() {
-  assertDefaultIdleRestartIsAccepted();
+  assertSelfRelaunchRestartIsAccepted();
+  assertWrapperOwnedRestartUsesDedicatedExit();
   assertAlreadyEnabledDoesNotRestart();
   assertActiveJobBlocksRestart();
   assertQueueStateBlocksRestart();

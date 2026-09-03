@@ -28,6 +28,9 @@ const MAX_STORED_EVENTS = 10000;
 const DEFAULT_IDLE_CHECK_INTERVAL_MS = 30000;
 const SHUTDOWN_FORCE_EXIT_MS = 3000;
 const RESTART_FORCE_CLOSE_CONNECTIONS_MS = 200;
+const SYSTEM_CA_RESTART_EXIT_CODE = 75;
+const GUI_WRAPPER_ENV = "LINK_CHECKER_GUI_WRAPPER";
+const GUI_CMD_WRAPPER = "cmd";
 const jobs = new Map();
 const queue = {
   items: [],
@@ -1245,10 +1248,15 @@ function buildSystemCaRestartPlan({
   };
 }
 
+function isGuiCmdWrapperOwned(env = process.env) {
+  return String(env[GUI_WRAPPER_ENV] || "").toLowerCase() === GUI_CMD_WRAPPER;
+}
+
 function resolveSystemCaRestartRequest({
   systemCaEnabled = isSystemCaEnabled(),
   runningWork = hasRestartBlockingWork(),
   restartPlanOptions = {},
+  wrapperOwned = isGuiCmdWrapperOwned(),
 } = {}) {
   if (systemCaEnabled) {
     return {
@@ -1271,7 +1279,9 @@ function resolveSystemCaRestartRequest({
     status: "accepted",
     accepted: true,
     systemCaEnabled: false,
-    restartPlan: buildSystemCaRestartPlan(restartPlanOptions),
+    restartMode: wrapperOwned ? "wrapper_exit" : "self_relaunch",
+    restartExitCode: wrapperOwned ? SYSTEM_CA_RESTART_EXIT_CODE : null,
+    restartPlan: wrapperOwned ? null : buildSystemCaRestartPlan(restartPlanOptions),
   };
 }
 
@@ -1298,7 +1308,7 @@ function beginShutdown(reason) {
   activeServer.close(() => process.exit(0));
 }
 
-function beginSystemCaRestart(plan) {
+function beginSystemCaRestart(decision) {
   if (shutdownStarted || restartStarted) {
     return;
   }
@@ -1312,6 +1322,26 @@ function beginSystemCaRestart(plan) {
 
   console.log("Link Checker 正在重新啟動並使用 Windows 系統憑證。");
 
+  if (decision?.restartMode === "wrapper_exit") {
+    const exitCode = Number.isInteger(decision.restartExitCode)
+      ? decision.restartExitCode
+      : SYSTEM_CA_RESTART_EXIT_CODE;
+    const exitForWrapper = () => process.exit(exitCode);
+    const forceExitTimer = setTimeout(exitForWrapper, SHUTDOWN_FORCE_EXIT_MS);
+    forceExitTimer.unref?.();
+
+    if (!activeServer) {
+      exitForWrapper();
+      return;
+    }
+
+    activeServer.close(exitForWrapper);
+    activeServer.closeIdleConnections?.();
+    setTimeout(() => activeServer?.closeAllConnections?.(), RESTART_FORCE_CLOSE_CONNECTIONS_MS).unref?.();
+    return;
+  }
+
+  const plan = decision?.restartPlan || decision;
   let relaunched = false;
   const relaunch = () => {
     if (relaunched) {
@@ -1443,7 +1473,7 @@ async function route(request, response) {
       restarting: true,
       systemCaEnabled: false,
     });
-    setTimeout(() => beginSystemCaRestart(decision.restartPlan), 25).unref?.();
+    setTimeout(() => beginSystemCaRestart(decision), 25).unref?.();
     return;
   }
 
@@ -1762,10 +1792,12 @@ export {
   buildUrlPatternSummary,
   getJobArtifactPlan,
   hasRestartBlockingWork,
+  isGuiCmdWrapperOwned,
   makeBrokenCsv,
   makeEventsLog,
   makeExternalLinksCsv,
   resolveSystemCaRestartRequest,
+  SYSTEM_CA_RESTART_EXIT_CODE,
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
