@@ -1443,7 +1443,8 @@ class LinkChecker {
         this.addSource(resolved, source);
 
         const isExternal = !this.isCrawlOrigin(resolved);
-        const shouldCheck = this.shouldCheck(resolved);
+        const validationSkippedByLinkIntent = isConnectionOnlyResourceHint(link);
+        const shouldCheck = !validationSkippedByLinkIntent && this.shouldCheck(resolved);
         const shouldCrawl = this.shouldCrawl(resolved, link, depth + 1);
         const inventoryEntry = this.addInventoryItem(resolved, source, link, {
           isExternal,
@@ -1461,7 +1462,7 @@ class LinkChecker {
           this.enqueueValidation(inventoryEntry, resolved, { requireBody: false }, { deferPump: true });
         } else if (shouldCheck) {
           this.inventoryMetrics.validationSkippedByInventory += 1;
-        } else {
+        } else if (!validationSkippedByLinkIntent) {
           this.skippedExternal += 1;
           this.reporter?.externalSkipped(resolved, url);
         }
@@ -6199,12 +6200,14 @@ function extractLinks(html, baseUrl) {
         continue;
       }
 
+      const relTokens = tag === "link" ? parseRelTokens(attributes.get("rel")) : [];
+      const linkIntent = relTokens.length > 0 ? { rel: relTokens } : {};
       if (attribute === "srcset") {
         for (const src of parseSrcset(value)) {
-          links.push({ tag, attribute, value: src });
+          links.push({ tag, attribute, value: src, ...linkIntent });
         }
       } else {
-        links.push({ tag, attribute, value });
+        links.push({ tag, attribute, value, ...linkIntent });
       }
     }
   }
@@ -6774,6 +6777,22 @@ function parseAttributes(input) {
   }
 
   return attributes;
+}
+
+function parseRelTokens(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function isConnectionOnlyResourceHint(link) {
+  if (link?.tag !== "link" || link?.attribute !== "href") {
+    return false;
+  }
+  const rel = Array.isArray(link.rel) ? link.rel : [];
+  return rel.includes("preconnect") || rel.includes("dns-prefetch");
 }
 
 function parseSrcset(value) {
