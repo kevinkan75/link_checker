@@ -2587,7 +2587,8 @@ class LinkChecker {
     const inventorySummary = this.buildInventorySummary();
     const checkedByKind = this.buildCheckedByKind(checked);
     const spaDetection = this.buildSpaDetectionSummary();
-    const scanQuality = this.buildScanQuality(checked, spaDetection, checkedByKind);
+    const startPageFetchFailed = this.hasStartPageDiscoveryInputFailure();
+    const scanQuality = this.buildScanQuality(checked, spaDetection, checkedByKind, { startPageFetchFailed });
     const runStatus = this.buildRunStatus();
     const broken = checked
       .filter((result) => !result.ok)
@@ -2698,7 +2699,7 @@ class LinkChecker {
       robotsTxt: this.robotsTxt,
       hostDiagnostics: this.buildHostDiagnostics(checked),
     };
-    summary.coverage = deriveCoverageStatus({ runStatus, summary, options: reportOptions });
+    summary.coverage = deriveCoverageStatus({ runStatus, summary, options: reportOptions, startPageFetchFailed });
 
     const report = {
       schemaVersion: REPORT_SCHEMA_VERSION,
@@ -2800,7 +2801,13 @@ class LinkChecker {
     return counts;
   }
 
-  buildScanQuality(checked, spaDetection, checkedByKind = this.buildCheckedByKind(checked)) {
+  hasStartPageDiscoveryInputFailure() {
+    return isStartPageDiscoveryInputFailure(this.results.get(this.getCanonicalKey(this.startUrl)));
+  }
+
+  buildScanQuality(checked, spaDetection, checkedByKind = this.buildCheckedByKind(checked), {
+    startPageFetchFailed = this.hasStartPageDiscoveryInputFailure(),
+  } = {}) {
     const checkedUrls = checked.map((result) => result.url || "");
     const assetUrls = checkedByKind.assets;
     const nuxtAssetUrls = checkedByKind.nuxtAssets;
@@ -2818,6 +2825,9 @@ class LinkChecker {
     }
     if (spaDetection?.detected && this.options.spaLinks === "off") {
       warnings.push("spa_links_disabled");
+    }
+    if (startPageFetchFailed) {
+      warnings.push("start_page_fetch_failed");
     }
 
     return {
@@ -8233,6 +8243,7 @@ function deriveCoverageStatus(reportLike = {}) {
   const summary = reportLike.summary && typeof reportLike.summary === "object" ? reportLike.summary : {};
   const runStatus = reportLike.runStatus && typeof reportLike.runStatus === "object" ? reportLike.runStatus : {};
   const options = reportLike.options && typeof reportLike.options === "object" ? reportLike.options : {};
+  const startPageFetchFailed = reportLike.startPageFetchFailed === true || hasStartPageFetchFailureEvidence(reportLike);
   const discoveryReasons = [];
   const validationReasons = [];
   const details = buildCoverageDetails({ summary, runStatus, options });
@@ -8247,6 +8258,10 @@ function deriveCoverageStatus(reportLike = {}) {
 
   if (hasSitemapSeedTruncationEvidence({ summary, details })) {
     discoveryReasons.push("sitemap_seed_truncated");
+  }
+
+  if (startPageFetchFailed) {
+    discoveryReasons.push("start_page_fetch_failed");
   }
 
   if (hasMaxPagesReachedEvidence({ summary, runStatus, details, discoveryReasons })) {
@@ -8297,6 +8312,40 @@ function buildCoverageDetails({ summary, runStatus, options }) {
 function toFiniteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function hasStartPageFetchFailureEvidence(reportLike = {}) {
+  const startUrl = typeof reportLike.startUrl === "string" ? reportLike.startUrl : "";
+  const checked = Array.isArray(reportLike.checked) ? reportLike.checked : [];
+  if (!startUrl || checked.length === 0) {
+    return false;
+  }
+
+  const options = reportLike.options && typeof reportLike.options === "object" ? reportLike.options : {};
+  const canonicalStrategy = options.canonicalStrategy || DEFAULTS.canonicalStrategy;
+  const startCanonicalUrl = canonicalizeCheckedUrl(startUrl, canonicalStrategy);
+  const startResult = checked.find((result) => (
+    result?.url === startUrl
+    || result?.normalizedFrom === startUrl
+    || result?.canonicalUrl === startCanonicalUrl
+  ));
+  return isStartPageDiscoveryInputFailure(startResult);
+}
+
+function isStartPageDiscoveryInputFailure(result) {
+  if (!result || result.cancelledByStop === true) {
+    return false;
+  }
+  if (result.ok !== true) {
+    return true;
+  }
+  if (!isHtml(result.contentType)) {
+    return true;
+  }
+  if (Object.prototype.hasOwnProperty.call(result, "bodyBytesRead")) {
+    return toFiniteNumber(result.bodyBytesRead) <= 0;
+  }
+  return false;
 }
 
 function hasIncompleteValidationEvidence(runStatus) {
@@ -9597,6 +9646,9 @@ function formatCoverageNotice(coverage) {
     return "This scan did not fully complete; results only represent URLs that finished validation.";
   }
   if (coverage?.discovery?.incomplete) {
+    if (coverage.discovery.reasons?.includes("start_page_fetch_failed")) {
+      return "Scheduled URL validation completed, but the start page could not be fetched as usable HTML for discovery.";
+    }
     return "Scheduled URL validation completed, but site discovery was limited by page or sitemap seed budgets.";
   }
   return "Results only represent discovered and validated URLs.";

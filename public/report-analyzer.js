@@ -935,6 +935,9 @@ function formatCoverageNotice(coverage) {
     return "本次掃描未完整完成，目前結果僅包含已完成驗證的 URL，不應視為完整網站檢測結果。";
   }
   if (coverage?.discovery?.incomplete) {
+    if (coverage.discovery.reasons?.includes("start_page_fetch_failed")) {
+      return "起始頁面無法取得可供探索的內容，因此本次結果可能未涵蓋網站連結。";
+    }
     return "本次已完成排定的 URL 驗證，但網站探索範圍受頁面上限或 sitemap seed 限制，結果可能未涵蓋完整網站。";
   }
   return "本次掃描可能未完整涵蓋網站內容，目前結果僅代表已探索及已完成驗證的 URL。";
