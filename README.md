@@ -26,6 +26,10 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 ## 快速開始
 
+### 執行環境
+
+Portable 版本目前以 Windows 本機環境為主要支援方式；原始碼及其他執行方式請依技術文件所列之已驗證環境使用。
+
 ### 使用 portable 版本
 
 1. 從 [v1.4.0 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.4.0/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
@@ -180,7 +184,7 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。正�
 
 匯入 GUI 輸出的 `report.json`，整理外部網域、分類與治理狀態。
 
-目前掃描的標準輸入是 `report.json`。仍可匯入舊有或另行取得的 `external-links.csv`、`external-links.ndjson`：
+目前「外部連結分析」的標準匯入格式為 `report.json`。仍可匯入舊有或另行取得的 `external-links.csv`、`external-links.ndjson`：
 
 1. 一般情境：選 `report.json`。
 2. 舊有外連清單：選 `external-links.csv`。

@@ -29,6 +29,12 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 
 ## Current / Next
 
+### Current Focus
+
+`v1.4.0` 已完成正式發布與 release validation。目前專案進入 maintenance / evidence-driven refinement 階段，沒有已授權的新功能 implementation phase。
+
+後續工作以 real-site evidence、實際使用問題、regression evidence 與維護成本作為是否啟動 Future Candidate 的依據；Roadmap 中存在候選項目不代表自動進入實作。
+
 ### P12 Static Discovery Resilience
 
 P12 保持既有名稱與範圍；後續只做 evidence-driven refinement，不重新命名已完成階段。
@@ -49,9 +55,9 @@ P12-3 已支援的 coverage reason 至少包含：
 
 ### P13 HTTP Validation Resilience
 
-P13 是 P12 之後的正式後續 Phase，目標是提高 HTTP validation 可靠性，降低由 HEAD 行為、暫時性 network failure、特殊 redirect、WAF / Bot protection 造成的誤判與不必要人工判讀。
+P13 作為 P12 後續的 HTTP Validation Resilience Phase，目前已完成 necessity review 與 implementation disposition，無 remaining implementation item；其目標是提高 HTTP validation 可靠性，降低由 HEAD 行為、暫時性 network failure、特殊 redirect、WAF / Bot protection 造成的誤判與不必要人工判讀。
 
-P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallback、retry / scheduler、redirect handling、404/410 confirmation、protection detection 與 interpretation pipeline；除非既有 abstraction 無法承接，不建立平行 validation / confirmation framework。多次桃園 real-site regression 顯示，單純降低 global concurrency 或增加 delay 並未穩定降低 HEAD transport uncertainty，因此後續仍以 targeted evidence-driven validation / interpretation 修正為主，而不是把 global slowdown 當主要修正策略。
+P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallback、retry / scheduler、redirect handling、404/410 confirmation、protection detection 與 interpretation pipeline；除非既有 abstraction 無法承接，不建立平行 validation / confirmation framework。詳細 acceptance 與 real-site evidence 由 closure archive 承接。
 
 目前狀態：
 
@@ -66,8 +72,6 @@ P13 採 reuse-first 原則：優先擴充既有 `fetchUrl()`、HEAD -> GET fallb
 P13 status：3 DONE、2 SKIPPED / NOT REQUIRED、0 remaining implementation items。Implemented DONE = 3/5；disposition resolved = 5/5（3 DONE + 2 SKIPPED）。此 item-count / disposition count 不代表固定剩餘工作量，也不代表 skipped 項目已實作完成。
 
 P13 的 final acceptance、real-site regression、skip-decision evidence 與 reopen boundary，詳見 [docs/archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md)。
-
-P13 子項編號代表既有規劃識別，不強制等同實際 implementation sequence；conditional 項目應由 regression evidence 決定是否進入實作。
 
 ### P14 Result Interpretation & Management Handoff
 
