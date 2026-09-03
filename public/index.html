@@ -40,20 +40,127 @@
             <p class="url-field-note">檢查結果可協助初步盤點，重要頁面仍建議人工確認。</p>
           </div>
 
+          <div class="scan-mode-panel" aria-labelledby="scan-mode-title">
+            <div class="scan-mode-heading">
+              <h2 id="scan-mode-title">掃描模式</h2>
+              <span id="advanced-summary" class="advanced-summary">300 頁 / 深度 3 / 併發 6 / 每 host 2 / 固定 1000ms</span>
+            </div>
+            <div class="preset-row" aria-label="掃描模式">
+              <button type="button" class="active" data-preset="balanced">標準保守</button>
+              <button type="button" data-preset="fast">快速掃描</button>
+              <button type="button" data-preset="conservative">更保守</button>
+              <button type="button" data-preset="defaults">還原預設</button>
+            </div>
+            <p class="settings-note">一般網站建議使用標準保守；快速掃描較快，但較容易遇到 403、429 或逾時。</p>
+          </div>
+        </form>
+      </section>
+
+      <section class="environment-panel" aria-labelledby="environment-title">
+        <div class="section-heading">
+          <h2 id="environment-title">執行環境</h2>
+        </div>
+        <div class="session-status-field">
+          <span class="field-label">Windows 系統憑證 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="Windows 系統憑證說明" aria-describedby="help-system-ca" data-help-trigger>?</span><span id="help-system-ca" class="help-tooltip" role="tooltip">此狀態由目前 Link Checker 執行期間決定，不是單次掃描設定。</span></span></span>
+          <strong id="system-ca-status">讀取中</strong>
+          <span id="system-ca-note" class="session-status-note">正在確認目前執行狀態。</span>
+          <button id="system-ca-restart" class="session-status-action" type="button" hidden>重新啟動並使用 Windows 系統憑證</button>
+        </div>
+      </section>
+
+      <section class="status-panel" aria-labelledby="status-title">
+        <div class="status-heading">
+          <div>
+            <span id="state-badge" class="badge idle">待命</span>
+            <strong id="status-title" aria-live="polite">尚未開始</strong>
+          </div>
+          <span id="elapsed" class="elapsed-time">0s</span>
+        </div>
+        <p id="watching-site" class="watching-site" hidden></p>
+        <div id="scan-empty-state" class="empty-state scan-empty-state">
+          <strong>準備開始檢查</strong>
+          <p>輸入網站 URL 後，這裡會顯示即時檢測進度、目前處理中的 URL 與問題摘要。</p>
+          <div class="empty-state-steps" aria-label="連結檢查流程">
+            <span>1 輸入 URL</span>
+            <span>2 開始檢查</span>
+            <span>3 查看摘要 / 匯出</span>
+          </div>
+        </div>
+        <div class="progress-summary">
+          <span id="progress-label">整體掃描進度</span>
+          <strong id="progress-percent">0%</strong>
+        </div>
+        <div class="progress-track" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progress-bar"></div>
+        </div>
+        <p id="scan-phase-note" class="scan-phase-note">目前階段：尚未開始</p>
+        <p id="pending-url-note" class="pending-url-note">目前已知 URL：已檢測 0 個，尚有 0 個待檢測，0 個請求中</p>
+        <p id="page-discovery-note" class="page-discovery-note">頁面探索：0 / 100，待爬 0</p>
+        <p id="url-pattern-note" class="url-pattern-note" hidden></p>
+        <p id="scan-advice-note" class="scan-advice-note" hidden></p>
+        <p id="coverage-notice" class="coverage-notice" hidden></p>
+        <p id="current-url" class="current-url">目前沒有處理中的 URL</p>
+        <div class="metric-grid">
+          <div><span>頁面探索</span><strong id="pages">0 / 100</strong></div>
+          <div><span>已檢測 URL</span><strong id="checked">0</strong></div>
+          <div><span>待檢測 URL</span><strong id="pending-urls">0</strong></div>
+          <div class="metric-card-attention"><span>需判讀結果</span><strong id="broken-count">0</strong></div>
+        </div>
+        <details class="status-details">
+          <summary>詳細狀態</summary>
+          <div class="metric-grid detail-metric-grid">
+            <div><span>目前請求</span><strong id="active">0</strong></div>
+            <div><span>待爬佇列</span><strong id="queue">0</strong></div>
+            <div><span>略過外部</span><strong id="skipped">0</strong></div>
+          </div>
+          <h3 class="status-subheading">判讀分類</h3>
+          <div class="issue-grid">
+            <div><span>需處理</span><strong id="issue-not-found">0</strong></div>
+            <div><span>需人工確認</span><strong id="issue-protected">0</strong></div>
+            <div><span>外站限制</span><strong id="issue-access-denied">0</strong></div>
+            <div><span>可能失效</span><strong id="issue-http">0</strong></div>
+            <div><span>已轉址仍可用</span><strong id="issue-timeout">0</strong></div>
+            <div><span>可先忽略 / 正常</span><strong id="issue-network">0</strong></div>
+            <div><span>頁內品質提醒</span><strong id="issue-unknown">0</strong></div>
+          </div>
+          <h3 class="status-subheading">Redirect 摘要</h3>
+          <div class="redirect-grid">
+            <div><span>轉址 URL</span><strong id="redirect-total">0</strong></div>
+            <div><span>永久轉址</span><strong id="redirect-permanent">0</strong></div>
+            <div><span>暫時轉址</span><strong id="redirect-temporary">0</strong></div>
+            <div><span>跨 host</span><strong id="redirect-cross-host">0</strong></div>
+            <div><span>轉址過長</span><strong id="redirect-long">0</strong></div>
+            <div><span>未完成轉址</span><strong id="redirect-unresolved">0</strong></div>
+          </div>
+          <h3 class="status-subheading">二次確認</h3>
+          <div class="confirmation-grid">
+            <div><span>候選</span><strong id="confirmation-candidates">0</strong></div>
+            <div><span>已恢復</span><strong id="confirmation-recovered">0</strong></div>
+            <div><span>需複查</span><strong id="confirmation-needs-review">0</strong></div>
+            <div><span>確認不存在</span><strong id="confirmation-missing">0</strong></div>
+          </div>
+          <section id="incremental-panel" class="incremental-panel" aria-labelledby="incremental-title" hidden>
+            <h3 id="incremental-title" class="status-subheading">增量掃描</h3>
+            <div class="incremental-grid">
+              <div><span>模式</span><strong id="incremental-mode">-</strong></div>
+              <div><span>新增 URL</span><strong id="incremental-new">0</strong></div>
+              <div><span>已知 URL</span><strong id="incremental-known">0</strong></div>
+              <div><span>復用結果</span><strong id="incremental-reused">0</strong></div>
+              <div><span>上次存在本次未發現</span><strong id="incremental-disappeared">0</strong></div>
+              <div><span>優先 / 延後</span><strong id="incremental-priority">0 / 0</strong></div>
+            </div>
+          </section>
+        </details>
+        <p id="log-location" class="log-location" hidden></p>
+      </section>
+
+      <section class="advanced-panel" aria-labelledby="advanced-settings-title">
           <details class="advanced-settings">
             <summary>
-              <span>掃描模式與進階設定</span>
-              <span id="advanced-summary" class="advanced-summary">300 頁 / 深度 3 / 併發 6 / 每 host 2 / 固定 1000ms</span>
+              <span id="advanced-settings-title">進階掃描設定</span>
+              <span class="disclosure-hint">點擊展開</span>
             </summary>
             <div class="advanced-settings-body">
-              <div class="preset-row" aria-label="掃描模式">
-                <button type="button" class="active" data-preset="balanced">標準保守</button>
-                <button type="button" data-preset="fast">快速掃描</button>
-                <button type="button" data-preset="conservative">更保守</button>
-                <button type="button" data-preset="defaults">還原預設</button>
-              </div>
-              <p class="settings-note">一般網站建議使用標準保守；快速掃描較快，但較容易遇到 403、429 或逾時。</p>
-
               <p id="advanced-validation" class="validation-message" role="alert" hidden></p>
 
               <section class="settings-section" aria-labelledby="crawl-settings-title">
@@ -160,13 +267,6 @@
                     <span class="field-label">相容老舊 TLS <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="相容老舊 TLS 說明" aria-describedby="help-legacy-tls" data-help-trigger>?</span><span id="help-legacy-tls" class="help-tooltip" role="tooltip">用於老舊網站 TLS 相容性。一般情況不要開啟。</span></span></span>
                   </label>
 
-                  <div class="session-status-field option-toggle">
-                    <span class="field-label">Windows 系統憑證 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="Windows 系統憑證說明" aria-describedby="help-system-ca" data-help-trigger>?</span><span id="help-system-ca" class="help-tooltip" role="tooltip">此狀態由目前 Link Checker 執行期間決定，不是單次掃描設定。</span></span></span>
-                    <strong id="system-ca-status">讀取中</strong>
-                    <span id="system-ca-note" class="session-status-note">正在確認目前執行狀態。</span>
-                    <button id="system-ca-restart" class="session-status-action" type="button" hidden>重新啟動並使用 Windows 系統憑證</button>
-                  </div>
-
                   <label class="toggle-field option-toggle">
                     <input id="authorized-scan" name="authorizedScan" type="checkbox">
                     <span class="field-label">宣告已授權掃描 <span class="help-wrap"><span class="help-trigger" role="button" tabindex="0" aria-label="宣告已授權掃描說明" aria-describedby="help-authorized-scan" data-help-trigger>?</span><span id="help-authorized-scan" class="help-tooltip" role="tooltip">只記錄使用者宣告，不代表工具會驗證授權。</span></span></span>
@@ -195,7 +295,6 @@
               </section>
             </div>
           </details>
-        </form>
       </section>
 
       <section class="queue-panel">
@@ -245,122 +344,22 @@
         </details>
       </section>
 
-      <section class="status-panel" aria-labelledby="status-title">
-        <div class="status-heading">
-          <div>
-            <span id="state-badge" class="badge idle">待命</span>
-            <strong id="status-title" aria-live="polite">尚未開始</strong>
-          </div>
-          <span id="elapsed" class="elapsed-time">0s</span>
-        </div>
-        <p id="watching-site" class="watching-site" hidden></p>
-        <div id="scan-empty-state" class="empty-state scan-empty-state">
-          <strong>準備開始檢查</strong>
-          <p>輸入網站 URL 後，這裡會顯示即時檢測進度、目前處理中的 URL 與問題摘要。</p>
-          <div class="empty-state-steps" aria-label="連結檢查流程">
-            <span>1 輸入 URL</span>
-            <span>2 開始檢查</span>
-            <span>3 查看待判讀結果 / 匯出</span>
-          </div>
-        </div>
-        <div class="progress-summary">
-          <span id="progress-label">整體掃描進度</span>
-          <strong id="progress-percent">0%</strong>
-        </div>
-        <div class="progress-track" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          <div id="progress-bar"></div>
-        </div>
-        <p id="scan-phase-note" class="scan-phase-note">目前階段：尚未開始</p>
-        <p id="pending-url-note" class="pending-url-note">目前已知 URL：已檢測 0 個，尚有 0 個待檢測，0 個請求中</p>
-        <p id="page-discovery-note" class="page-discovery-note">頁面探索：0 / 100，待爬 0</p>
-        <p id="url-pattern-note" class="url-pattern-note" hidden></p>
-        <p id="scan-advice-note" class="scan-advice-note" hidden></p>
-        <p id="coverage-notice" class="coverage-notice" hidden></p>
-        <p id="current-url" class="current-url">目前沒有處理中的 URL</p>
-        <div class="metric-grid">
-          <div><span>頁面探索</span><strong id="pages">0 / 100</strong></div>
-          <div><span>已檢測 URL</span><strong id="checked">0</strong></div>
-          <div><span>待檢測 URL</span><strong id="pending-urls">0</strong></div>
-          <div class="metric-card-attention"><span>需判讀結果</span><strong id="broken-count">0</strong></div>
-        </div>
-        <details class="status-details">
-          <summary>詳細狀態</summary>
-          <div class="metric-grid detail-metric-grid">
-            <div><span>目前請求</span><strong id="active">0</strong></div>
-            <div><span>待爬佇列</span><strong id="queue">0</strong></div>
-            <div><span>略過外部</span><strong id="skipped">0</strong></div>
-          </div>
-          <h3 class="status-subheading">判讀分類</h3>
-          <div class="issue-grid">
-            <div><span>需處理</span><strong id="issue-not-found">0</strong></div>
-            <div><span>需人工確認</span><strong id="issue-protected">0</strong></div>
-            <div><span>外站限制</span><strong id="issue-access-denied">0</strong></div>
-            <div><span>可能失效</span><strong id="issue-http">0</strong></div>
-            <div><span>已轉址仍可用</span><strong id="issue-timeout">0</strong></div>
-            <div><span>可先忽略 / 正常</span><strong id="issue-network">0</strong></div>
-            <div><span>頁內品質提醒</span><strong id="issue-unknown">0</strong></div>
-          </div>
-          <h3 class="status-subheading">Redirect 摘要</h3>
-          <div class="redirect-grid">
-            <div><span>轉址 URL</span><strong id="redirect-total">0</strong></div>
-            <div><span>永久轉址</span><strong id="redirect-permanent">0</strong></div>
-            <div><span>暫時轉址</span><strong id="redirect-temporary">0</strong></div>
-            <div><span>跨 host</span><strong id="redirect-cross-host">0</strong></div>
-            <div><span>轉址過長</span><strong id="redirect-long">0</strong></div>
-            <div><span>未完成轉址</span><strong id="redirect-unresolved">0</strong></div>
-          </div>
-          <h3 class="status-subheading">二次確認</h3>
-          <div class="confirmation-grid">
-            <div><span>候選</span><strong id="confirmation-candidates">0</strong></div>
-            <div><span>已恢復</span><strong id="confirmation-recovered">0</strong></div>
-            <div><span>需複查</span><strong id="confirmation-needs-review">0</strong></div>
-            <div><span>確認不存在</span><strong id="confirmation-missing">0</strong></div>
-          </div>
-          <section id="incremental-panel" class="incremental-panel" aria-labelledby="incremental-title" hidden>
-            <h3 id="incremental-title" class="status-subheading">增量掃描</h3>
-            <div class="incremental-grid">
-              <div><span>模式</span><strong id="incremental-mode">-</strong></div>
-              <div><span>新增 URL</span><strong id="incremental-new">0</strong></div>
-              <div><span>已知 URL</span><strong id="incremental-known">0</strong></div>
-              <div><span>復用結果</span><strong id="incremental-reused">0</strong></div>
-              <div><span>上次存在本次未發現</span><strong id="incremental-disappeared">0</strong></div>
-              <div><span>優先 / 延後</span><strong id="incremental-priority">0 / 0</strong></div>
-            </div>
-          </section>
-        </details>
-        <p id="log-location" class="log-location" hidden></p>
-      </section>
-
-      <section class="results-layout">
-        <div class="results-panel">
-          <div class="section-heading">
-            <h2>待判讀結果</h2>
-            <span id="result-summary">尚無結果</span>
-          </div>
-          <div id="filter-bar" class="filter-bar" aria-label="判讀分類篩選">
-            <button type="button" data-filter="all">全部待判讀 <span>0</span></button>
-            <button type="button" class="active" data-filter="action_required">需處理 <span>0</span></button>
-            <button type="button" data-filter="needs_review">需人工確認 <span>0</span></button>
-            <button type="button" data-filter="external_limited">外站限制 <span>0</span></button>
-            <button type="button" data-filter="likely_problem">可能失效 <span>0</span></button>
-            <button type="button" data-filter="redirect_ok">已轉址仍可用 <span>0</span></button>
-            <button type="button" data-filter="page_quality_notice">頁內品質提醒 <span>0</span></button>
-          </div>
-          <div id="broken-table" class="broken-list-wrap">
-            <div class="empty-state compact-empty-state">
-              <strong>尚未開始檢查</strong>
-              <p>檢查完成或發現需要判讀的結果時，會依分類顯示在這裡。</p>
-            </div>
-          </div>
-        </div>
-
-        <aside class="log-panel">
-          <div class="section-heading">
+      <section class="log-panel">
+        <details class="log-details">
+          <summary>
+            <span class="queue-summary-content">
+              <span class="queue-summary-title">事件紀錄</span>
+              <span class="queue-summary-meta">
+                <span class="queue-toggle-hint">點擊展開</span>
+              </span>
+            </span>
+          </summary>
+          <div class="section-heading log-heading">
             <h2>事件紀錄</h2>
             <button id="clear-log" type="button">清除</button>
           </div>
           <ol id="event-log"></ol>
-        </aside>
+        </details>
       </section>
     </main>
 

@@ -9,15 +9,18 @@ function assert(condition, message) {
 }
 
 const appJs = readFileSync("public/app.js", "utf8");
+const indexHtml = readFileSync("public/index.html", "utf8");
 const fixture = JSON.parse(readFileSync("fixtures/reports/client-redirect-evidence.v1.3.json", "utf8"));
 
-assert(appJs.includes("shouldShowClientRedirectEvidence"), "Main GUI should decide when to display client redirect evidence.");
-assert(appJs.includes("formatClientRedirectEvidence"), "Main GUI should format client redirect evidence.");
-assert(appJs.includes("瀏覽器端導向"), "Main GUI should use TA-friendly client redirect wording.");
-assert(appJs.includes("導向目標可開啟，建議確認原連結是否應更新"), "Main GUI should explain reachable client redirect targets.");
-assert(appJs.includes("導向目標是外部網站，請人工確認是否可開啟"), "Main GUI should explain external target boundaries.");
-assert(appJs.includes("row.append(detailLine(\"瀏覽器端導向\""), "Main GUI should render client redirect evidence as an issue detail line.");
-assert(appJs.includes("header.append(metaBadge(\"瀏覽器端導向\", \"impact\"))"), "Main GUI should render a client redirect evidence badge.");
+assert(!indexHtml.includes("id=\"filter-bar\""), "Main GUI should not render the interpretation filter workspace.");
+assert(!indexHtml.includes("id=\"broken-table\""), "Main GUI should not render the item-level interpretation list.");
+assert(!indexHtml.includes("待判讀結果</h2>"), "Main GUI should not carry the item-level interpretation workspace heading.");
+assert(indexHtml.includes("id=\"broken-count\""), "Main GUI should keep the scan-status interpretation count summary.");
+assert(indexHtml.includes("href=\"/report-analyzer.html\""), "Main GUI should keep navigation to Report Analyzer for item-level review.");
+assert(appJs.includes("buildInterpretationView"), "Main GUI should still derive interpretation counts for scan status.");
+assert(appJs.includes("updateIssueBreakdown"), "Main GUI should still update scan-status interpretation counts.");
+assert(!appJs.includes("renderBrokenTable"), "Main GUI should not render item-level interpretation cards.");
+assert(!appJs.includes("formatClientRedirectEvidence"), "Main GUI should leave client redirect evidence formatting to Report Analyzer.");
 
 const cases = fixture.broken.map((item) => item.confirmation?.clientRedirectEvidence);
 assert(cases.some((item) => item?.detected && item.reason === "target_reachable"), "Fixture should include reachable target evidence.");

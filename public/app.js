@@ -63,8 +63,6 @@ const brokenCount = document.querySelector("#broken-count");
 const skipped = document.querySelector("#skipped");
 const currentUrl = document.querySelector("#current-url");
 const logLocation = document.querySelector("#log-location");
-const brokenTable = document.querySelector("#broken-table");
-const resultSummary = document.querySelector("#result-summary");
 const eventLog = document.querySelector("#event-log");
 const issueNotFound = document.querySelector("#issue-not-found");
 const issueProtected = document.querySelector("#issue-protected");
@@ -90,7 +88,6 @@ const incrementalKnown = document.querySelector("#incremental-known");
 const incrementalReused = document.querySelector("#incremental-reused");
 const incrementalDisappeared = document.querySelector("#incremental-disappeared");
 const incrementalPriority = document.querySelector("#incremental-priority");
-const filterBar = document.querySelector("#filter-bar");
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const defaultUserAgent = `${browserUserAgent} LocalLinkChecker/1.0`;
 const sessionHeaderName = "X-Link-Checker-Session";
@@ -152,7 +149,6 @@ const buttonLabels = {
   stopQueue: "停止佇列",
 };
 const unfinishedScanWarning = "檢測尚未完成。切換功能頁面會中斷目前頁面的即時進度顯示，確定要離開嗎？";
-const defaultInterpretationFilter = "action_required";
 const interpretationCategories = [
   "action_required",
   "needs_review",
@@ -176,7 +172,6 @@ let currentJobId = null;
 let eventSource = null;
 let currentReport = null;
 let currentReportUrl = null;
-let currentFilter = defaultInterpretationFilter;
 let queuePollTimer = null;
 let watchedQueueItemId = null;
 let watchedQueueUrl = null;
@@ -357,19 +352,6 @@ queueTable.addEventListener("click", async (event) => {
 
 clearLogButton.addEventListener("click", () => {
   eventLog.replaceChildren();
-});
-
-filterBar.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-filter]");
-  if (!button) {
-    return;
-  }
-
-  currentFilter = button.dataset.filter;
-  updateActiveFilter();
-  if (currentReport) {
-    renderBrokenTableForReport(currentReport);
-  }
 });
 
 function startSessionHeartbeat() {
@@ -676,14 +658,9 @@ async function startCheck() {
   watchedQueueItemId = null;
   watchedQueueUrl = null;
   manualWatchSelected = false;
-  currentFilter = defaultInterpretationFilter;
-  updateActiveFilter();
   downloadButton.disabled = true;
   setScanEmptyStateVisible(false);
-  renderBrokenEmptyState("正在檢查", "發現需要判讀的結果後會顯示在這裡。");
-  resultSummary.textContent = "檢查中";
   updateIssueBreakdown(emptyInterpretationCounts(), 0);
-  updateFilterCounts(emptyInterpretationCounts(), 0);
   updateRedirectBreakdown(emptyRedirectBreakdown(), 0);
   updateIncrementalSummary(null);
   pendingUrls.textContent = "0";
@@ -693,7 +670,6 @@ async function startCheck() {
   updateUrlPatternDisplay(null);
   updateScanAdvice(null);
   updateCoverageNotice(null);
-  updateActiveFilter();
   setProgressValue(0);
   showLogLocation(null);
   updateWatchingSite();
@@ -948,14 +924,10 @@ function watchQueueItemObject(item, { manual }) {
   manualWatchSelected = manual || manualWatchSelected;
   currentReport = null;
   currentReportUrl = item.jobId ? `/api/jobs/${item.jobId}/report` : null;
-  currentFilter = defaultInterpretationFilter;
-  updateActiveFilter();
   scanInProgress = true;
   downloadButton.disabled = true;
   eventLog.replaceChildren();
   eventLog.removeAttribute("aria-label");
-  renderBrokenTable([]);
-  resultSummary.textContent = "檢查中";
   updateIncrementalSummary(null);
   updateCoverageNotice(null);
   showLogLocation(null);
@@ -994,7 +966,6 @@ async function viewQueueReport(id) {
   manualWatchSelected = true;
   currentReport = data;
   currentReportUrl = `/api/queue/items/${id}/report`;
-  currentFilter = defaultInterpretationFilter;
   renderReport(data);
   setState("finished");
   setBusy(false);
@@ -1113,7 +1084,6 @@ function updateStatus(status) {
   const interpretationTotal = countDisplayInterpretations(interpretationCounts);
   brokenCount.textContent = interpretationTotal;
   updateIssueBreakdown(interpretationCounts, interpretationTotal);
-  updateFilterCounts(interpretationCounts, interpretationTotal);
   updateRedirectBreakdown(status.redirectByType || emptyRedirectBreakdown(), status.redirects || 0);
   updateConfirmationBreakdown(emptyConfirmationBreakdown());
   updateIncrementalSummary(null);
@@ -1389,7 +1359,6 @@ function renderReport(report) {
   const broken = hasBrokenDetails ? report.broken : [];
   const interpretationView = buildInterpretationView(report);
   const interpretationTotal = interpretationView.displayTotal;
-  resultSummary.textContent = `${interpretationTotal} 筆需判讀結果`;
   brokenCount.textContent = interpretationTotal;
   const reportPagesCrawled = Number(summary.pagesCrawled || 0);
   const reportMaxPages = Number(options.maxPages || 0);
@@ -1413,14 +1382,10 @@ function renderReport(report) {
   skipped.textContent = summary.skippedExternal || 0;
   setProgressValue(getReportUrlValidationProgress(report));
   updateIssueBreakdown(interpretationView.counts, interpretationTotal);
-  updateFilterCounts(interpretationView.counts, interpretationTotal);
   updateRedirectBreakdown(summary.redirectByType || emptyRedirectBreakdown(), summary.redirects || 0);
   updateConfirmationBreakdown(summary.confirmation || (Array.isArray(report.checked) ? buildConfirmationBreakdown(report.checked) : buildConfirmationBreakdown(broken)));
   updateIncrementalSummary(summary.incremental || null);
   updateCoverageNotice(buildCoverageNotice(report));
-  updateActiveFilter();
-
-  renderBrokenTableForReport(report);
 }
 
 function getReportPhaseState(report) {
@@ -1573,200 +1538,11 @@ function updateCoverageNotice(message) {
   coverageNotice.textContent = message;
 }
 
-function renderBrokenTableForReport(report) {
-  const hasBrokenDetails = Array.isArray(report.broken);
-  const interpretationView = buildInterpretationView(report);
-  renderBrokenTable(interpretationView.displayItems, {
-    detailsDeferred: !hasBrokenDetails && interpretationView.displayTotal > 0,
-    completeHandoff: report?.runStatus?.status === "complete",
-    totalBroken: interpretationView.displayTotal,
-  });
-}
-
-function renderBrokenTable(broken, { detailsDeferred = false, completeHandoff = false, totalBroken = broken.length } = {}) {
-  if (detailsDeferred) {
-    renderBrokenEmptyState(
-      completeHandoff ? "判讀清單已保存到完整報告" : "掃描結果未完整完成",
-      completeHandoff
-        ? "為避免大型報告在完成瞬間卡住，這裡先顯示摘要；下載完整 report.json，或查看 log 目錄中的 broken.csv 取得交辦明細。"
-        : "此結果不適合作為完整交辦清單；請下載 report.json 並查看 log 目錄中的 events.log 確認原因。",
-    );
-    return;
-  }
-
-  const visible = currentFilter === "all"
-    ? broken
-    : broken.filter((item) => getInterpretation(item).category === currentFilter);
-
-  if (totalBroken === 0) {
-    const hasReport = Boolean(currentReport);
-    renderBrokenEmptyState(
-      hasReport ? "沒有需要判讀的結果" : "正在等待結果",
-      hasReport ? "這份報告目前沒有需要列出的判讀項目。" : "檢查進行中，發現需要判讀的結果時會立即出現在這裡。",
-    );
-    return;
-  }
-
-  if (visible.length === 0) {
-    renderBrokenEmptyState("此分類沒有待判讀結果", "切回「全部待判讀」可查看其他分類。");
-    return;
-  }
-
-  brokenTable.replaceChildren(...visible.map(renderBrokenItem));
-}
-
 function setScanEmptyStateVisible(isVisible) {
   if (!scanEmptyState) {
     return;
   }
   scanEmptyState.hidden = !isVisible;
-}
-
-function renderBrokenEmptyState(title, body) {
-  brokenTable.replaceChildren(makeEmptyState(title, body, "compact-empty-state broken-empty"));
-}
-
-function makeEmptyState(title, body, modifier = "") {
-  const wrapper = document.createElement("div");
-  wrapper.className = modifier ? `empty-state ${modifier}` : "empty-state";
-  const heading = document.createElement("strong");
-  heading.textContent = title;
-  const text = document.createElement("p");
-  text.textContent = body;
-  wrapper.append(heading, text);
-  return wrapper;
-}
-
-function renderBrokenItem(item) {
-  const row = document.createElement("article");
-  row.className = "broken-item";
-
-  const header = document.createElement("div");
-  header.className = "broken-item-header";
-  const statusCode = document.createElement("span");
-  const interpretation = getInterpretation(item);
-  const issueType = item.issueType || getIssueType(item);
-  const statusClass = `interpretation-${interpretation.category.replaceAll("_", "-")}`;
-  statusCode.className = `status-code ${statusClass}`;
-  statusCode.textContent = interpretation.label;
-  header.append(statusCode, metaBadge(formatIssueLabel(item)), metaBadge(item.method || "HTTP"), metaBadge(item.status ? `Status ${item.status}` : "No status"));
-  const incrementalBadge = getIncrementalResultBadge(item);
-  if (incrementalBadge) {
-    header.append(metaBadge(incrementalBadge.text, incrementalBadge.modifier));
-  }
-  if (shouldShowClientRedirectEvidence(item.confirmation?.clientRedirectEvidence)) {
-    header.append(metaBadge("瀏覽器端導向", "impact"));
-  }
-
-  row.append(header, detailLine("URL", item.url));
-  row.append(detailLine("建議處理", interpretation.action));
-  row.append(detailLine("技術原因", formatIssueLabel(item)));
-  if (item.checkedAt) {
-    row.append(detailLine("檢查時間", item.checkedAt));
-  }
-  if (item.canonicalUrl && item.canonicalUrl !== item.url) {
-    row.append(detailLine("Canonical URL", item.canonicalUrl));
-  }
-  if (item.contentLength !== null && item.contentLength !== undefined) {
-    row.append(detailLine("Content-Length", item.contentLength));
-  }
-
-  if (item.redirected) {
-    row.append(detailLine("轉址", `${item.redirectCount} 次轉址，最終 URL：${item.finalUrl}`));
-  }
-  if (item.classification === "protected" || issueType === "access_denied" || item.diagnosis || item.error) {
-    row.append(detailLine("診斷", formatDiagnosis(item)));
-  }
-  if (item.confirmation?.enabled) {
-    row.append(detailLine("二次確認", formatConfirmationStatus(item.confirmation)));
-  }
-  if (shouldShowClientRedirectEvidence(item.confirmation?.clientRedirectEvidence)) {
-    row.append(detailLine("瀏覽器端導向", formatClientRedirectEvidence(item.confirmation.clientRedirectEvidence)));
-  }
-  if (item.incremental?.reused) {
-    row.append(detailLine("增量來源", formatIncrementalProvenance(item.incremental)));
-  }
-
-  const sources = (item.sources || []).slice(0, 4);
-  if (sources.length > 0) {
-    const sourceText = sources
-      .map((source) => `${source.page} (${source.tag}[${source.attribute}])`)
-      .join("；");
-    row.append(detailLine("發現位置", sourceText));
-  } else {
-    row.append(detailLine("發現位置", "無來源資料"));
-  }
-  if ((item.sources || []).length > 4) {
-    row.append(detailLine("更多位置", `另有 ${(item.sources || []).length - 4} 個位置`));
-  }
-
-  return row;
-}
-
-function detailLine(label, value) {
-  const row = document.createElement("div");
-  row.className = "broken-detail-line";
-  const labelElement = document.createElement("span");
-  labelElement.className = "detail-label";
-  labelElement.textContent = label;
-  const valueElement = document.createElement("span");
-  valueElement.className = "detail-value";
-  valueElement.textContent = value;
-  row.append(labelElement, valueElement);
-  return row;
-}
-
-function getIncrementalResultBadge(item) {
-  if (item.incremental?.reused) {
-    return { text: "復用", modifier: "impact" };
-  }
-  if (currentReport?.summary?.incremental?.enabled) {
-    return {
-      text: item.incremental?.classification === "new" ? "新增" : "已重查",
-      modifier: "",
-    };
-  }
-  return null;
-}
-
-function formatIncrementalProvenance(incremental) {
-  const parts = [];
-  if (incremental.baselineCheckedAt) {
-    parts.push(`基準檢查時間 ${incremental.baselineCheckedAt}`);
-  }
-  if (incremental.reuseSource) {
-    parts.push(`來源 ${formatIncrementalReuseSource(incremental.reuseSource)}`);
-  }
-  if (incremental.reason) {
-    parts.push(formatIncrementalReason(incremental.reason));
-  }
-  return parts.length ? parts.join("；") : "復用上次穩定結果";
-}
-
-function formatIncrementalReuseSource(source) {
-  const labels = {
-    state: "scan state",
-    baseline_report: "baseline report",
-  };
-  return labels[source] || source;
-}
-
-function formatIncrementalReason(reason) {
-  const labels = {
-    stable_known_policy_match_ttl_valid: "設定相同且 TTL 未過期",
-    listed_in_sitemap: "列於 sitemap",
-    sitemap_lastmod_newer: "sitemap lastmod 較新",
-    sitemap_lastmod_unchanged: "sitemap lastmod 未變",
-    sitemap_lastmod_not_newer: "sitemap lastmod 未更新",
-  };
-  return labels[reason] || reason;
-}
-
-function metaBadge(value, modifier = "") {
-  const span = document.createElement("span");
-  span.className = modifier ? `meta-badge ${modifier}` : "meta-badge";
-  span.textContent = value;
-  return span;
 }
 
 updateAdvancedSummary();
@@ -2053,14 +1829,6 @@ function updateIssueBreakdown(counts, total) {
   brokenCount.textContent = total || 0;
 }
 
-function updateFilterCounts(counts, total) {
-  for (const button of filterBar.querySelectorAll("button[data-filter]")) {
-    const filter = button.dataset.filter;
-    const count = filter === "all" ? total : counts[filter] || 0;
-    button.querySelector("span").textContent = count;
-  }
-}
-
 function updateRedirectBreakdown(counts, total) {
   redirectTotal.textContent = total || 0;
   redirectPermanent.textContent = counts.permanent_redirect || 0;
@@ -2104,12 +1872,6 @@ function updateIncrementalSummary(incremental) {
   incrementalPriority.textContent = `${priority.boosted || 0} / ${priority.deferred || 0}`;
 }
 
-function updateActiveFilter() {
-  for (const button of filterBar.querySelectorAll("button[data-filter]")) {
-    button.classList.toggle("active", button.dataset.filter === currentFilter);
-  }
-}
-
 function getIssueType(item) {
   if (item.classification === "redirect_error") {
     return item.issueType || "unknown_error";
@@ -2132,147 +1894,4 @@ function getIssueType(item) {
     return "http_error";
   }
   return "unknown_error";
-}
-
-function formatIssueLabel(item) {
-  if (item.classification === "protected") {
-    return item.protection?.provider ? `防護阻擋: ${item.protection.provider}` : "防護阻擋";
-  }
-  if ((item.issueType || getIssueType(item)) === "access_denied") {
-    return "存取被拒";
-  }
-  if (item.classification === "redirect_error") {
-    if ((item.issueType || getIssueType(item)) === "redirect_to_error") {
-      return "轉址後無法到達";
-    }
-    if ((item.issueType || getIssueType(item)) === "too_many_redirects") {
-      return "轉址過多";
-    }
-    if ((item.issueType || getIssueType(item)) === "redirect_loop") {
-      return "轉址循環";
-    }
-    return "轉址無法到達";
-  }
-  if ((item.issueType || getIssueType(item)) === "not_found") {
-    return "404 / 410";
-  }
-  if ((item.issueType || getIssueType(item)) === "timeout") {
-    return "逾時";
-  }
-  if ((item.issueType || getIssueType(item)) === "network_error") {
-    return "網路錯誤";
-  }
-  return item.status ? `HTTP ${item.status}` : "錯誤";
-}
-
-function formatDiagnosis(item) {
-  const status = item.status ? `HTTP ${item.status}` : "未取得 HTTP 狀態";
-  if ((item.issueType || getIssueType(item)) === "access_denied") {
-    return item.diagnosis || `${status}，伺服器拒絕目前工具請求，需人工確認。`;
-  }
-  const evidence = item.protection?.evidence?.join("、");
-  const diagnostics = [
-    evidence ? `證據：${evidence}` : "",
-    item.blockedReason ? `原因：${item.blockedReason}` : "",
-    item.suspectedWaf ? "疑似 WAF" : "",
-    item.suspectedBot ? "疑似 Bot challenge" : "",
-  ].filter(Boolean).join("，");
-  return diagnostics ? `${status}，${diagnostics}` : status;
-}
-
-function formatConfirmationStatus(confirmation) {
-  if (!confirmation.enabled) {
-    return "未啟用";
-  }
-  if (!confirmation.candidate) {
-    return "非二次確認候選";
-  }
-  if (!confirmation.checked) {
-    return `未複查${confirmation.reason ? `（${formatConfirmationReason(confirmation.reason)}）` : ""}`;
-  }
-
-  const labels = {
-    recovered: "已恢復",
-    needs_review: "需複查",
-    confirmed_missing: "確認不存在",
-  };
-  const label = labels[confirmation.outcome] || confirmation.outcome || "未知";
-  const status = confirmation.status ? `HTTP ${confirmation.status}` : "未取得 HTTP 狀態";
-  const checkedAt = confirmation.checkedAt ? `，${confirmation.checkedAt}` : "";
-  return `${label}（${status}${checkedAt}）`;
-}
-
-function formatConfirmationReason(reason) {
-  const labels = {
-    disabled: "未啟用",
-    not_candidate: "非候選",
-    queued: "已排入複查",
-    per_host_limit: "超過每 host 上限",
-    global_limit: "超過全域上限",
-    stopped: "已停止",
-    ok: "可正常開啟",
-    still_not_found: "仍為 404 / 410",
-    blocked_waf: "疑似 WAF 阻擋",
-    blocked_bot: "疑似 Bot challenge",
-    rate_limited: "被限流",
-    access_denied: "存取被拒",
-    timeout: "逾時",
-    network_error: "網路錯誤",
-    unknown: "結果不明",
-  };
-  return labels[reason] || reason;
-}
-
-function shouldShowClientRedirectEvidence(evidence) {
-  return Boolean(evidence?.detected);
-}
-
-function formatClientRedirectEvidence(evidence) {
-  if (!evidence?.detected) {
-    return "未偵測到瀏覽器端導向";
-  }
-
-  const parts = [formatClientRedirectSource(evidence)];
-  if (evidence.targetUrl) {
-    parts.push(`導向目標：${evidence.targetUrl}`);
-  }
-
-  if (evidence.targetChecked) {
-    const status = evidence.targetStatus ? `HTTP ${evidence.targetStatus}` : "未取得 HTTP 狀態";
-    parts.push(`${formatClientRedirectReason(evidence.reason)}（${status}）`);
-  } else {
-    parts.push(formatClientRedirectReason(evidence.reason));
-  }
-
-  if (evidence.targetFinalUrl && evidence.targetFinalUrl !== evidence.targetUrl) {
-    parts.push(`最終網址：${evidence.targetFinalUrl}`);
-  }
-
-  return parts.filter(Boolean).join("；");
-}
-
-function formatClientRedirectSource(evidence) {
-  const sourceLabels = {
-    meta_refresh: "錯誤頁包含 meta refresh",
-    script_literal: "錯誤頁包含 JavaScript 導向",
-  };
-  const source = sourceLabels[evidence.source] || "錯誤頁包含瀏覽器端導向";
-  return evidence.attribute ? `${source}（${evidence.attribute}）` : source;
-}
-
-function formatClientRedirectReason(reason) {
-  const labels = {
-    target_reachable: "導向目標可開啟，建議確認原連結是否應更新",
-    target_not_checked_external: "導向目標是外部網站，請人工確認是否可開啟",
-    target_still_not_found: "導向目標仍是 404 / 410，建議人工確認",
-    target_blocked_waf: "導向目標疑似被 WAF 阻擋，建議人工確認",
-    target_blocked_bot: "導向目標疑似遇到 Bot challenge，建議人工確認",
-    target_blocked_by_security_policy: "導向目標被安全政策阻擋，建議人工確認",
-    target_timeout: "導向目標檢查逾時，建議人工確認",
-    target_network_error: "導向目標發生網路錯誤，建議人工確認",
-    target_unknown: "導向目標結果不明，建議人工確認",
-    target_not_http_or_invalid: "導向目標不是可檢查的 HTTP(S) 網址",
-    target_queued: "導向目標尚未完成檢查",
-  };
-  return labels[reason] || reason || "導向目標結果不明，建議人工確認";
 }
