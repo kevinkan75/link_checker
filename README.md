@@ -56,7 +56,7 @@ Portable launcher 簽章狀態以 build manifest 為準，可能是未簽或 loc
 .\gui.cmd
 ```
 
-輸入網站 URL 後按「開始檢查」。完成後，GUI 會在 `logs/` 建立本次掃描資料夾；正常完成時保留 `broken.csv` 與 `report.json`，若掃描未完整完成或失敗則保留 `report.json` 與 `events.log`。
+輸入網站 URL 後按「開始檢查」。完成後，GUI 會在 `logs/` 建立本次掃描資料夾；執行正常完成時保留 `broken.csv` 與 `report.json`，若掃描中途停止或執行失敗則保留 `report.json` 與 `events.log`。
 
 GUI 的「連結檢查」使用較保守的日常掃描設定，並預設檢查外部連結。
 
@@ -169,14 +169,14 @@ CLI 預設只檢查站內連結；若要檢查外部連結，需加上 `--extern
 
 ## 輸出檔案
 
-GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。正常完成時只保留兩個檔案：
+GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。執行正常完成時只保留兩個檔案：
 
 | 檔案 | 用途 |
 | --- | --- |
 | `broken.csv` | 可用 Excel 開啟的待處理 / 待確認連結清單。 |
 | `report.json` | 完整掃描結果，也是主要資料來源。 |
 
-一般交辦請開啟 `broken.csv`；需要完整存查或重新分析時使用 `report.json`。若掃描未完整完成或失敗，工具只保留 `report.json` 與 `events.log` 供確認原因，不會產生可能被誤認為完整交辦清單的 `broken.csv`。
+一般交辦請開啟 `broken.csv`；需要完整存查、重新分析或確認覆蓋範圍時使用 `report.json`。若掃描中途停止或執行失敗，工具只保留 `report.json` 與 `events.log` 供確認原因，不會產生可能被誤認為完整交辦清單的 `broken.csv`。
 
 ## 外部連結分析與報告分析
 

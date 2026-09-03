@@ -666,16 +666,18 @@ GUI server 是本機 HTTP server，不是遠端服務。主要 API：
 | `POST` | `/api/queue/stop` | 停止佇列。 |
 | `GET` | `/api/queue/items/:id/report` | 取得佇列項目的 report。 |
 
-GUI 會依 scan run status 保存最小輸出：
+GUI 會依 `runStatus.status` 保存最小輸出：
 
 - `complete`：`broken.csv`、`report.json`。
 - `partial` 或 `failed`：`report.json`、`events.log`。
 
-`report.json` 持續是完整、正式的主契約；`events.log` 只保留未完整或失敗掃描的追查資訊。GUI 不再預設產生 summary、外連 CSV、NDJSON sidecar、external summary、README 或 per-scan manifest。
+此處的 `complete`、`partial`、`failed` 指 execution status。`summary.coverage.status = "incomplete"` 代表探索或驗證覆蓋範圍有限，不會單獨改變 GUI artifact set；覆蓋限制應由 `report.json`、GUI notice 或 Analyzer notice 呈現。
+
+`report.json` 持續是完整、正式的主契約；`events.log` 只保留中途停止或執行失敗掃描的追查資訊。GUI 不再預設產生 summary、外連 CSV、NDJSON sidecar、external summary、README 或 per-scan manifest。
 
 CLI 使用 `--output <file>` 時會寫出指定 report，並在同目錄建立 `manifest.json`。
 
-`broken.csv` 是給承辦人交辦與存查使用的 interpretation-first Excel 友善輸出，會以 UTF-8 BOM 與 CRLF 寫出。`complete` 掃描固定使用下列 9 欄：
+`broken.csv` 是給承辦人交辦與存查使用的 interpretation-first Excel 友善輸出，會以 UTF-8 BOM 與 CRLF 寫出。`runStatus.status = "complete"` 的掃描固定使用下列 9 欄：
 
 - `判讀分類`
 - `建議處理`
