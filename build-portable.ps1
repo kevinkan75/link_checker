@@ -334,8 +334,22 @@ if not exist "%NODE_EXE%" (
   exit /b 1
 )
 call :enableSystemCa %*
+set "LINK_CHECKER_GUI_WRAPPER=cmd"
+set "LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED="
+
+:runGui
 "%NODE_EXE%" "%~dp0gui-server.mjs" %*
-exit /b %ERRORLEVEL%
+set "GUI_EXIT_CODE=%ERRORLEVEL%"
+if "%GUI_EXIT_CODE%"=="75" (
+  if defined LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED (
+    echo Link Checker system certificate restart did not complete after one retry.
+    exit /b %GUI_EXIT_CODE%
+  )
+  set "LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED=1"
+  call :appendSystemCa
+  goto runGui
+)
+exit /b %GUI_EXIT_CODE%
 
 :enableSystemCa
 if "%~1"=="" exit /b 0
