@@ -803,6 +803,7 @@ class LinkChecker {
       preferGet: this.options.preferGet,
       canonicalStrategy: this.options.canonicalStrategy,
       legacyTls: this.options.legacyTls,
+      systemCa: this.options.systemCa,
       maxHtmlBytes: this.options.maxHtmlBytes,
       maxBodyPreviewBytes: this.options.maxBodyPreviewBytes,
       maxDownloadProbeBytes: this.options.maxDownloadProbeBytes,
@@ -4222,6 +4223,7 @@ async function fetchUrl(url, {
   preferGet = false,
   canonicalStrategy = DEFAULTS.canonicalStrategy,
   legacyTls = false,
+  systemCa = false,
   maxHtmlBytes = DEFAULTS.maxHtmlBytes,
   maxBodyPreviewBytes = DEFAULTS.maxBodyPreviewBytes,
   maxDownloadProbeBytes = DEFAULTS.maxDownloadProbeBytes,
@@ -4254,6 +4256,7 @@ async function fetchUrl(url, {
       preferGet,
       canonicalStrategy,
       legacyTls,
+      systemCa,
       maxHtmlBytes,
       maxBodyPreviewBytes,
       maxDownloadProbeBytes,
@@ -4308,6 +4311,7 @@ async function fetchUrlOnce(url, {
   preferGet,
   canonicalStrategy,
   legacyTls,
+  systemCa,
   maxHtmlBytes,
   maxBodyPreviewBytes,
   maxDownloadProbeBytes,
@@ -4331,6 +4335,7 @@ async function fetchUrlOnce(url, {
         referer,
         canonicalStrategy,
         legacyTls,
+        systemCa,
         maxHtmlBytes,
         maxBodyPreviewBytes,
         maxDownloadProbeBytes,
@@ -4355,6 +4360,7 @@ async function fetchUrlOnce(url, {
         referer,
         canonicalStrategy,
         legacyTls,
+        systemCa,
         maxHtmlBytes,
         maxBodyPreviewBytes,
         maxDownloadProbeBytes,
@@ -4378,6 +4384,7 @@ async function fetchUrlOnce(url, {
       referer,
       canonicalStrategy,
       legacyTls,
+      systemCa,
       maxHtmlBytes,
       maxBodyPreviewBytes,
       maxDownloadProbeBytes,
@@ -4403,6 +4410,7 @@ async function fetchUrlOnce(url, {
       referer,
       canonicalStrategy,
       legacyTls,
+      systemCa,
       maxHtmlBytes,
       maxBodyPreviewBytes,
       maxDownloadProbeBytes,
@@ -4455,7 +4463,7 @@ async function fetchUrlOnce(url, {
       issueType: error.name === "AbortError" || cause?.code === "ETIMEDOUT" ? "timeout" : "network_error",
       diagnosis: error.name === "AbortError"
         ? `Request timed out after ${timeoutMs}ms.`
-        : getNetworkDiagnosis(cause),
+        : getNetworkDiagnosis(cause, { systemCa }),
     };
   }
 }
@@ -4475,11 +4483,14 @@ function getErrorCause(error) {
   };
 }
 
-function getNetworkDiagnosis(cause) {
+function getNetworkDiagnosis(cause, { systemCa = false } = {}) {
   if (isWeakDiffieHellmanError(cause)) {
     return "TLS handshake failed because the server uses a weak Diffie-Hellman key. Enable legacy TLS compatibility only when this site must be checked.";
   }
   if (isCertificateChainError(cause)) {
+    if (systemCa) {
+      return "TLS certificate verification still failed while system CA mode was enabled. Confirm the site in a browser or curl and review the certificate chain or local network trust environment.";
+    }
     return "TLS certificate verification failed because Node could not build a trusted certificate chain. Retry with system CA enabled when the site works in the operating-system browser or curl.";
   }
   if (cause?.code === "EACCES") {
@@ -4810,6 +4821,7 @@ async function request(url, method, {
   referer,
   canonicalStrategy,
   legacyTls,
+  systemCa,
   maxHtmlBytes,
   maxBodyPreviewBytes,
   maxDownloadProbeBytes,
