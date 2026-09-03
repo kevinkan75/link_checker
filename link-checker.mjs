@@ -8888,7 +8888,7 @@ function parseArgs(argv) {
       continue;
     }
     if (arg === "--max-depth") {
-      options.maxDepth = readPositiveInteger(args.shift(), "--max-depth");
+      options.maxDepth = readNonNegativeInteger(args.shift(), "--max-depth");
       continue;
     }
     if (arg === "--concurrency") {
