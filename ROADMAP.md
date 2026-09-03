@@ -6,15 +6,15 @@
 
 ## Current State
 
-- 最新正式版本：`v1.4.0`。
-- 目前沒有已知 release blocker；`v1.4.0` 已正式發布並完成 release validation。
+- 最新正式版本：`v1.4.1`。
+- 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
 
 ## Current Focus
 
-`v1.4.0` 已完成正式發布與 release validation。目前專案進入 maintenance / evidence-driven refinement 階段，沒有已授權的新功能 implementation phase。
+`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。目前專案維持 maintenance / evidence-driven refinement 階段，沒有已授權的新功能 implementation phase。
 
 後續工作以 real-site evidence、實際使用問題、regression evidence 與維護成本作為是否啟動 Future Candidate 的依據；Roadmap 中存在候選項目不代表自動進入實作。
 

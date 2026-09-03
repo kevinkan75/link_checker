@@ -4,7 +4,9 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.4.0`
+目前正式版本：`v1.4.1`
+
+`v1.4.1` 是 maintenance release，重點包括改善 Windows System CA 啟用與 GUI restart lifecycle、TLS 與 discovery coverage 診斷語意、`--max-depth 0` 與 maxPages coverage evidence、一線 GUI 掃描流程，以及避免 `preconnect` / `dns-prefetch` 與正常 reCAPTCHA 使用造成誤判。
 
 ## 適合誰使用
 
@@ -32,7 +34,7 @@ Portable 版本目前以 Windows 本機環境為主要支援方式；原始碼�
 
 ### 使用 portable 版本
 
-1. 從 [v1.4.0 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.4.0/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.4.1 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.4.1/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
