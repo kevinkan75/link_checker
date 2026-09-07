@@ -7,15 +7,11 @@ const governanceFilterInput = document.querySelector("#governance-filter");
 const highRiskInput = document.querySelector("#high-risk-categories");
 const mediumRiskInput = document.querySelector("#medium-risk-categories");
 const trustedDomainsInput = document.querySelector("#trusted-domains");
-const analyzeButton = document.querySelector("#analyze-button");
 const exportJsonButton = document.querySelector("#export-json-button");
 const exportCsvButton = document.querySelector("#export-csv-button");
 const loadState = document.querySelector("#load-state");
 const fileStatus = document.querySelector("#file-status");
 const importEmptyState = document.querySelector("#import-empty-state");
-const flowSelect = document.querySelector("#flow-select");
-const flowAnalyze = document.querySelector("#flow-analyze");
-const flowExport = document.querySelector("#flow-export");
 const metricLinks = document.querySelector("#metric-links");
 const metricDomains = document.querySelector("#metric-domains");
 const metricHigh = document.querySelector("#metric-high");
@@ -81,7 +77,6 @@ const UT1_SECURITY_CATEGORIES = new Set([
   "vpn",
 ]);
 
-const FILE_SIZE_WARN_BYTES = 15 * 1024 * 1024;
 const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
 const LINK_LIST_INITIAL_COUNT = 200;
 const LINK_LIST_INCREMENT = 200;
@@ -170,6 +165,7 @@ const RISK_REASON_LABELS = new Map([
 ]);
 
 let currentAnalysis = null;
+let analysisRequestId = 0;
 let ut1Categories = [];
 let appliedUt1Rules = [];
 let linkListState = {
@@ -211,28 +207,20 @@ pickLinksButton.addEventListener("click", () => {
   linksFileInput.click();
 });
 
-linksFileInput.addEventListener("change", () => {
+linksFileInput.addEventListener("change", async () => {
+  const requestId = ++analysisRequestId;
   const file = linksFileInput.files?.[0];
   if (!file) {
     currentAnalysis = null;
     resetLinkListState();
     exportJsonButton.disabled = true;
     exportCsvButton.disabled = true;
-    analyzeButton.disabled = true;
     setFileStatus(null);
-    setImportFlow("select", "尚未載入外部連結清單");
+    loadState.textContent = "尚未載入分析資料";
     setImportEmptyStateVisible(true);
     return;
   }
-  currentAnalysis = null;
-  resetLinkListState();
-  exportJsonButton.disabled = true;
-  exportCsvButton.disabled = true;
-  analyzeButton.disabled = false;
-  setImportEmptyStateVisible(true);
-  const profile = getFileSizeProfile(file);
-  setFileStatus(profile.message, profile.level);
-  setImportFlow("analyze", `已選擇 ${file.name}（${formatBytes(file.size)}），下一步按「載入並分析」`);
+  await loadAndAnalyzeSelectedFile(file, requestId);
 });
 
 for (const input of [searchInput, riskFilterInput, governanceFilterInput, highRiskInput, mediumRiskInput, trustedDomainsInput]) {
@@ -244,6 +232,20 @@ for (const input of [searchInput, riskFilterInput, governanceFilterInput, highRi
     }
   });
 }
+
+rulesFileInput.addEventListener("change", async () => {
+  if (!currentAnalysis) {
+    return;
+  }
+  try {
+    const ruleIndex = await loadRulesFile();
+    resetLinkListState();
+    currentAnalysis = analyze(currentAnalysis.links, ruleIndex);
+    renderAnalysis(currentAnalysis);
+  } catch (error) {
+    setFileStatus(error.message, "error");
+  }
+});
 
 ut1FolderInput.addEventListener("change", async () => {
   const selectedFiles = [...ut1FolderInput.files];
@@ -329,40 +331,44 @@ ut1DownloadButton.addEventListener("click", () => {
   }
 });
 
-analyzeButton.addEventListener("click", async () => {
+async function loadAndAnalyzeSelectedFile(file, requestId) {
+  currentAnalysis = null;
+  resetLinkListState();
+  exportJsonButton.disabled = true;
+  exportCsvButton.disabled = true;
+  setImportEmptyStateVisible(true);
+  const profile = getFileSizeProfile(file);
+  setFileStatus(profile.message, profile.level);
+  loadState.textContent = `正在載入分析資料：${file.name}（${formatBytes(file.size)}）`;
   try {
-    analyzeButton.disabled = true;
-    const file = linksFileInput.files?.[0];
-    if (file) {
-      const profile = getFileSizeProfile(file);
-      setFileStatus(profile.message, profile.level);
-      setImportFlow("analyze", `正在載入並分析 ${file.name}（${formatBytes(file.size)}）`);
-    } else {
-      setImportFlow("analyze", "正在載入並分析");
-    }
     await yieldToBrowser();
-    const links = await loadLinksFile();
+    const links = await loadLinksFile(file);
+    if (requestId !== analysisRequestId) {
+      return;
+    }
     const ruleIndex = await loadRulesFile();
+    if (requestId !== analysisRequestId) {
+      return;
+    }
     resetLinkListState();
     currentAnalysis = analyze(links, ruleIndex);
     renderAnalysis(currentAnalysis);
     exportJsonButton.disabled = false;
     exportCsvButton.disabled = false;
-    analyzeButton.disabled = false;
-    if (file) {
-      setFileStatus(`${file.name} 已分析，大小 ${formatBytes(file.size)}。`, "ok");
-    }
-    setImportFlow("export", `${getAnalysisStatusText(currentAnalysis)}；可匯出目前篩選結果`);
+    setFileStatus(`${file.name} 已分析，大小 ${formatBytes(file.size)}。`, "ok");
+    loadState.textContent = `${getAnalysisStatusText(currentAnalysis)}；可匯出目前篩選結果`;
   } catch (error) {
+    if (requestId !== analysisRequestId) {
+      return;
+    }
     currentAnalysis = null;
-    analyzeButton.disabled = !linksFileInput.files?.[0];
     exportJsonButton.disabled = true;
     exportCsvButton.disabled = true;
     setFileStatus(error.message, "error");
     setImportEmptyStateVisible(true);
-    setImportFlow("analyze", "載入或分析失敗");
+    loadState.textContent = "載入或分析失敗；請選擇其他檔案重試";
   }
-});
+}
 
 exportJsonButton.addEventListener("click", () => {
   if (!currentAnalysis) {
@@ -378,8 +384,7 @@ exportCsvButton.addEventListener("click", () => {
   downloadText("external-analysis.csv", makeAnalysisCsv(currentAnalysis.filteredLinks), "text/csv");
 });
 
-async function loadLinksFile() {
-  const file = linksFileInput.files?.[0];
+async function loadLinksFile(file = linksFileInput.files?.[0]) {
   if (!file) {
     throw new Error("請先選擇 external-links.csv、external-links.ndjson 或 report.json");
   }
@@ -435,18 +440,12 @@ function getFileSizeProfile(file) {
   if (file.size >= FILE_SIZE_LARGE_BYTES) {
     return {
       level: "warn",
-      message: `${file.name} 大小 ${formatBytes(file.size)}，瀏覽器載入與分析可能會停頓。可先縮小報告範圍；舊有或另行取得的 external-links.csv、external-links.ndjson 仍可匯入。`,
-    };
-  }
-  if (file.size >= FILE_SIZE_WARN_BYTES) {
-    return {
-      level: "warn",
-      message: `${file.name} 大小 ${formatBytes(file.size)}，載入與分析可能需要一點時間。`,
+      message: `${file.name} 大小 ${formatBytes(file.size)}，檔案較大，載入分析時可能出現短暫停頓。`,
     };
   }
   return {
     level: "ok",
-    message: `${file.name} 大小 ${formatBytes(file.size)}，可直接載入並分析。`,
+    message: `${file.name} 大小 ${formatBytes(file.size)}，正在載入分析。`,
   };
 }
 
@@ -1108,24 +1107,6 @@ function setImportEmptyStateVisible(isVisible) {
     return;
   }
   importEmptyState.hidden = !isVisible;
-}
-
-function setImportFlow(stage, message) {
-  loadState.textContent = message;
-  const states = {
-    select: ["active", "", ""],
-    analyze: ["done", "active", ""],
-    export: ["done", "done", "active"],
-  }[stage] || ["active", "", ""];
-  [flowSelect, flowAnalyze, flowExport].forEach((item, index) => {
-    if (!item) {
-      return;
-    }
-    item.classList.remove("active", "done");
-    if (states[index]) {
-      item.classList.add(states[index]);
-    }
-  });
 }
 
 function getAnalysisStatusText(analysis) {
