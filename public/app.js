@@ -1697,22 +1697,41 @@ function getInterpretation(item, report = currentReport) {
 
   const issueType = item.issueType || getIssueType(item);
   const confirmationOutcome = item.confirmation?.outcome;
+  const status = Number.parseInt(item.status, 10);
   const externalLimited = isExternalLimitedResult(item, report);
 
   if (item.ok) {
     return buildInterpretation(item.redirected ? "redirect_ok" : "ok", item);
   }
-  if (issueType === "redirect_to_error" || issueType === "too_many_redirects" || issueType === "redirect_loop") {
+  if (issueType === "redirect_to_error") {
+    if (confirmationOutcome === "confirmed_missing") {
+      return buildMissingInterpretation("action_required", item);
+    }
+    if (confirmationOutcome === "recovered") {
+      return buildInterpretation("needs_review", item);
+    }
+    if (confirmationOutcome === "needs_review") {
+      return buildMissingInterpretation("needs_review", item);
+    }
+    if (status === 404 || status === 410) {
+      return buildMissingInterpretation("likely_problem", item);
+    }
+    return buildInterpretation("action_required", item);
+  }
+  if (issueType === "too_many_redirects" || issueType === "redirect_loop") {
     return buildInterpretation("action_required", item);
   }
   if (issueType === "not_found") {
     if (confirmationOutcome === "confirmed_missing") {
-      return buildInterpretation("action_required", item);
+      return buildMissingInterpretation("action_required", item);
     }
     if (confirmationOutcome === "needs_review") {
-      return buildInterpretation(externalLimited ? "external_limited" : "needs_review", item);
+      return buildMissingInterpretation(externalLimited ? "external_limited" : "needs_review", item);
     }
-    return buildInterpretation("likely_problem", item);
+    if (confirmationOutcome === "recovered") {
+      return buildInterpretation("likely_problem", item);
+    }
+    return buildMissingInterpretation("likely_problem", item);
   }
   if (
     issueType === "protected"
@@ -1760,6 +1779,18 @@ function buildInterpretation(category, item) {
     severity: severity[category] || "review",
     action: actions[category] || actions.needs_review,
     needsManualReview: ["needs_review", "external_limited", "likely_problem"].includes(category),
+  };
+}
+
+function buildMissingInterpretation(category, item) {
+  const confirmed = category === "action_required";
+  return {
+    ...buildInterpretation(category, item),
+    label: confirmed ? "已確認失效" : "請人工確認",
+    action: confirmed
+      ? "建議修正、更新或移除此連結。"
+      : "請先用一般瀏覽器確認此連結是否可正常開啟；若確實失效，再修正、更新或移除此連結。",
+    needsManualReview: !confirmed,
   };
 }
 

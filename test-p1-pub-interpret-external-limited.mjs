@@ -80,6 +80,8 @@ const report = {
       },
     },
     { url: "https://out.example/redirect-error", issueType: "redirect_to_error" },
+    { url: "https://out.example/redirect-missing-unconfirmed", status: 404, issueType: "redirect_to_error" },
+    { url: "https://out.example/redirect-missing-confirmed", status: 404, issueType: "redirect_to_error", confirmation: { outcome: "confirmed_missing" } },
     { url: "https://out.example/missing-confirmed", issueType: "not_found", confirmation: { outcome: "confirmed_missing" } },
     { url: "https://out.example/missing-unconfirmed", status: 404 },
   ],
@@ -88,6 +90,7 @@ const report = {
 const originalFirstRow = { ...report.broken[0] };
 const analysis = sandbox.__reportAnalyzerTest.analyzeReport(report);
 const categories = new Map(analysis.broken.map((item) => [item.url, item.interpretation.category]));
+const labels = new Map(analysis.broken.map((item) => [item.url, item.interpretation.label]));
 
 assert(categories.get("https://out.example/denied") === "external_limited", "external 403 fallback should be external_limited.");
 assert(categories.get("https://out.example/rate-limit") === "external_limited", "external 429 fallback should be external_limited.");
@@ -107,8 +110,14 @@ for (const url of [
 
 assert(categories.get("https://out.example/existing") === "action_required", "existing interpretation.category should override fallback.");
 assert(categories.get("https://out.example/redirect-error") === "action_required", "redirect error fallback should remain action_required.");
+assert(categories.get("https://out.example/redirect-missing-unconfirmed") === "likely_problem", "unconfirmed redirect-to-404 fallback should be likely_problem.");
+assert(labels.get("https://out.example/redirect-missing-unconfirmed") === "請人工確認", "unconfirmed redirect-to-404 fallback should use human-review wording.");
+assert(categories.get("https://out.example/redirect-missing-confirmed") === "action_required", "confirmed redirect-to-404 fallback should be action_required.");
+assert(labels.get("https://out.example/redirect-missing-confirmed") === "已確認失效", "confirmed redirect-to-404 fallback should use confirmed-missing wording.");
 assert(categories.get("https://out.example/missing-confirmed") === "action_required", "confirmed not_found fallback should remain action_required.");
+assert(labels.get("https://out.example/missing-confirmed") === "已確認失效", "confirmed not_found fallback should use confirmed-missing wording.");
 assert(categories.get("https://out.example/missing-unconfirmed") === "likely_problem", "unconfirmed not_found fallback should remain likely_problem.");
+assert(labels.get("https://out.example/missing-unconfirmed") === "請人工確認", "unconfirmed not_found fallback should use human-review wording.");
 assert(report.broken[0].interpretation === originalFirstRow.interpretation, "analysis should not mutate imported rows.");
 
 console.log("ok p1 pub interp external limited");

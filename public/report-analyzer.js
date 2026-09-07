@@ -1383,17 +1383,35 @@ function normalizeInterpretation(item, report) {
   const confirmationOutcome = item.confirmation?.outcome;
   const status = Number.parseInt(item.status, 10);
   const externalLimited = isExternalLimitedResult(item, report);
-  if (issueType === "redirect_to_error" || issueType === "too_many_redirects" || issueType === "redirect_loop") {
+  if (issueType === "redirect_to_error") {
+    if (confirmationOutcome === "confirmed_missing") {
+      return buildMissingInterpretation("action_required");
+    }
+    if (confirmationOutcome === "recovered") {
+      return buildInterpretation("needs_review");
+    }
+    if (confirmationOutcome === "needs_review") {
+      return buildMissingInterpretation("needs_review");
+    }
+    if (status === 404 || status === 410) {
+      return buildMissingInterpretation("likely_problem");
+    }
+    return buildInterpretation("action_required");
+  }
+  if (issueType === "too_many_redirects" || issueType === "redirect_loop") {
     return buildInterpretation("action_required");
   }
   if (issueType === "not_found") {
     if (confirmationOutcome === "confirmed_missing") {
-      return buildInterpretation("action_required");
+      return buildMissingInterpretation("action_required");
     }
     if (confirmationOutcome === "needs_review") {
-      return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
+      return buildMissingInterpretation(externalLimited ? "external_limited" : "needs_review");
     }
-    return buildInterpretation("likely_problem");
+    if (confirmationOutcome === "recovered") {
+      return buildInterpretation("likely_problem");
+    }
+    return buildMissingInterpretation("likely_problem");
   }
   if (
     issueType === "protected"
@@ -1438,6 +1456,18 @@ function buildInterpretation(category) {
     severity: INTERPRETATION_SEVERITY[category] || "review",
     action: INTERPRETATION_ACTIONS[category] || INTERPRETATION_ACTIONS.needs_review,
     needsManualReview: ["needs_review", "external_limited", "likely_problem"].includes(category),
+  };
+}
+
+function buildMissingInterpretation(category) {
+  const confirmed = category === "action_required";
+  return {
+    ...buildInterpretation(category),
+    label: confirmed ? "已確認失效" : "請人工確認",
+    action: confirmed
+      ? "建議修正、更新或移除此連結。"
+      : "請先用一般瀏覽器確認此連結是否可正常開啟；若確實失效，再修正、更新或移除此連結。",
+    needsManualReview: !confirmed,
   };
 }
 

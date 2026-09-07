@@ -142,6 +142,8 @@ Priority 原則：
 - `transientFailure`
 - `needsReview`
 
+Interpretation 依現有 confirmation evidence 判定，不擴大候選資格：直接或轉址後的 `404 / 410` 只有在 `confirmation.outcome=confirmed_missing` 時使用 `action_required`，並以「已確認失效」呈現；未確認時使用 `likely_problem`，以「請人工確認」呈現。`confirmation.outcome=needs_review` 不視為已確認失效，`recovered` 維持既有非 action-required 行為。轉址循環、轉址次數過多與其他非 `404 / 410` 的明確錯誤仍可使用既有 `action_required` /「需處理」。Report schema 維持 `1.3.0`。
+
 `clientRedirectEvidence` 是 `404 / 410` 錯誤頁的輔助證據，不改變 confirmation outcome。主要欄位：
 
 - `detected`

@@ -113,6 +113,7 @@ async function assertSameOriginMatrix(server) {
   assert(confirmedMissing.confirmation?.checked === true, "Case 5 should complete formal confirmation.");
   assert(confirmedMissing.confirmation?.outcome === "confirmed_missing", "Case 5 should remain confirmed_missing.");
   assert(confirmedMissing.interpretation?.category === "action_required", "Case 5 confirmed_missing should remain action_required.");
+  assert(confirmedMissing.interpretation?.label === "已確認失效", "Case 5 confirmed_missing should use evidence-based TA wording.");
 
   const directProtection = findByUrl(report, `${server.origin}/direct-protected`);
   assert(directProtection.issueType === "protected", "Case 6 direct protection should retain protected issueType.");

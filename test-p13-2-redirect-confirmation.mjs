@@ -53,6 +53,10 @@ function assertConfirmedMissing(item, label) {
   assert(item.confirmation?.checked === true, `${label} should be checked by formal confirmation.`);
   assert(item.confirmation?.outcome === "confirmed_missing", `${label} should be confirmed_missing.`);
   assert(item.interpretation?.category === "action_required", `${label} should remain action_required.`);
+  assert(item.interpretation?.label === "已確認失效", `${label} should use confirmed-missing TA wording.`);
+  assert(item.interpretation?.severity === "high", `${label} should retain high severity.`);
+  assert(item.interpretation?.needsManualReview === false, `${label} should not require another manual confirmation.`);
+  assert(item.interpretation?.action === "建議修正、更新或移除此連結。", `${label} should recommend direct maintenance action.`);
 }
 
 function assertNotCandidate(item, label) {
@@ -305,16 +309,19 @@ async function assertRedirectConfirmationMatrix() {
     assert(recovered.issueType === "redirect_to_error", "Recovered redirect should preserve original redirect_to_error issueType.");
     assert(recovered.confirmation?.outcome === "recovered", "Recovered redirect should record recovered confirmation.");
     assert(recovered.interpretation?.category === "needs_review", "Recovered redirect should need review, not action_required.");
+    assert(recovered.interpretation?.label !== "已確認失效", "Recovered redirect must not use confirmed-missing wording.");
 
     const timeout = findByPath(report, "/timeout-confirm");
     assert(timeout.confirmation?.outcome === "needs_review", "Timeout confirmation should be needs_review.");
     assert(timeout.confirmation?.reason === "timeout", "Timeout confirmation should preserve timeout reason.");
     assert(timeout.interpretation?.category === "needs_review", "Timeout confirmation should need review.");
+    assert(timeout.interpretation?.label === "請人工確認", "Unresolved 404 confirmation should use human-review wording.");
 
     const protectedConfirmation = findByPath(report, "/protected-confirm");
     assert(protectedConfirmation.confirmation?.outcome === "needs_review", "Protection confirmation should be needs_review.");
     assert(protectedConfirmation.confirmation?.reason === "blocked_bot" || protectedConfirmation.confirmation?.reason === "blocked_waf", "Protection confirmation should preserve protection reason.");
     assert(protectedConfirmation.interpretation?.category === "needs_review", "Protection confirmation should need review.");
+    assert(protectedConfirmation.interpretation?.label === "請人工確認", "Protection-limited 404 confirmation should not look confirmed missing.");
 
     const clientRedirect = findByPath(report, "/client-redirect-confirm");
     assert(clientRedirect.confirmation?.outcome === "confirmed_missing", "Client redirect evidence should not change confirmation outcome.");
@@ -323,8 +330,14 @@ async function assertRedirectConfirmationMatrix() {
 
     assertNotCandidate(findByPath(report, "/redirect-500"), "redirect -> 500");
     assertNotCandidate(findByPath(report, "/redirect-403"), "redirect -> 403");
-    assertNotCandidate(findByPath(report, "/redirect-loop-a"), "redirect loop");
-    assertNotCandidate(findByPath(report, "/too-many-a"), "too many redirects");
+    const redirectLoop = findByPath(report, "/redirect-loop-a");
+    assertNotCandidate(redirectLoop, "redirect loop");
+    assert(redirectLoop.interpretation?.category === "action_required", "Redirect loop should remain action_required.");
+    assert(redirectLoop.interpretation?.label === "需處理", "Redirect loop should preserve the non-404 action_required label.");
+    const tooManyRedirects = findByPath(report, "/too-many-a");
+    assertNotCandidate(tooManyRedirects, "too many redirects");
+    assert(tooManyRedirects.interpretation?.category === "action_required", "Too many redirects should remain action_required.");
+    assert(tooManyRedirects.interpretation?.label === "需處理", "Too many redirects should preserve the non-404 action_required label.");
     assertNotCandidate(findByPath(report, "/protected-initial"), "protected initial");
     assertNotCandidate(findByPath(report, "/network-error"), "network error");
     assertNotCandidate(findByPath(report, "/direct-timeout"), "direct timeout");
@@ -367,6 +380,9 @@ async function assertConfirm404Disabled() {
     assert(item.confirmation?.enabled === false, "confirm404=false should disable confirmation.");
     assert(item.confirmation?.candidate === false, "confirm404=false should not queue candidates.");
     assert(item.confirmation?.reason === "disabled", "confirm404=false should preserve disabled reason.");
+    assert(item.interpretation?.category === "likely_problem", "Unconfirmed redirect to 404 should be likely_problem.");
+    assert(item.interpretation?.label === "請人工確認", "Unconfirmed redirect to 404 should use human-review wording.");
+    assert(item.interpretation?.needsManualReview === true, "Unconfirmed redirect to 404 should require manual review.");
   } finally {
     await server.close();
   }
@@ -407,6 +423,8 @@ async function assertSharedConfirmationLimits() {
     assert(redirected.confirmation?.candidate === true, "Redirect missing should still be recognized as a candidate at the shared limit.");
     assert(redirected.confirmation?.checked === false, "Redirect missing should not bypass the shared confirmation limit.");
     assert(redirected.confirmation?.reason === "global_limit", "Redirect missing should use existing global_limit reason.");
+    assert(redirected.interpretation?.category === "likely_problem", "Unchecked redirect at the shared limit should be likely_problem.");
+    assert(redirected.interpretation?.label === "請人工確認", "Unchecked redirect at the shared limit should ask for human confirmation.");
   } finally {
     await server.close();
   }

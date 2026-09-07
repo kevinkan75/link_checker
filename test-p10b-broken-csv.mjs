@@ -82,9 +82,9 @@ const csv = makeBrokenCsv([
     },
     interpretation: {
       category: "action_required",
-      label: "需處理",
+      label: "已確認失效",
       severity: "high",
-      action: "請優先確認來源頁，並修正或移除連結。",
+      action: "建議修正、更新或移除此連結。",
       needsManualReview: false,
     },
     sources: [{
@@ -141,13 +141,26 @@ const csv = makeBrokenCsv([
     issueType: "redirect_to_error",
     classification: "redirect_to_error",
     interpretation: {
-      category: "redirect_ok",
-      label: "已轉址仍可用",
-      severity: "info",
-      action: "連結目前可到達；若 final URL 穩定，可視情況更新原連結。",
-      needsManualReview: false,
+      category: "likely_problem",
+      label: "請人工確認",
+      severity: "medium",
+      action: "請先用一般瀏覽器確認此連結是否可正常開啟；若確實失效，再修正、更新或移除此連結。",
+      needsManualReview: true,
     },
     sources: [{ page: "https://example.test/source", text: "轉址樣本" }],
+  },
+  {
+    url: "https://example.test/redirect-loop",
+    issueType: "redirect_loop",
+    classification: "redirect_error",
+    interpretation: {
+      category: "action_required",
+      label: "需處理",
+      severity: "high",
+      action: "請優先確認來源頁，並修正或移除連結。",
+      needsManualReview: false,
+    },
+    sources: [{ page: "https://example.test/source", text: "轉址循環" }],
   },
 ], {
   redactSensitiveQuery: true,
@@ -162,7 +175,7 @@ assert(!csv.includes("final-secret"), "broken.csv leaked final token.");
 assert(!csv.includes("external-secret"), "broken.csv leaked external api key.");
 
 const rows = parseCsv(csv);
-const [header, actionRow, externalRow, timeoutRow, likelyProblemRow, redirectRow] = rows;
+const [header, actionRow, externalRow, timeoutRow, likelyProblemRow, redirectRow, redirectLoopRow] = rows;
 
 assert(JSON.stringify(header) === JSON.stringify(expectedHeaders), "broken.csv headers must match the exact nine-column handoff contract.");
 assert(header.length === 9, "broken.csv must contain exactly nine columns.");
@@ -170,12 +183,13 @@ assert(!header.includes("優先度"), "broken.csv must not expose priority.");
 assert(!header.includes("檢查時間"), "broken.csv must not expose per-row timestamps.");
 assert(!header.includes("needsReview"), "broken.csv must not expose raw needsReview.");
 
-assert(column(actionRow, header, "判讀分類") === "需處理", "Confirmed missing link should use final action_required interpretation.");
+assert(column(actionRow, header, "判讀分類") === "已確認失效", "Confirmed missing link should use evidence-based TA wording.");
+assert(column(actionRow, header, "建議處理") === "建議修正、更新或移除此連結。", "Confirmed missing link should recommend direct maintenance action.");
 assert(column(actionRow, header, "是否需人工確認") === "否", "Confirmed missing link should not require manual review.");
 assert(column(actionRow, header, "問題網址").includes("token=REDACTED"), "Display URL should be redacted.");
 assert(column(actionRow, header, "來源頁").includes("session=REDACTED"), "Source page should be redacted.");
 assert(column(actionRow, header, "最終網址").includes("token=REDACTED"), "Final URL should be redacted.");
-assert(column(actionRow, header, "檢查結果") === "二次確認後仍不存在", "Confirmed missing outcome should be human readable.");
+assert(column(actionRow, header, "檢查結果") === "HTTP 404，二次確認後仍無法找到頁面。", "Confirmed missing outcome should be human readable.");
 
 assert(column(externalRow, header, "判讀分類") === "外站限制", "External limited result should retain its distinct interpretation.");
 assert(column(externalRow, header, "是否需人工確認") === "是", "Final interpretation manual-review flag must override raw needsReview=false.");
@@ -188,6 +202,12 @@ assert(column(likelyProblemRow, header, "判讀分類") === "可能失效", "Lik
 assert(column(likelyProblemRow, header, "檢查結果") === "HTTP 500", "Generic HTTP error should use a concise status result.");
 assert(column(likelyProblemRow, header, "連結文字") === "含,逗號 \"引號\"\n第二行", "CSV escaping should preserve commas, quotes, and newlines.");
 
-assert(column(redirectRow, header, "檢查結果") === "轉址後頁面不存在", "Redirect error should have a human-readable result.");
+assert(column(redirectRow, header, "判讀分類") === "請人工確認", "Unconfirmed redirect to 404 should use human-review wording.");
+assert(column(redirectRow, header, "建議處理") === "請先用一般瀏覽器確認此連結是否可正常開啟；若確實失效，再修正、更新或移除此連結。", "Unconfirmed redirect to 404 should explain the next action.");
+assert(column(redirectRow, header, "是否需人工確認") === "是", "Unconfirmed redirect to 404 should require manual review.");
+assert(column(redirectRow, header, "檢查結果") === "連結轉址至錯誤頁，最終回應為 HTTP 404，目前尚未完成失效確認。", "Redirect error should explain the missing confirmation evidence.");
+
+assert(column(redirectLoopRow, header, "判讀分類") === "需處理", "Non-404 action_required wording should remain unchanged.");
+assert(column(redirectLoopRow, header, "檢查結果") === "轉址循環", "Redirect loop should retain its human-readable result.");
 
 console.log("ok p10b broken csv");

@@ -8140,6 +8140,19 @@ function buildInterpretation(category) {
   };
 }
 
+const CONFIRMED_MISSING_ACTION = "建議修正、更新或移除此連結。";
+const UNCONFIRMED_MISSING_ACTION = "請先用一般瀏覽器確認此連結是否可正常開啟；若確實失效，再修正、更新或移除此連結。";
+
+function buildMissingInterpretation(category) {
+  const confirmed = category === "action_required";
+  return {
+    ...buildInterpretation(category),
+    label: confirmed ? "已確認失效" : "請人工確認",
+    action: confirmed ? CONFIRMED_MISSING_ACTION : UNCONFIRMED_MISSING_ACTION,
+    needsManualReview: !confirmed,
+  };
+}
+
 function buildResultInterpretation(result, { startUrl = "" } = {}) {
   if (result?.interpretation?.category) {
     return {
@@ -8157,10 +8170,19 @@ function buildResultInterpretation(result, { startUrl = "" } = {}) {
   }
   if (issueType === "redirect_to_error") {
     if (result.confirmation?.candidate === true && result.confirmation?.checked === true) {
-      return buildInterpretation(confirmationOutcome === "confirmed_missing" ? "action_required" : "needs_review");
+      if (confirmationOutcome === "confirmed_missing") {
+        return buildMissingInterpretation("action_required");
+      }
+      if (confirmationOutcome === "recovered") {
+        return buildInterpretation("needs_review");
+      }
+      return buildMissingInterpretation("needs_review");
     }
     if (hasMeaningfulProtectionEvidence(result)) {
       return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
+    }
+    if (result.status === 404 || result.status === 410) {
+      return buildMissingInterpretation("likely_problem");
     }
     return buildInterpretation("action_required");
   }
@@ -8169,12 +8191,15 @@ function buildResultInterpretation(result, { startUrl = "" } = {}) {
   }
   if (issueType === "not_found") {
     if (confirmationOutcome === "confirmed_missing") {
-      return buildInterpretation("action_required");
+      return buildMissingInterpretation("action_required");
     }
     if (confirmationOutcome === "needs_review") {
-      return buildInterpretation(externalLimited ? "external_limited" : "needs_review");
+      return buildMissingInterpretation(externalLimited ? "external_limited" : "needs_review");
     }
-    return buildInterpretation("likely_problem");
+    if (confirmationOutcome === "recovered") {
+      return buildInterpretation("likely_problem");
+    }
+    return buildMissingInterpretation("likely_problem");
   }
   if (
     issueType === "protected"

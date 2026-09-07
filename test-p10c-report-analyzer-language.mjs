@@ -51,10 +51,13 @@ for (const column of [
 assert(readme.includes("| 判讀分類 | 常見情況 | 建議處理 |"), "README should document user-facing interpretation guidance.");
 assert(readme.includes("待判讀結果"), "README should use handoff-oriented wording.");
 assert(readme.includes("404 / 410 二次確認"), "README should document 404/410 confirmation.");
+assert(readme.includes("| 已確認失效 |"), "README should document confirmed missing wording.");
+assert(readme.includes("| 請人工確認 |"), "README should document unconfirmed 404 wording.");
 assert(readme.includes("瀏覽器端導向"), "README should explain client-side redirect evidence.");
 assert(readme.includes("輔助證據"), "README should describe client-side redirect as supporting evidence.");
 assert(readme.includes("二次確認結果"), "README should explain that client-side redirect evidence does not replace confirmation evidence.");
 assert(technicalSpec.includes("GUI 與 Report Analyzer 應優先顯示 `interpretation.label`"), "Technical spec should define interpretation-first display.");
+assert(technicalSpec.includes("只有在 `confirmation.outcome=confirmed_missing` 時使用 `action_required`"), "Technical spec should require direct confirmation evidence for actionable missing-link interpretation.");
 assert(technicalSpec.includes("`clientRedirectEvidence` 是 `404 / 410` 錯誤頁的輔助證據"), "Technical spec should define client redirect evidence as additive evidence.");
 assert(technicalSpec.includes("主 GUI 與 Report Analyzer 會在待判讀項目中顯示 `瀏覽器端導向` badge"), "Technical spec should document GUI and Report Analyzer display behavior.");
 

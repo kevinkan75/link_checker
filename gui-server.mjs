@@ -679,13 +679,18 @@ function getCsvInterpretation(item) {
 }
 
 function formatCsvCheckResult(item) {
-  const labels = {
-    recovered: "二次確認時已恢復",
-    confirmed_missing: "二次確認後仍不存在",
-    needs_review: "二次確認時無法確認",
-  };
-  if (labels[item.confirmation?.outcome]) {
-    return labels[item.confirmation.outcome];
+  const confirmationOutcome = item.confirmation?.outcome;
+  if (confirmationOutcome === "recovered") {
+    return "二次確認時已恢復";
+  }
+  if (confirmationOutcome === "confirmed_missing") {
+    if (item.issueType === "redirect_to_error") {
+      return `連結轉址至錯誤頁，二次確認後仍為 HTTP ${item.status || 404}。`;
+    }
+    return `HTTP ${item.status || 404}，二次確認後仍無法找到頁面。`;
+  }
+  if (confirmationOutcome === "needs_review") {
+    return "二次確認時無法確認";
   }
   if (item.suspectedWaf || item.suspectedBot || item.classification === "protected" || item.issueType === "protected") {
     return "網站防護可能阻擋自動檢查";
@@ -697,7 +702,9 @@ function formatCsvCheckResult(item) {
     return "網路連線失敗";
   }
   if (item.issueType === "redirect_to_error") {
-    return item.status === 404 || item.status === 410 ? "轉址後頁面不存在" : "轉址後發生錯誤";
+    return item.status === 404 || item.status === 410
+      ? `連結轉址至錯誤頁，最終回應為 HTTP ${item.status}，目前尚未完成失效確認。`
+      : "轉址後發生錯誤";
   }
   if (item.issueType === "redirect_loop") {
     return "轉址循環";
