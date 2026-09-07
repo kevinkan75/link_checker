@@ -770,32 +770,36 @@ Build script 會重建：
 - `dist\LinkChecker-portable.build-manifest.json`
 - `dist\LinkChecker-portable.zip.sha256`
 
-Build、publication 與 verification 是分開的 release steps。Publication 維持人工操作；release automation 只做 machine-checkable precheck 與 read-only verification，不建立或修改 tag、GitHub Release 或 release assets。
+Build、publication 與 verification 是分開的 release steps。Publication 維持人工操作；release scripts 不建立或修改 tag、GitHub Release 或 release assets。
 
 `scripts/release-preflight.ps1` 在 publication 前驗證：
 
-- source / version / report schema coherence
-- regression result
-- artifact、manifest 與 hash alignment
-- launcher / Node signature expectations
-- release tag / GitHub Release absence
-- publication prerequisites
+- synchronized `main` source 與 clean worktree
+- authoritative tool / README / launcher / report-diff version surfaces
+- report source 與 schema JSON coherence；tool version 不要求等於 report schema version
+- artifact、manifest provenance、package version 與 ZIP SHA256 alignment
+- bundled Node Authenticode `Valid`
+- launcher signature actual status；local/self-signed trust state 只記錄，`HashMismatch` 仍屬失敗
+
+Canonical regression 由正常 SOP 在 build 前直接執行一次 `scripts/run-tests.ps1`；preflight 不重跑。Preflight 也不探測 tag / Release absence、GitHub authentication 或 write permission。
 
 `scripts/release-verify.ps1` 在 publication 後驗證：
 
-- remote release tag
-- GitHub Release metadata
-- exact expected asset set
-- downloaded artifact SHA256
+- remote release tag resolves to the locally approved source commit
+- GitHub Release 存在、非 draft 且非 prerelease
+- `LinkChecker-portable.zip` 與 `LinkChecker-portable.zip.sha256` assets 存在
+- GitHub-reported ZIP digest 等於本機核准 ZIP SHA256
+
+正常 verify 不因額外 historical assets 失敗，也不下載資產；`-Deep` 才下載 ZIP 與 SHA256 重新驗證。
 
 Portable package 的安全與完整性原則：
 
 - GUI server 固定 listen `127.0.0.1`，不對外開放。
 - `.cmd` launcher 只使用同資料夾內的 `runtime\node.exe`，找不到 bundled runtime 時直接停止，不 fallback 到 PATH。
 - package 不安裝 Windows service、不寫 registry startup entries、不設定開機自啟動、不連接遠端控制端。
-- `BUILD-MANIFEST.json` 記錄 portable 資料夾內 bundled file 清單與 SHA256。
-- external build manifest 記錄 zip SHA256、來源 commit、Node runtime version、launcher / Node hash 與 Authenticode 簽章資訊。
-- `LinkChecker-portable.zip.sha256` 是發佈前核對 zip artifact 的簡易入口。
+- `BUILD-MANIFEST.json` 記錄 portable 資料夾內 bundled file 清單與 SHA256，並保留在 ZIP 內供 provenance / diagnostics。
+- external build manifest 記錄 zip SHA256、來源 commit、Node runtime version、launcher / Node hash 與 Authenticode 簽章資訊；正常 release 保留為本機技術 evidence，不要求另行公開。
+- 正常 GitHub Release 公開 `LinkChecker-portable.zip` 與 `LinkChecker-portable.zip.sha256`；SHA256 是使用者核對 artifact 的主要入口。
 - `Start Link Checker.exe` 的簽章狀態以 build manifest 為準；可能是 `NotSigned`，也可能是 local self-signed Authenticode。local self-signed 只適合內部 trust/import 流程，不是公開信任 code signing，不能期待消除 Windows SmartScreen 警告。
 - `LinkChecker-local-code-signing.cer` 只應在 launcher 成功 local self-signed 時保留於 package；它是該簽章憑證的公開憑證，供內部手動信任或匯入流程使用，一般使用者不需要安裝，也不能取代 zip SHA256 / manifest 驗證。
 - 若要正式公開發佈，應在 P11f 或正式 release 流程中評估公開信任 code signing certificate 或可信代管簽章服務。

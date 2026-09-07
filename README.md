@@ -48,7 +48,7 @@ Portable 版本目前以 Windows 本機環境為主要支援方式；原始碼�
 http://127.0.0.1:8787
 ```
 
-Portable launcher 簽章狀態以 build manifest 為準，可能是未簽或 local self-signed。散布或使用前，請核對 release 頁提供的 `LinkChecker-portable.zip.sha256` 與 build manifest；若可攜資料夾內出現 `LinkChecker-local-code-signing.cer`，那只供內部自簽 launcher 的手動信任流程使用，一般使用者不需要安裝。
+下載後可用 release 頁提供的 `LinkChecker-portable.zip.sha256` 核對 ZIP 完整性。解壓縮後的 `BUILD-MANIFEST.json` 保存套件來源與檔案雜湊，供需要技術追查時使用。Portable launcher 可能未簽或使用 local self-signed 簽章；若資料夾內出現 `LinkChecker-local-code-signing.cer`，它只供內部手動信任流程使用，一般使用者不需要安裝。
 
 ### 從原始碼啟動 GUI
 

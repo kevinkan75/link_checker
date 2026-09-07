@@ -6,7 +6,6 @@
 
 ## Current State
 
-- 最新正式版本：`v1.4.1`。
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
@@ -63,7 +62,7 @@ Local Link Checker 是本機輔助工具，不是集中式監控平台、CMS、�
 ## Maintenance Baseline
 
 - `scripts/run-tests.ps1` 是 canonical full regression entry。
-- Formal release flow 維持 automated precheck -> manual publication -> automated read-only verify。
+- Formal release 採 synchronized `main` -> one canonical regression -> fresh portable build -> portable smoke -> manual publication -> lightweight digest verification；一般流程不建立 release branch、formal Scope Freeze 或獨立 Version Preparation phase。
 - Formal release artifacts 必須對齊同一個 source commit。
 - Portable artifacts 每次 formal release 都要重新產生。
 - 詳細維護慣例、release gate、文件分層與歷史記錄分別放在 [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md)、[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)、[docs/README.md](docs/README.md) 與 [docs/archive/README.md](docs/archive/README.md)。

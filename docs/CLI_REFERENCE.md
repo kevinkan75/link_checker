@@ -212,75 +212,57 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 
 ## 維護者：正式版本發布驗證
 
-正式發布仍採人工 publication：先準備並鎖定 source/version，另外執行 portable build，再記錄 source commit 與 artifact SHA256。publication 前必須執行 `scripts\release-preflight.ps1`，立即保存 exit code，且只允許 exit `0` 繼續：
+本專案採單人維護、`main`-based release。正常流程不建立 release branch，不設獨立 Scope Freeze 或 Version Preparation phase；Scope review 可用 `git log <previous-tag>..HEAD` 輕量確認。
 
 ```powershell
-$preflightArgs = @{
-  Version = $version
-  ExpectedSourceCommit = $sourceCommit
-  ExpectedReportSchemaVersion = $reportSchemaVersion
-  ExpectedZipSha256 = $zipSha256
-  ExpectedExternalManifestSha256 = $externalManifestSha256
-  ExpectedPackageManifestSha256 = $packageManifestSha256
-  ExpectedLauncherSha256 = $launcherSha256
-  ExpectedNodeSha256 = $nodeSha256
-  ExpectedLauncherSignatureStatus = $launcherSignatureStatus
-  ExpectedNodeSignatureStatus = $nodeSignatureStatus
-}
+$version = "1.4.2"
 
-if ($nodeSignatureStatus -ne "NotSigned") {
-  $preflightArgs.ExpectedNodeSigner = $nodeSigner
-}
+# 1. Update established version surfaces, commit, and push main.
+# 2. Confirm main, clean worktree, and HEAD == origin/main.
 
-& .\scripts\release-preflight.ps1 @preflightArgs
-$preflightExit = $LASTEXITCODE
+# 3. Run the canonical regression exactly once.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-tests.ps1
+if ($LASTEXITCODE -ne 0) { throw "Canonical regression failed." }
 
-if ($preflightExit -ne 0) {
-  throw "Release preflight failed with exit code $preflightExit"
-}
+# 4. Produce a fresh portable build.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
+if ($LASTEXITCODE -ne 0) { throw "Portable build failed." }
 
-# Manual tag, push, release creation and asset upload may occur only here.
+# 5. Smoke the exact final ZIP from a disposable extraction:
+#    portable CLI, GUI startup, 127.0.0.1 bind, manual and idle shutdown.
+
+# 6. Validate source and artifact identity. This does not rerun regression.
+& .\scripts\release-preflight.ps1 -Version $version
+if ($LASTEXITCODE -ne 0) { throw "Release preflight failed." }
+
+# 7. Manually create/push the annotated tag and GitHub Release.
+#    Upload only LinkChecker-portable.zip and LinkChecker-portable.zip.sha256.
+
+# 8. Verify the published tag, release, assets, and GitHub ZIP digest.
+& .\scripts\release-verify.ps1 -Version $version
+if ($LASTEXITCODE -ne 0) { throw "Release verification failed." }
 ```
 
-`ExpectedNodeSignatureStatus` 為 `NotSigned` 時必須省略 `ExpectedNodeSigner`；其餘已簽狀態必須明確提供預期 signer subject。
+`scripts\run-tests.ps1` 是唯一 canonical full regression entry，每次正常 release 只執行一次。`release-preflight.ps1` 會自動推導 HEAD、report schema、artifact hashes 與簽章狀態，不要求維護者先抄錄再回填。
 
-**A NONZERO PREFLIGHT EXIT IS A HARD PUBLICATION STOP.** 不可忽略、覆寫或在未處理失敗原因前繼續建立 tag、push、建立 Release 或上傳資產。任何 partial publication state 都需要人工審查，不得由腳本自動刪除或修復。
+Preflight 必須確認 bundled Node Authenticode 為 `Valid`。Launcher local/self-signed 狀態只記錄；`NotSigned`、`NotTrusted` 或預期的 local self-signed `UnknownError` 不會單獨阻擋 release，但 `HashMismatch` 仍會失敗。
 
-`release-preflight.ps1` 與 `release-verify.ps1` 只涵蓋可機器檢查的 release 條件；ROADMAP 要求的 launcher / GUI smoke、版本相關 real-site 或 manual smoke evidence，以及 release notes 仍需人工保存。Release notes 應持續列出 source commit、artifact SHA256、launcher / Node 簽章狀態與 smoke result。
+正常公開資產只有：
 
-publication 完成後，在 Windows PowerShell 直接傳入陣列、布林值與 hashtable，執行唯讀驗證並要求 exit `0`：
+- `LinkChecker-portable.zip`
+- `LinkChecker-portable.zip.sha256`
+
+`BUILD-MANIFEST.json` 已在 ZIP 內；external build manifest 繼續由 build 自動產生並保留為本機 technical evidence，不要求另行公開。正常 verify 使用 GitHub asset digest，不下載資產，也不因歷史 release 的額外 assets 失敗。
+
+只有遇到 publication anomaly、疑似 asset replacement 或高保證稽核時，才執行 optional deep verify：
 
 ```powershell
-$expectedAssets = @(
-  "LinkChecker-portable.zip"
-  "LinkChecker-portable.zip.sha256"
-  "LinkChecker-portable.build-manifest.json"
-  "BUILD-MANIFEST.json"
-)
-$expectedAssetSha256 = @{
-  "LinkChecker-portable.zip" = $zipSha256
-  "LinkChecker-portable.zip.sha256" = $zipSha256FileSha256
-  "LinkChecker-portable.build-manifest.json" = $externalManifestSha256
-  "BUILD-MANIFEST.json" = $packageManifestSha256
-}
-
-& .\scripts\release-verify.ps1 `
-  -Version $version `
-  -ExpectedSourceCommit $sourceCommit `
-  -ExpectedTagType Annotated `
-  -ExpectedReleaseTitle $releaseTitle `
-  -ExpectedDraft $false `
-  -ExpectedPrerelease $false `
-  -ExpectedAssets $expectedAssets `
-  -ExpectedAssetSha256 $expectedAssetSha256
-
-$verifyExit = $LASTEXITCODE
-if ($verifyExit -ne 0) {
-  throw "Release verification failed with exit code $verifyExit"
-}
+& .\scripts\release-verify.ps1 -Version $version -Deep
 ```
 
-上例資產名稱只示範目前 portable 命名；每次 release 都必須重新明確鎖定 `ExpectedAssets` 與每個資產的 SHA256，不得從前一版推導。
+Deep mode 下載公開 ZIP 與 `.sha256`，重新計算 ZIP hash 並驗證 sidecar semantics。Real-site scan 屬於 development evidence、bug reproduction 或 feature validation，不是一般 release gate。
+
+正常 release notes 只需列出 main changes、必要的 compatibility / limitations、canonical regression result、source commit 與 portable ZIP SHA256。Signer details、component hashes、manifest hashes 與完整 smoke evidence 留在 technical evidence。
 
 ## 規則檔格式
 

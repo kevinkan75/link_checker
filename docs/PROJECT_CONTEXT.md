@@ -30,17 +30,15 @@
 
 ## Release Gate 原則
 
-- Patch release 不應改變掃描邏輯、CLI 參數、GUI API、report schema 或輸出契約，除非 release notes 明確說明。
-- Formal release flow 維持 `AUTOMATED PRECHECK -> MANUAL PUBLICATION -> AUTOMATED VERIFY`。
-- `scripts/release-preflight.ps1` 在 publication 前檢查 machine-checkable release prerequisites；任何非零 exit 都是 hard publication stop。
-- Publication 本身維持人工操作。
-- `scripts/release-verify.ps1` 在 publication 後執行 read-only verification。
-- 這兩個 release script 不建立 tag、不 push、不建立 GitHub Release、不上傳 assets，也不修復 gh authentication。
-- 正式 release 前必須重建 portable package，不能沿用舊 `dist` 產物。
-- `LinkChecker-portable.zip`、external manifest、package manifest 與 `.sha256` 必須對齊同一個 source commit。
-- Build manifest 的 `gitStatus` 應為空字串。
-- Release notes 必須列出 source commit、zip SHA256、Node runtime、launcher 簽章狀態、Node 簽章狀態與 smoke test 結果。
-- 如果 launcher 維持 `NotSigned`，README、ROADMAP、portable README、manifest 與 release notes 都應如實記錄，並提醒使用 SHA256 / manifest 驗證。
+- 本專案採單人維護、`main`-based formal release；一般 release 不建立 release branch，也不設獨立的 Scope Freeze 或 Version Preparation phase。
+- 發布前確認 `main`、clean worktree 與 `HEAD == origin/main`，並執行一次 `scripts/run-tests.ps1` canonical regression。
+- 每次正式 release 都要重新執行 `build-portable.ps1`，再以最終 ZIP 的 disposable extraction 完成 portable CLI / GUI、`127.0.0.1` bind、manual shutdown 與 idle shutdown smoke。
+- `scripts/release-preflight.ps1` 只驗證 release source、authoritative version surfaces、artifact / manifest provenance、ZIP SHA256 與簽章最低要求；不重跑 regression，也不探測 GitHub publication prerequisites。
+- Build manifest 自動保存 source、file hashes 與簽章 evidence；不要求維護者逐欄手動複核。Bundled Node Authenticode 必須為 `Valid`；launcher local/self-signed 狀態只記錄，除非出現 `HashMismatch` 等完整性失敗，否則不作一般 release blocker。
+- Publication 維持人工操作；正常公開資產只有 `LinkChecker-portable.zip` 與 `LinkChecker-portable.zip.sha256`。Package `BUILD-MANIFEST.json` 留在 ZIP 內，external build manifest 留作本機技術 evidence。
+- `scripts/release-verify.ps1` 正常模式只驗證 tag target、公開 Release 狀態、ZIP / SHA256 assets 與 GitHub ZIP digest；`-Deep` download verification 只用於 publication anomaly 或高保證稽核。
+- Release notes 一般只需 main changes、必要的 compatibility / limitations、canonical regression result、source commit 與 ZIP SHA256。Node / launcher signer、component hashes、manifest hashes與完整 smoke details留在技術 evidence。
+- Real-site scan 屬於 development evidence、bug reproduction 或 feature validation，不是一般 release gate。
 
 ## 文件分層
 
