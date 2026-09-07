@@ -7,14 +7,14 @@
 ## Current State
 
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
-- `v1.5.0` candidate 的 Static Discovery refinement 與 Analyzer maintenance cleanup 已完成 implementation、targeted validation、canonical regression、fresh portable build / CLI-GUI smoke 與 bounded real-site acceptance；正式版本仍為 `v1.4.1`，release preparation 尚未開始。
+- `v1.5.0` candidate 的 Static Discovery refinement 與 Analyzer maintenance cleanup 已完成 implementation、targeted validation、canonical regression、fresh portable build / CLI-GUI smoke 與 bounded real-site acceptance；authoritative version surfaces 已準備完成，formal release 尚未執行。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
 
 ## Current Focus
 
-`v1.5.0` candidate development batch 已完成 implementation、validation 與 active documentation closeout；目前焦點是 development batch safe push，之後才進入獨立的 version preparation。這不是新的功能 phase。
+`v1.5.0` candidate development batch、active documentation closeout 與 version preparation 已完成並整合至 `main`；下一步依 lightweight SOP 執行 formal release。這不是新的功能 phase。
 
 後續工作以 real-site evidence、實際使用問題、regression evidence 與維護成本作為是否啟動 Future Candidate 的依據；Roadmap 中存在候選項目不代表自動進入實作。
 
