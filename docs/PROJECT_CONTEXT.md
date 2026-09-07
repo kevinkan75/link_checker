@@ -9,14 +9,23 @@
 - 掃描結果要協助承辦人判讀與交辦，不替使用者做不可逆決策。
 - Report、CSV、NDJSON、manifest 與 release artifacts 都要保留可追溯性。
 
-## Report Analyzer UX 原則
+## Analyzer UX 原則
 
+- Portable 的正常產品入口是 `Start Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`；External Link Analyzer 從 main GUI 的「外部連結分析」進入，不另設 `analyzer.cmd`。
+- External Link Analyzer 選擇檔案後會自動載入與分析，再顯示結果；匯出是選用操作，不把 Analyzer 呈現成必須逐步完成的 wizard。
 - 待判讀清單優先於摘要、排行與掃描概況。
 - 畫面文案先呈現處理建議，再呈現技術狀態。
 - 本機檔案選取使用「匯入」或「載入」，不要用「上傳」。
 - 技術狀態應盡量用人讀文字，例如 `HTTP 404 找不到頁面`，不要只顯示裸狀態碼。
 - 不在清單卡片顯示沒有脈絡的高 / 中 / 低優先度徽章；CSV 可保留優先度欄位供 Excel 排序。
 - 非二次確認候選不顯示二次確認列；只有真正排入、完成或有具體原因時才顯示二次確認結果。
+
+## Static Discovery 與 coverage 契約
+
+- 起始頁在 `depth=0` 完成既有 static extraction 後，若只產生 0 或 1 個 crawlable same-origin frontier page，且沒有 explicit `--sitemap`、`maxDepth >= 1` 且 page budget 尚有額度，可啟動 conventional `<start-origin>/sitemap.xml` fallback；2 個以上則沿用 normal static crawl，不做這項 auto probe。
+- Automatic XML fallback 重用既有 sitemap fetch/security、parser、seed decision、inventory、page queue、crawler 與 validator。Explicit `--sitemap` 仍有優先權；自動來源不改寫 `options.sitemap`，也不啟用 incremental mode，same-origin、SSRF 與 budget policy 均不變。
+- `sitemap_seed_truncated` 必須有 sitemap seed 因 page budget 被略過的直接證據，例如 `ignoredByReason.max_pages > 0`。Duplicate 或 `already_queued_or_crawled` 本身不構成 truncation；整體 crawl 的 `max_pages_reached` 也是獨立語意。
+- 這項 refinement 不改 report schema；目前仍為 `1.3.0`。
 
 ## 驗證慣例
 

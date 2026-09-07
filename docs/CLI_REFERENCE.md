@@ -157,11 +157,11 @@ P8d 會保守 seed sitemap URL：只 seed same-origin、page-like URL，受 `max
 
 ### Static Discovery Resilience
 
-工具會先完成一般靜態探索。只有起始頁沒有產生任何額外 same-origin crawlable page、未提供明確 `--sitemap`，且 `maxDepth` / `maxPages` 仍允許繼續探索時，才會嘗試唯一的自動 XML 候選：
+工具會先完成一般靜態探索。只有 `depth=0` 起始頁產生至多 1 個 same-origin crawlable frontier page、未提供明確 `--sitemap`，且 `maxDepth >= 1`、`maxPages` 仍允許繼續探索時，才會嘗試唯一的自動 XML 候選；frontier 為 2 個以上時不做這項 auto probe：
 
 - `<start-origin>/sitemap.xml`
 
-這個自動候選沿用既有 P8d sitemap loader、URL security / SSRF policy、`urlset` / `sitemapindex` parser、same-origin page-like seed filtering、`--sitemap-max-urls`、`maxDepth`、`maxPages` 與一般 crawler pipeline。只有實際產生至少一個可用 seed 才會接受；它不會改寫 `options.sitemap`，也不會假裝使用者提供了 `--sitemap`。
+這個自動候選沿用既有 P8d sitemap loader、URL security / SSRF policy、`urlset` / `sitemapindex` parser、same-origin page-like seed filtering、`--sitemap-max-urls`、`maxDepth`、`maxPages` 與一般 crawler pipeline。只有實際產生至少一個可用 seed 才會接受；它不會改寫 `options.sitemap`、啟用 incremental mode，也不會假裝使用者提供了 `--sitemap`。
 
 若 `/sitemap.xml` 不存在、無法使用或沒有可用 seed，工具才接續既有保守的 HTML site-map / site-navigation fallback。HTML fallback 最多檢查 6 個 same-origin 慣例路徑：
 
@@ -190,6 +190,8 @@ Windows portable package 由根目錄 `build-portable.ps1` 產生：
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 ```
+
+Portable 的產品 launcher 為 `Start Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`。External Link Analyzer 由 main GUI 的「外部連結分析」進入，也保留 `/analyzer.html` route；不另提供 Analyzer launcher script。
 
 主要產物：
 

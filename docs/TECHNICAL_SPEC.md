@@ -18,11 +18,13 @@ Local Link Checker 是一個本機執行的網站連結檢查工具。核心目�
 | 入口 | 檔案 | 用途 |
 | --- | --- | --- |
 | CLI | `link-checker.mjs` / `check-links.cmd` | 單站掃描、JSON 輸出、命令列診斷。 |
-| GUI server | `gui-server.mjs` / `gui.cmd` | 本機 HTTP GUI、工作佇列、log 自動保存。 |
+| GUI server | `gui-server.mjs` / `Start Link Checker.exe` / `gui.cmd` | 本機 HTTP GUI、工作佇列、log 自動保存。 |
 | GUI frontend | `public/index.html`、`public/app.js` | 掃描表單、即時事件、待判讀結果表格、隊列控制。 |
-| External analyzer | `public/analyzer.js` | 分析 `report.json` 或 `external-links.csv` 的外連治理結果。 |
+| External analyzer | `/analyzer.html`、`public/analyzer.js`、`public/analyzer.css` | 分析 `report.json`、`external-links.csv` 或 `external-links.ndjson` 的外連治理結果。 |
 | Report analyzer | `public/report-analyzer.js` | 分析單份 `report.json` 的待判讀結果、判讀分類與來源頁。 |
 | Portable build | `build-portable.ps1` | 打包 Windows portable zip，包含 Node runtime、GUI、docs 與 public assets。 |
+
+Portable 對外 launcher surface 固定為 `Start Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`。External Link Analyzer 保留在 main GUI 與 `/analyzer.html` route，不另提供 `analyzer.cmd`。
 
 ## 3. 核心掃描流程
 
@@ -570,7 +572,7 @@ P8d-2 新增 sitemap priority signal，但仍只影響 current inventory 內的 
 P8d-3 新增 sitemap 保守 seed：
 
 - 明確使用 `--sitemap` 時，仍由 worker 啟動前的既有 explicit path 載入與 seed，並具有自動探索的優先權。
-- P12-2A 的自動 `/sitemap.xml` 只在 empty initial frontier 時呼叫同一組 loader、parser 與 seed decision；不建立第二套 sitemap pipeline。
+- P12-2A 的自動 `/sitemap.xml` 只在 weak initial frontier（0 或 1 個 crawlable same-origin page）時呼叫同一組 loader、parser 與 seed decision；不建立第二套 sitemap pipeline。
 - 只 seed same-origin、page-like sitemap URL。
 - seed depth 固定為 `1`，受 `maxDepth` 控制；`maxDepth: 0` 不 seed。
 - 受 `maxPages` 與 `--sitemap-max-urls` 控制。
@@ -585,17 +587,17 @@ Production ordering 固定為：
 
 ```text
 normal static discovery
--> empty initial same-origin frontier
+-> weak initial same-origin frontier (0-1 crawlable page)
 -> conventional XML <start-origin>/sitemap.xml fallback
 -> existing P8d load / parse / seed pipeline
 -> existing HTML sitemap fallback when XML is not accepted
 ```
 
-明確 `--sitemap` 保留既有 pre-worker path 並抑制自動 conventional probe；`options.sitemap` 只表示 explicit input。自動 XML 只有在 depth-0 起始頁完成既有 HTML extraction、SPA payload extraction 與 site link rules 後仍無額外 same-origin crawlable page，且 `maxDepth` / `maxPages` 尚有額度時，才嘗試唯一候選 `<start-origin>/sitemap.xml`。
+明確 `--sitemap` 保留既有 pre-worker path 並抑制自動 conventional probe；`options.sitemap` 只表示 explicit input。自動 XML 只有在 `depth=0` 起始頁完成既有 HTML extraction、SPA payload extraction 與 site link rules 後，產生至多 1 個 same-origin crawlable frontier page，且 `maxDepth >= 1`、`maxPages` 尚有額度時，才嘗試唯一候選 `<start-origin>/sitemap.xml`。Frontier 為 2 個以上時記錄 `normal_frontier_present`，不做這項 auto probe。
 
-自動 XML 透過既有 sitemap fetch/security、`urlset` / `sitemapindex` parser、child constraints、`sitemapMaxUrls` 與 seed decision。只有 existing seed plan 實際產生 `seeded > 0` 才提交 sitemap state 並停止 fallback chain；404、unsupported XML、redirect boundary rejection 或 zero usable seed 不進入一般 checked / broken results，並接續 HTML fallback。自動來源不會啟用 incremental mode 或 state write。
+自動 XML 透過既有 sitemap fetch/security、`urlset` / `sitemapindex` parser、child constraints、`sitemapMaxUrls` 與 seed decision。只有 existing seed plan 實際產生 `seeded > 0` 才提交 sitemap state 並停止 fallback chain；404、unsupported XML、redirect boundary rejection 或 zero usable seed 不進入一般 checked / broken results，並接續 HTML fallback。自動來源不會改寫 `options.sitemap`、啟用 incremental mode 或 state write；same-origin、SSRF、private / link-local / metadata、`maxDepth`、`maxPages` 與 `sitemapMaxUrls` policy 均沿用既有實作。
 
-HTML site-map fallback 是保守的靜態 discovery 補強，不屬於 P8d XML sitemap，也不啟用 Browser / Dynamic Render。觸發條件是起始頁 `depth=0` 完成既有 HTML extraction、SPA payload extraction 與 site link rules 後，沒有額外 same-origin crawlable page 被排入一般 page queue。
+HTML site-map fallback 是保守的靜態 discovery 補強，不屬於 P8d XML sitemap，也不啟用 Browser / Dynamic Render。它沿用同一個 weak-frontier branch，只有自動 XML 未被接受時才接續執行。
 
 Phase 1 只產生固定、去重後最多 6 個 same-origin 慣例候選：
 
@@ -608,11 +610,13 @@ Phase 1 只產生固定、去重後最多 6 個 same-origin 慣例候選：
 
 `<start-prefix>` 只來自起始路徑第一個非空且不含副檔名的 segment；不推論多層 prefix，也不加入 hostname 特例。候選頁透過既有 `checkUrl(candidate, { requireBody: true })` 路徑檢查，因此沿用既有 URL security policy、redirect recheck、timeout、retry、connection 與 body cache 行為。候選必須成功回應 HTML，且 server-returned body 內至少有一個新的 same-origin page-like crawl candidate，才會被加上 `sourceType: "html_sitemap_fallback"` 並以 `depth=1` 進入既有 `pageQueue`。候選頁內的連結仍由一般 `processPage()`、`extractLinks()` / SPA extraction、inventory、validation 與 report pipeline 處理。
 
-此 fallback 共用 `maxDepth` 與 `maxPages`。`maxDepth: 0` 不 fetch / enqueue 候選；`maxDepth: 1` 可 crawl 被接受的候選頁，但不再 crawl 其子頁；`maxDepth >= 2` 時其子頁依現有規則繼續排程。若一般起始頁 discovery 已產生任何額外 crawlable page，fallback 狀態為 `not_needed`。
+此 fallback 共用 `maxDepth` 與 `maxPages`。`maxDepth: 0` 不 fetch / enqueue 候選；`maxDepth: 1` 可 crawl 被接受的候選頁，但不再 crawl 其子頁；`maxDepth >= 2` 時其子頁依現有規則繼續排程。若一般起始頁 discovery 已產生 2 個以上 crawlable page，fallback 狀態為 `not_needed`。
 
 報告會在 `summary.discoveryFallback.htmlSitemap` 記錄最小診斷資訊：`status`、`reason`、`attempted`、`candidateLimit`、`candidatesTried`、`accepted`、`acceptedUrl` 與 `linksDiscovered`。未被接受的候選 probe 不會保留為一般 checked / broken link 結果；URL 輸出仍套用既有 sensitive query redaction。
 
 自動 XML 診斷位於 additive `summary.discoveryFallback.xmlSitemap`，欄位為 `status`、`reason`、`attempted`、`candidateLimit`、`candidatesTried`、`accepted`、`acceptedUrl`、`sitemapType`、`urlsDiscovered` 與 `urlsSeeded`。`acceptedUrl` 套用既有 sensitive-query redaction；XML 接受後，HTML 診斷為 `not_needed / xml_sitemap_accepted`。這項 additive summary 不改變 report schema，`REPORT_SCHEMA_VERSION` 維持 `1.3.0`。
+
+Coverage reason `sitemap_seed_truncated` 只在 sitemap seed 有 page-budget omission 的直接證據時成立；目前 authoritative evidence 是 `summary.incremental.sitemap.seed.ignoredByReason.max_pages > 0`。`urlsDiscovered > urlsSeeded`、`pagesCrawled >= maxPages`、duplicate 或 `already_queued_or_crawled` 都不能單獨推論 sitemap truncation。整體 crawl budget exhaustion 仍可獨立產生 `max_pages_reached`，兩者不是同一語意。
 
 Report 會記錄：
 
@@ -709,6 +713,8 @@ P9b-3 第一版只降低前端列表 DOM 建立成本，不改排序、篩選或
 
 P9b-4 第一版讓 Analyzer 可直接載入大型報告 sidecar。Report Analyzer 支援 `broken.ndjson`，載入後以 sidecar report model 呈現待判讀列表與可確定的待判讀數，並標示為 partial report，因為此檔不包含完整 checked / summary 資訊。External Link Analyzer 支援 `external-links.ndjson`，逐行解析後走既有 external link normalization / dedupe / risk analysis。這些 historical import capabilities 保留，但 current GUI scan 不會自動產生 NDJSON。`checked.ndjson` 匯入、跨 sidecar 合併、完整 streaming parser、Web Worker 與 IndexedDB 不列為 P9b-4 第一版範圍。
 
+目前 External Link Analyzer 從 main GUI 或 `/analyzer.html` 進入。選擇 `report.json`、`external-links.csv` 或 `external-links.ndjson` 後會透過同一匯入路徑自動載入與分析，再保留既有 filters、rules、whitelist 與完整結果匯出；沒有第二個 Analyze action 或三步 wizard。檔案小於 50 MB 不因舊的較低門檻顯示 generic size warning；`>= 50 MB` 只提示載入分析時可能短暫停頓，不構成效能保證或阻擋。
+
 ## 9. Exit Codes
 
 | Exit code | 意義 |
@@ -753,7 +759,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 
 Package 包含：
 
-- CLI / GUI scripts
+- `Start Link Checker.exe`
+- `gui.cmd`
+- `check-links.cmd`
 - `link-checker.mjs`
 - `gui-server.mjs`
 - public frontend assets
@@ -761,7 +769,6 @@ Package 包含：
 - `README.md`
 - `ROADMAP.md`
 - `docs/`
-- `Start Link Checker.exe`
 
 Build script 會重建：
 

@@ -186,7 +186,9 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。執�
 
 ### 外部連結分析
 
-匯入 GUI 輸出的 `report.json`，整理外部網域、分類與治理狀態。
+從 `Start Link Checker.exe` 開啟主 GUI，選擇「外部連結分析」。選擇分析檔案後會自動載入與分析；查看結果後可視需要匯出，不需要額外的分析步驟。
+
+一般建議匯入 GUI 輸出的 `report.json`，整理外部網域、分類與治理狀態。
 
 目前「外部連結分析」的標準匯入格式為 `report.json`。仍可匯入舊有或另行取得的 `external-links.csv`、`external-links.ndjson`：
 

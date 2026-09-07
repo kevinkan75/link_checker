@@ -1,19 +1,20 @@
 # 開發路線圖
 
-更新日期：2026-09-03
+更新日期：2026-09-07
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
 ## Current State
 
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
+- `v1.5.0` candidate 的 Static Discovery refinement 與 Analyzer maintenance cleanup 已完成 implementation、targeted validation、canonical regression、fresh portable build / CLI-GUI smoke 與 bounded real-site acceptance；正式版本仍為 `v1.4.1`，release preparation 尚未開始。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
 
 ## Current Focus
 
-`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。目前專案維持 maintenance / evidence-driven refinement 階段，沒有已授權的新功能 implementation phase。
+`v1.5.0` candidate development batch 已完成 implementation、validation 與 active documentation closeout；目前焦點是 development batch safe push，之後才進入獨立的 version preparation。這不是新的功能 phase。
 
 後續工作以 real-site evidence、實際使用問題、regression evidence 與維護成本作為是否啟動 Future Candidate 的依據；Roadmap 中存在候選項目不代表自動進入實作。
 
@@ -34,7 +35,7 @@
 
 | 項目 | Resume 條件 |
 | --- | --- |
-| Dynamic Render / headless fallback | DEFERRED。只有當靜態 HTML、SPA / payload / static-signal extraction、conventional `/sitemap.xml`、HTML sitemap fallback 與其他安全 discovery 仍漏掉重要連結，且 browser runtime execution 能明確補到重要連結時才恢復評估；現有 `feature/js-dynamic-scan` branch 不提高優先度。 |
+| Dynamic Render / headless fallback | DEFERRED / EVIDENCE-REQUIRED。Taitung bounded acceptance 已確認 weak-frontier conventional `/sitemap.xml` 能在沒有 explicit `--sitemap` 時補強 discovery，因此目前不提高 Dynamic Render 優先度。只有當靜態 HTML、SPA / payload / static-signal extraction、conventional `/sitemap.xml`、HTML sitemap fallback 與其他安全 discovery 仍漏掉重要連結，且 browser runtime execution 能明確補到重要連結時才恢復評估。 |
 | Report-diff legacy / ambiguous input hardening | DEFERRED。duplicate-key policy 與 legacy / manual value normalization 暫緩；跨次掃描比較仍優先沿用既有 `report-diff.mjs`。 |
 | Public-trust code signing | EVIDENCE-REQUIRED。需另行評估正式對外散布需求、憑證成本、簽章流程與長期維護責任；目前不是 release blocker。 |
 
@@ -43,9 +44,11 @@
 | Phase | Status | Summary |
 | --- | --- | --- |
 | P0-P11 | COMPLETE / ACCEPTED | 已完成或驗收；歷史狀態由 [CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) 與 [ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) 承接。 |
-| P12 Static Discovery Resilience | COMPLETE / REFINEMENT ONLY | HTML sitemap fallback、conventional `/sitemap.xml` fallback 與 incomplete coverage notice 已完成；robots-advertised sitemap 已移至 Next Candidates，維持 evidence-required。 |
+| P12 Static Discovery Resilience | COMPLETE / REFINEMENT ONLY | HTML sitemap fallback、weak initial frontier（0–1 個 crawlable same-origin page）的 conventional `/sitemap.xml` fallback 與 incomplete coverage notice 已完成；sitemap seed truncation 只依 direct page-budget omission evidence 判定。robots-advertised sitemap 維持 evidence-required candidate。 |
 | P13 HTTP Validation Resilience | RESOLVED | P13-1、P13-2、P13-4 DONE；P13-3、P13-5 SKIPPED / NOT REQUIRED。3 DONE、2 SKIPPED / NOT REQUIRED、0 remaining implementation items；只有新的可重現 evidence 才 reopen。維持 reuse-first，不建立平行 validation / confirmation engine、不擴充 generic 400 fallback、不建立 Facebook-specific workaround，且 protection uncertainty 不可蓋過 formal `confirmed_missing` semantics。詳細 acceptance、skip rationale 與 regression evidence 見 [P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md)。 |
 | P14 Result Interpretation & Management Handoff | REVIEW COMPLETE / NO IMPLEMENTATION | necessity review complete；既有功能已主要承接需求，目前無 justified implementation item。`P14_AS_SEPARATE_IMPLEMENTATION_PHASE = NOT_JUSTIFIED`；`P14_IMPLEMENTATION_ITEMS_JUSTIFIED_NOW = 0`。Link Scope filter 已移至 Next Candidates；詳細 evidence 見 [P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md](docs/archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md)。 |
+
+2026-09 maintenance refinement 同時移除 redundant `analyzer.cmd` launcher；Analyzer 功能仍由 main GUI 提供，選檔後自動分析，不再呈現第二個 Analyze action 或三步 stepper。這是既有產品面的精簡，不建立新的 Analyzer phase。
 
 ## Architecture / Product Guardrails
 
