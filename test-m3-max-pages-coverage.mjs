@@ -88,11 +88,11 @@ async function assertNoFalsePositiveWhenBudgetExactlyFilled() {
   const origin = "http://127.0.0.1:13102";
   const report = await runWithHandler(origin, (url) => {
     if (url.pathname === "/") {
-      return htmlResponse('<a href="/b">B</a>');
+      return htmlResponse('<a href="/b">B</a><a href="/c">C</a>');
     }
-    if (url.pathname === "/b") {
+    if (url.pathname === "/b" || url.pathname === "/c") {
       return htmlResponse([
-        '<a href="/b">Self</a>',
+        `<a href="${url.pathname}">Self</a>`,
         '<a href="https://external.example/path">External</a>',
         '<script src="/app.js"></script>',
       ].join(""));
@@ -104,10 +104,10 @@ async function assertNoFalsePositiveWhenBudgetExactlyFilled() {
       });
     }
     return htmlResponse("<p>not found</p>", 404);
-  }, { maxPages: 2 });
+  }, { maxPages: 3 });
 
   assert(report.runStatus.status === "complete", "Control scan should complete.");
-  assert(report.summary.pagesCrawled === 2, "Control should exactly fill the page budget.");
+  assert(report.summary.pagesCrawled === 3, "Control should exactly fill the page budget.");
   assert(report.summary.coverage.status === "complete", "Exact page budget without skipped crawlable work should keep coverage complete.");
   assert(report.summary.coverage.discovery.status === "complete", "Exact page budget should not imply incomplete discovery.");
   assertExcludes(report.summary.coverage.reasons, "max_pages_reached", "Control should not report max_pages_reached.");

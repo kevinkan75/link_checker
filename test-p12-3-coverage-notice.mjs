@@ -133,6 +133,31 @@ function assertSitemapSeedTruncatedOnCompleteRun() {
   assert(coverage.validation.incomplete === false, "Complete run with sitemap truncation should not mark validation incomplete.");
 }
 
+function assertDuplicateOnlyDoesNotTruncateSitemapSeed() {
+  const coverage = derive({
+    options: { maxPages: 129 },
+    summary: makeSummary({
+      pagesCrawled: 129,
+      incremental: {
+        sitemap: {
+          enabled: true,
+          urlCount: 129,
+          seed: {
+            seeded: 128,
+            ignoredByReason: {
+              already_queued_or_crawled: 1,
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  assertExcludes(coverage.reasons, "sitemap_seed_truncated", "Duplicate-only sitemap omission must not imply seed truncation.");
+  assertExcludes(coverage.reasons, "max_pages_reached", "Duplicate-only sitemap omission must not imply page-budget exhaustion.");
+  assert(coverage.status === "complete", "Duplicate-only sitemap omission should remain coverage complete.");
+}
+
 function assertMaxPagesReachedWithTruncationEvidence() {
   const coverage = derive({
     options: { maxPages: 3 },
@@ -163,6 +188,7 @@ function assertNoFalsePositiveMaxPagesEquality() {
   });
 
   assertExcludes(coverage.reasons, "max_pages_reached", "pagesCrawled === maxPages alone should not imply max_pages_reached.");
+  assertExcludes(coverage.reasons, "sitemap_seed_truncated", "pagesCrawled === maxPages alone should not imply sitemap_seed_truncated.");
   assert(coverage.status === "complete", "Numeric equality without truncation evidence should remain coverage complete.");
 }
 
@@ -195,6 +221,7 @@ assertFullyComplete();
 assertUserStoppedWithPendingValidation();
 assertValidationIncompleteWithoutUserStop();
 assertSitemapSeedTruncatedOnCompleteRun();
+assertDuplicateOnlyDoesNotTruncateSitemapSeed();
 assertMaxPagesReachedWithTruncationEvidence();
 assertNoFalsePositiveMaxPagesEquality();
 assertReportBuilderAddsCoverageWithoutSchemaBump();

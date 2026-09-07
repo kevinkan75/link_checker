@@ -34,6 +34,7 @@ const DEFAULT_SITEMAP_MAX_URLS = 50000;
 const DEFAULT_SITEMAP_INDEX_MAX_CHILDREN = 20;
 const DEFAULT_SITEMAP_SAMPLE_URLS = 5;
 const XML_SITEMAP_FALLBACK_CANDIDATE_LIMIT = 1;
+const WEAK_INITIAL_FRONTIER_MAX_PAGES = 1;
 const HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT = 6;
 const HTML_SITEMAP_FALLBACK_PATHS = [
   "siteinformation/sitemap",
@@ -1473,7 +1474,7 @@ class LinkChecker {
       }
       this.pumpValidationQueue();
       if (url === this.startUrl && depth === 0) {
-        if (crawlEnqueuedFromPage === 0) {
+        if (crawlEnqueuedFromPage <= WEAK_INITIAL_FRONTIER_MAX_PAGES) {
           const xmlSitemapAccepted = await this.tryXmlSitemapFallback();
           if (!xmlSitemapAccepted) {
             await this.tryHtmlSitemapFallback(pageResult.finalUrl || url);
@@ -8311,7 +8312,7 @@ function deriveCoverageStatus(reportLike = {}) {
     validationReasons.push("validation_incomplete");
   }
 
-  if (hasSitemapSeedTruncationEvidence({ summary, details })) {
+  if (hasSitemapSeedTruncationEvidence({ summary })) {
     discoveryReasons.push("sitemap_seed_truncated");
   }
 
@@ -8433,14 +8434,8 @@ function getSitemapCoveragePairs(summary) {
   return pairs;
 }
 
-function hasSitemapSeedTruncationEvidence({ summary, details }) {
-  return getSitemapCoveragePairs(summary).some((pair) => {
-    if (pair.discovered <= pair.seeded) {
-      return false;
-    }
-    return pair.ignoredByMaxPages
-      || (details.maxPages > 0 && details.pagesCrawled >= details.maxPages && pair.seeded <= details.maxPages);
-  });
+function hasSitemapSeedTruncationEvidence({ summary }) {
+  return getSitemapCoveragePairs(summary).some((pair) => pair.ignoredByMaxPages);
 }
 
 function hasMaxPagesReachedEvidence({ summary, runStatus, details, discoveryReasons }) {

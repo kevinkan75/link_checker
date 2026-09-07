@@ -131,10 +131,10 @@ function assertNoProbePollution(report, sitemapUrl) {
   assert(!report.broken.some((item) => item.url === sitemapUrl), "Auto XML probe must not enter broken results.");
 }
 
-async function assertNormalFrontierSuppressesXml() {
+async function assertStrongFrontierSuppressesXml() {
   await withServer((request, response) => {
     if (request.url === "/") {
-      writeHtml(response, '<a href="/normal-page">Normal</a>');
+      writeHtml(response, '<a href="/normal-a">A</a><a href="/normal-b">B</a>');
       return;
     }
     writeHtml(response, "<p>ok</p>");
@@ -142,14 +142,45 @@ async function assertNormalFrontierSuppressesXml() {
     const report = await makeChecker(`${origin}/`).run();
     const xml = report.summary.discoveryFallback.xmlSitemap;
     const fallback = report.summary.discoveryFallback.htmlSitemap;
-    assertEqual(requestCount(requestCounts, "/sitemap.xml"), 0, "Normal frontier must suppress XML probing.");
-    assert(report.checked.some((item) => item.url === `${origin}/normal-page`), "Normal page should be crawled.");
+    assertEqual(requestCount(requestCounts, "/sitemap.xml"), 0, "A two-page frontier must suppress XML probing.");
+    assert(report.checked.some((item) => item.url === `${origin}/normal-a`), "First normal page should be crawled.");
+    assert(report.checked.some((item) => item.url === `${origin}/normal-b`), "Second normal page should be crawled.");
     assertEqual(xml.status, "not_needed", "XML status should be not_needed.");
     assertEqual(xml.reason, "normal_frontier_present", "XML reason should identify the normal frontier.");
     assertEqual(xml.attempted, false, "XML fallback should not be attempted.");
     assertEqual(xml.candidatesTried, 0, "No XML candidates should be tried.");
     assertEqual(fallback.status, "not_needed", "HTML fallback should be not_needed.");
     assertEqual(fallback.reason, "normal_frontier_present", "HTML fallback should identify the normal frontier.");
+  });
+}
+
+async function assertWeakFrontierTriggersXmlAndPreservesDedupe() {
+  await withServer((request, response) => {
+    const origin = `http://${request.headers.host}`;
+    if (request.url === "/") {
+      writeHtml(response, '<a href="/normal-page">Normal</a>');
+      return;
+    }
+    if (request.url === "/sitemap.xml") {
+      writeXml(response, urlset([
+        `${origin}/normal-page`,
+        `${origin}/sitemap-page`,
+        `${origin}/sitemap-page`,
+      ]));
+      return;
+    }
+    writeHtml(response, "<p>ok</p>");
+  }, async (origin, requestCounts) => {
+    const checker = makeChecker(`${origin}/`);
+    const report = await checker.run();
+    const xml = report.summary.discoveryFallback.xmlSitemap;
+    assertEqual(requestCount(requestCounts, "/sitemap.xml"), 1, "A one-page frontier should activate XML probing.");
+    assertEqual(xml.status, "accepted", "A useful sitemap should be accepted for a weak frontier.");
+    assertEqual(xml.urlsDiscovered, 3, "All sitemap entries should remain visible in diagnostics.");
+    assertEqual(xml.urlsSeeded, 1, "Only the distinct sitemap page should be seeded.");
+    assertEqual(checker.sitemapSeed.ignoredByReason.already_queued_or_crawled, 2, "Queued and duplicate sitemap URLs should retain existing dedupe semantics.");
+    assert(report.checked.some((item) => item.url === `${origin}/normal-page`), "The original frontier page should still be crawled.");
+    assert(report.checked.some((item) => item.url === `${origin}/sitemap-page`), "The distinct sitemap page should be crawled.");
   });
 }
 
@@ -564,7 +595,8 @@ async function assertReportContract() {
 
 async function main() {
   const cases = [
-    ["normal frontier suppression", assertNormalFrontierSuppressesXml],
+    ["strong frontier suppression", assertStrongFrontierSuppressesXml],
+    ["weak frontier activation and dedupe", assertWeakFrontierTriggersXmlAndPreservesDedupe],
     ["explicit sitemap precedence", assertExplicitSitemapPrecedence],
     ["valid auto urlset", assertValidAutoUrlsetAccepted],
     ["404 HTML continuation", assertAuto404ContinuesHtmlFallback],
