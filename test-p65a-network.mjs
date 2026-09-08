@@ -149,10 +149,57 @@ async function assertPerHostConcurrencyLimit() {
   assert(maxActive <= 2, `Expected per-host concurrency <= 2, got ${maxActive}.`);
 }
 
+async function assertOrdinaryAnchor405Fallback() {
+  const requests = [];
+  await withServer((request, response) => {
+    requests.push({ method: request.method, url: request.url });
+    if (request.url === "/") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html>
+        <a href="/head-fallback-ok">Fallback succeeds</a>
+        <a href="/head-fallback-405">Fallback remains 405</a>`);
+      return;
+    }
+    if (request.url === "/head-fallback-ok" && request.method === "GET") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end("<!doctype html><title>Fallback succeeded</title>");
+      return;
+    }
+    response.writeHead(405, { "content-type": "text/html; charset=utf-8" });
+    response.end("<!doctype html><title>Method not allowed</title>");
+  }, async (origin) => {
+    const checker = new LinkChecker(`${origin}/`, {
+      allowLocalhost: true,
+      confirm404: false,
+      maxPages: 1,
+      maxDepth: 0,
+      requestDelayMs: 0,
+      retryCount: 0,
+      robotsTxt: false,
+    });
+    const report = await checker.run();
+    const recoveredUrl = `${origin}/head-fallback-ok`;
+    const failedUrl = `${origin}/head-fallback-405`;
+    const recovered = report.checked.find((item) => item.url === recoveredUrl);
+    const failed = report.checked.find((item) => item.url === failedUrl);
+    const recoveredMethods = requests.filter((item) => item.url === "/head-fallback-ok").map((item) => item.method);
+    const failedMethods = requests.filter((item) => item.url === "/head-fallback-405").map((item) => item.method);
+
+    assert(JSON.stringify(recoveredMethods) === JSON.stringify(["HEAD", "GET"]), "Ordinary anchor should retain HEAD-to-GET fallback after HEAD 405.");
+    assert(recovered?.ok === true && recovered.status === 200 && recovered.method === "GET", "Ordinary anchor should recover when fallback GET returns 200.");
+    assert(JSON.stringify(failedMethods) === JSON.stringify(["HEAD", "GET"]), "Ordinary anchor should still attempt GET when HEAD and GET both return 405.");
+    assert(failed?.ok === false && failed.status === 405 && failed.method === "GET", "Ordinary anchor GET 405 should retain general HTTP error semantics.");
+    assert(failed?.classification === "http_error" && failed.issueType === "http_error", "Ordinary anchor GET 405 classification must remain unchanged.");
+    assert(failed?.interpretation?.category === "likely_problem", "Ordinary anchor GET 405 interpretation must remain unchanged.");
+    assert(report.broken.length === 1 && report.broken[0].url === failedUrl, "Only the ordinary anchor whose GET remains 405 should be broken.");
+  });
+}
+
 async function main() {
   await assertHeadersAndCompression();
   await assertNoKeepAliveHeader();
   await assertPerHostConcurrencyLimit();
+  await assertOrdinaryAnchor405Fallback();
   console.log("ok p65a network");
 }
 

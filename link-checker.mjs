@@ -179,7 +179,7 @@ const DEFAULTS = {
   acceptLanguage: "zh-TW,zh;q=0.9,en;q=0.8",
 };
 
-const PAGE_NAVIGATION_TAGS = new Set(["a", "area", "form", "meta", "script"]);
+const PAGE_NAVIGATION_TAGS = new Set(["a", "area", "meta", "script"]);
 let runtimeSystemCaEnabled = false;
 
 function applyConservativeDefaults(options, explicitOptions = new Set()) {
@@ -1446,7 +1446,7 @@ class LinkChecker {
         this.addSource(resolved, source);
 
         const isExternal = !this.isCrawlOrigin(resolved);
-        const validationSkippedByLinkIntent = isConnectionOnlyResourceHint(link);
+        const validationSkippedByLinkIntent = isConnectionOnlyResourceHint(link) || isFormActionLink(link);
         const shouldCheck = !validationSkippedByLinkIntent && this.shouldCheck(resolved);
         const shouldCrawl = this.shouldCrawl(resolved, link, depth + 1);
         const inventoryEntry = this.addInventoryItem(resolved, source, link, {
@@ -6889,6 +6889,10 @@ function isConnectionOnlyResourceHint(link) {
   }
   const rel = Array.isArray(link.rel) ? link.rel : [];
   return rel.includes("preconnect") || rel.includes("dns-prefetch");
+}
+
+function isFormActionLink(link) {
+  return link?.tag === "form" && link?.attribute === "action";
 }
 
 function parseSrcset(value) {
