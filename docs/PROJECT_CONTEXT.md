@@ -39,15 +39,21 @@
 
 ## Release Gate 原則
 
-- 本專案採單人維護、`main`-based formal release；一般 release 不建立 release branch，也不設獨立的 Scope Freeze 或 Version Preparation phase。
-- 發布前確認 `main`、clean worktree 與 `HEAD == origin/main`，並執行一次 `scripts/run-tests.ps1` canonical regression。
-- 每次正式 release 都要重新執行 `build-portable.ps1`，再以最終 ZIP 的 disposable extraction 完成 portable CLI / GUI、`127.0.0.1` bind、manual shutdown 與 idle shutdown smoke。
-- `scripts/release-preflight.ps1` 只驗證 release source、authoritative version surfaces、artifact / manifest provenance、ZIP SHA256 與簽章最低要求；不重跑 regression，也不探測 GitHub publication prerequisites。
+- 本專案採單人維護、`main`-based formal release；一般 release 不建立 release branch。`DEFAULT_RELEASE_MODE = FAST RELEASE`；release SOP 不再以 Patch / Full / Lean Full / Normal Release 區分執行模式，SemVer 版本幅度也不是重新測試的依據。
+- Development acceptance 是 final behavior source 的 authoritative gate。Behavior / correctness change 應在 development 階段完成 implementation、風險相稱的 targeted validation、必要的 canonical regression、必要的 real-site acceptance、review / acceptance，並推送為 validated `main`。核心分工是 `TEST ON CHANGE / BUILD ON RELEASE / VERIFY ON PUBLISH`。
+- Fast Release 的進入條件是 final behavior source 已完成 development acceptance。符合時，`TARGETED_TESTS_DURING_RELEASE = NO`、`CANONICAL_REGRESSION_DURING_RELEASE = NO`、`REAL_SITE_SCAN_DURING_RELEASE = NO`；不符合時不得發布，應回到 development acceptance。Canonical regression 仍是 development / behavior validation responsibility，而不是 release 階段重複執行的 QA。
+- Fast Release 依序負責：確認 validated source identity；更新 version 與必要 active docs；嚴格檢查 validated behavior source 到 release source 的 diff；建立 release-prep commit；fresh build portable exactly once；執行 minimal portable smoke；確認 remote safety 並 normal push；執行 release-preflight；建立並推送 release tag；發布 GitHub Release；執行 normal release-verify；停止。
+- Release-prep diff 只允許 release metadata / documentation，例如 `TOOL_VERSION`、`GENERATOR_VERSION`、`AssemblyVersion`、`AssemblyFileVersion`、`AssemblyInformationalVersion`、README version / download reference、ROADMAP release-state text、release notes 與必要 active docs。若出現 crawler、HTTP、404 / 405、WAF、classification、form、security、schema、runtime 或 build behavior change，立即停止 release 並回到 development acceptance；不得在 release 階段臨時修改 behavior 後補跑測試繼續發布。
+- 每次正式 release 只 fresh 執行一次 `build-portable.ps1`（`RELEASE_BUILD_RUNS = 1`）。Build 與後續 preflight 成功後不重建；只有 artifact 有實際錯誤時才重新產生。
+- Minimal portable smoke 只驗證最終 ZIP 的 disposable extraction：portable CLI / GUI 可啟動、只綁 `127.0.0.1`、manual shutdown 與 idle shutdown 正常。不得執行 canonical `dist\LinkChecker-portable` package，也不把 smoke 擴張成 full regression、real-site scan 或大型 functional QA。
+- `scripts/release-preflight.ps1` 是 mandatory release gate，驗證 release source identity、authoritative version surfaces、schema coherence、artifact / manifest provenance、ZIP SHA256、signature minimum requirements 與 repository integrity；不弱化既有 checks。
 - Build manifest 自動保存 source、file hashes 與簽章 evidence；不要求維護者逐欄手動複核。Bundled Node Authenticode 必須為 `Valid`；launcher local/self-signed 狀態只記錄，除非出現 `HashMismatch` 等完整性失敗，否則不作一般 release blocker。
-- Publication 維持人工操作；正常公開資產只有 `LinkChecker-portable.zip` 與 `LinkChecker-portable.zip.sha256`。Package `BUILD-MANIFEST.json` 留在 ZIP 內，external build manifest 留作本機技術 evidence。
-- `scripts/release-verify.ps1` 正常模式只驗證 tag target、公開 Release 狀態、ZIP / SHA256 assets 與 GitHub ZIP digest；`-Deep` download verification 只用於 publication anomaly 或高保證稽核。
-- Release notes 一般只需 main changes、必要的 compatibility / limitations、canonical regression result、source commit 與 ZIP SHA256。Node / launcher signer、component hashes、manifest hashes與完整 smoke details留在技術 evidence。
+- Publication 維持人工操作；發布前確認 `main`、clean worktree、HEAD / origin / remote safety，且只使用 normal push。正常公開資產只有 `LinkChecker-portable.zip` 與 `LinkChecker-portable.zip.sha256`。Package `BUILD-MANIFEST.json` 留在 ZIP 內，external build manifest 留作本機技術 evidence。
+- `scripts/release-verify.ps1` normal mode 是 Fast Release 的預設（`RELEASE_VERIFY = NORMAL`），驗證 remote tag、tag target、GitHub Release state、ZIP asset、SHA256 asset 與 GitHub ZIP digest。
+- `scripts/release-verify.ps1 -Deep` 保留（`DEEP_VERIFY_AVAILABLE = YES`），但預設不執行且僅供例外情況使用（`DEEP_VERIFY_DEFAULT = NO`、`DEEP_VERIFY_EXCEPTION_ONLY = YES`）。只有 publication anomaly、digest mismatch、packaging / build workflow change、release tooling change、runtime / launcher packaging change、audit / high-assurance requirement 或 maintainer 明確要求時才考慮執行。
+- Release notes 一般只需 main changes、必要的 compatibility / limitations、accepted development validation summary、source commit 與 ZIP SHA256。Node / launcher signer、component hashes、manifest hashes 與完整 smoke details 留在技術 evidence。
 - Real-site scan 屬於 development evidence、bug reproduction 或 feature validation，不是一般 release gate。
+- 責任分層維持清楚：development regression 由 `scripts/run-tests.ps1` 負責；release 由 `build-portable.ps1`、`scripts/release-preflight.ps1` 與 `scripts/release-verify.ps1` 負責。One release process 不代表 one giant release script。
 
 ## 文件分層
 
