@@ -71,6 +71,8 @@ const CANONICAL_STRATEGIES = new Set(["safe", "moderate", "aggressive"]);
 const SPA_LINK_MODES = new Set(["auto", "off", "strict"]);
 const TRACKING_QUERY_KEYS = new Set(["fbclid", "gclid", "msclkid", "yclid"]);
 const ALLOWED_REQUEST_PROTOCOLS = new Set(["http:", "https:"]);
+const CLOUDFLARE_EMAIL_PROTECTION_PATH = "/cdn-cgi/l/email-protection";
+const CLOUDFLARE_EMAIL_TOKEN_MIN_LENGTH = 8;
 const BODY_SIGNATURE_SNIPPET_LENGTH = 240;
 const WAF_HEADER_NAMES = [
   "server",
@@ -5410,6 +5412,7 @@ async function buildResponseResult(response, {
     });
     applyResponseClassification(result, response.headers);
     applyRedirectIssueClassification(result);
+    applyCloudflareEmailProtectionResponseFallback(result, response.headers);
     return result;
   } finally {
     cleanupResponseAbort(response);
@@ -5985,6 +5988,37 @@ function applyRedirectIssueClassification(result) {
   }
 }
 
+function applyCloudflareEmailProtectionResponseFallback(result, headers) {
+  if (result.ok
+      || (result.status !== 404 && result.status !== 410)
+      || !isCloudflareEmailProtectionPath(result.finalUrl || result.url)) {
+    return;
+  }
+
+  const html = result.body || result.diagnosticBody || "";
+  const title = extractTitle(html).toLowerCase();
+  const body = String(html).replace(/\s+/g, " ").toLowerCase();
+  const hasEmailProtectionBody = (
+    title.includes("email protection") && title.includes("cloudflare")
+  ) || body.includes("cloudflare email protection");
+  const protectionProvider = String(result.protection?.provider || "").toLowerCase();
+  const hasCloudflareResponseEvidence = String(result.server || "").toLowerCase().includes("cloudflare")
+    || Boolean(headers.get("cf-ray"))
+    || protectionProvider === "cloudflare";
+  if (!hasEmailProtectionBody || !hasCloudflareResponseEvidence) {
+    return;
+  }
+
+  result.ok = true;
+  result.classification = "ok";
+  result.issueType = "ok";
+  result.diagnosis = "Cloudflare Email Protection link; excluded from broken-link handling.";
+  result.interpretation = {
+    ...buildInterpretation("page_quality_notice"),
+    action: "偵測到 Cloudflare 電子郵件保護連結，網站功能通常不受影響；如有需要，可用瀏覽器確認電子郵件連結是否正常。",
+  };
+}
+
 function applyResponseClassification(result, headers) {
   if (result.ok) {
     applyBodySignatureDiagnostics(result);
@@ -6230,6 +6264,9 @@ function extractLinks(html, baseUrl) {
           links.push({ tag, attribute, value: src, ...linkIntent });
         }
       } else {
+        if (tag === "a" && attribute === "href" && isCloudflareEmailProtectionLink(value, attributes, baseUrl)) {
+          continue;
+        }
         links.push({ tag, attribute, value, ...linkIntent });
       }
     }
@@ -6808,6 +6845,42 @@ function parseRelTokens(value) {
     .split(/\s+/)
     .map((token) => token.trim())
     .filter(Boolean);
+}
+
+function isValidCloudflareEmailProtectionToken(value) {
+  const token = String(value || "");
+  return token.length >= CLOUDFLARE_EMAIL_TOKEN_MIN_LENGTH
+    && token.length % 2 === 0
+    && /^[0-9a-f]+$/i.test(token);
+}
+
+function isCloudflareEmailProtectionPath(value, baseUrl) {
+  try {
+    return new URL(value, baseUrl).pathname === CLOUDFLARE_EMAIL_PROTECTION_PATH;
+  } catch {
+    return false;
+  }
+}
+
+function isCloudflareEmailProtectionLink(href, attributes, baseUrl) {
+  let parsed;
+  try {
+    parsed = new URL(href, baseUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.pathname !== CLOUDFLARE_EMAIL_PROTECTION_PATH) {
+    return false;
+  }
+
+  const fragmentToken = parsed.hash.slice(1);
+  if (isValidCloudflareEmailProtectionToken(fragmentToken)) {
+    return true;
+  }
+
+  const classTokens = String(attributes.get("class") || "").split(/\s+/).filter(Boolean);
+  return classTokens.includes("__cf_email__")
+    && isValidCloudflareEmailProtectionToken(attributes.get("data-cfemail"));
 }
 
 function isConnectionOnlyResourceHint(link) {

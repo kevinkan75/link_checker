@@ -48,6 +48,7 @@ startUrl
 抽取層保留低成本策略，不使用完整 DOM parser。主要來源：
 
 - HTML tag attributes，例如 `a[href]`、`img[src]`、`script[src]`、`link[href]`。
+- Cloudflare Email Protection anchor 只有在精確 endpoint 搭配有效 encoded fragment，或 anchor 本身同時具有 `__cf_email__` 與有效 `data-cfemail` 時，才在進入 HTTP inventory 前排除；bare path 與無效 token 仍走一般驗證。
 - Meta refresh 與簡單 JavaScript redirect literal。
 - SPA / Nuxt inline script 中的完整 URL literal。
 - SPA / Nuxt inline script 中明確 `/` 開頭 path literal。

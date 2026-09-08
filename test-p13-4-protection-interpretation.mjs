@@ -137,6 +137,65 @@ async function assertExternalProtection(startOrigin, externalServer) {
   assert(result.interpretation?.category === "external_limited", "Case 2 external redirect + protection should be external_limited.");
 }
 
+async function assertCloudflareEmailProtectionResponseFallback() {
+  const requests = new Map();
+  const server = await createServer((request, response) => {
+    requests.set(request.url, (requests.get(request.url) || 0) + 1);
+    if (request.url === "/") {
+      write(response, 200, `<!doctype html>
+        <a href="/cdn-cgi/l/email-protection">bare email protection endpoint</a>
+        <a href="/normal-cloudflare-404">ordinary missing link</a>`, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      return;
+    }
+    if (request.url === "/cdn-cgi/l/email-protection") {
+      write(response, 404, `<!doctype html>
+        <html><head><title>Email Protection | Cloudflare</title></head>
+        <body>Cloudflare Email Protection</body></html>`, {
+        "content-type": "text/html; charset=utf-8",
+        server: "cloudflare",
+        "cf-ray": "email-protection-test-ray",
+      });
+      return;
+    }
+    if (request.url === "/normal-cloudflare-404") {
+      write(response, 404, "<!doctype html><title>Missing page</title>ordinary missing page", {
+        "content-type": "text/html; charset=utf-8",
+        server: "cloudflare",
+        "cf-ray": "ordinary-404-test-ray",
+      });
+      return;
+    }
+    write(response, 404, "fallback missing");
+  });
+
+  try {
+    const checker = new LinkChecker(server.origin, checkerOptions({
+      preferGet: true,
+      robotsTxt: false,
+    }));
+    const report = await checker.run();
+    const emailProtection = findByUrl(report, `${server.origin}/cdn-cgi/l/email-protection`);
+    assert(emailProtection.status === 404, "Email Protection fallback should preserve the observed HTTP status.");
+    assert(emailProtection.ok === true, "Email Protection fallback should use non-broken semantics.");
+    assert(emailProtection.confirmation?.candidate === false, "Email Protection fallback should not enter 404 confirmation.");
+    assert(emailProtection.confirmation?.outcome === null, "Email Protection fallback should not become confirmed_missing.");
+    assert(emailProtection.interpretation?.category === "page_quality_notice", "Email Protection fallback should reuse page_quality_notice.");
+    assert(!report.broken.some((item) => item.url === emailProtection.url), "Email Protection fallback should not enter broken output.");
+    assert(requests.get("/cdn-cgi/l/email-protection") === 1, "Email Protection fallback should not trigger a confirmation request.");
+
+    const ordinaryMissing = findByUrl(report, `${server.origin}/normal-cloudflare-404`);
+    assert(ordinaryMissing.ok === false, "Cloudflare headers alone must not change ordinary 404 handling.");
+    assert(ordinaryMissing.confirmation?.outcome === "confirmed_missing", "Ordinary Cloudflare-served 404 should remain confirmed_missing.");
+    assert(ordinaryMissing.interpretation?.category === "action_required", "Ordinary confirmed 404 should remain action_required.");
+    assert(ordinaryMissing.interpretation?.label === "已確認失效", "Ordinary confirmed 404 should retain TA wording.");
+    assert(requests.get("/normal-cloudflare-404") >= 2, "Ordinary 404 should retain its confirmation request.");
+  } finally {
+    await server.close();
+  }
+}
+
 async function main() {
   let mainServer;
   let externalServer;
@@ -205,6 +264,7 @@ async function main() {
   try {
     await assertSameOriginMatrix(mainServer);
     await assertExternalProtection(mainServer.origin, externalServer);
+    await assertCloudflareEmailProtectionResponseFallback();
     console.log("ok p13-4 protection-aware interpretation");
   } finally {
     await Promise.all([mainServer.close(), externalServer.close()]);
