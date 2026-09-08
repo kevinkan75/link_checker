@@ -1,20 +1,20 @@
 # 開發路線圖
 
-更新日期：2026-09-07
+更新日期：2026-09-08
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
 ## Current State
 
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
-- `v1.5.0` candidate 的 Static Discovery refinement 與 Analyzer maintenance cleanup 已完成 implementation、targeted validation、canonical regression、fresh portable build / CLI-GUI smoke 與 bounded real-site acceptance；authoritative version surfaces 已準備完成，formal release 尚未執行。
+- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` patch release scope 已凍結為 404 證據式判讀、Cloudflare Email Protection 與 Form Action semantics 三項 accuracy / false-positive corrections。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
 
 ## Current Focus
 
-`v1.5.0` candidate development batch、active documentation closeout 與 version preparation 已完成並整合至 `main`；下一步依 lightweight SOP 執行 formal release。這不是新的功能 phase。
+目前焦點是依 lightweight SOP 完成 `v1.5.1` patch release；不新增功能、不變更 report schema，也不延伸其他 correctness refinement。
 
 後續工作以 real-site evidence、實際使用問題、regression evidence 與維護成本作為是否啟動 Future Candidate 的依據；Roadmap 中存在候選項目不代表自動進入實作。
 

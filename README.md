@@ -4,9 +4,9 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.5.0`
+目前正式版本：`v1.5.1`
 
-`v1.5.0` 改善弱初始探索情境下的 XML Sitemap 自動探索，修正 sitemap coverage 截斷判讀的 false positive，並簡化 External Link Analyzer 的入口與匯入流程。
+`v1.5.1` 是 accuracy 與 false-positive correction patch release，收斂 404 證據式判讀、Cloudflare Email Protection 誤報排除，以及 `form[action]` 只保留結構與來源證據、不觸發一般 hyperlink validation 或 page crawl 的語意修正。
 
 ## 適合誰使用
 
@@ -34,7 +34,7 @@ Portable 版本目前以 Windows 本機環境為主要支援方式；原始碼�
 
 ### 使用 portable 版本
 
-1. 從 [v1.5.0 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.5.0/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.5.1 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.5.1/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
 
