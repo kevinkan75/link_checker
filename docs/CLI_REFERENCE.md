@@ -214,38 +214,21 @@ Portable 的產品 launcher 為 `Start Link Checker.exe`、`gui.cmd` 與 `check-
 
 ## 維護者：正式版本發布驗證
 
-本專案採單人維護、`main`-based release。正常流程不建立 release branch，不設獨立 Scope Freeze 或 Version Preparation phase；Scope review 可用 `git log <previous-tag>..HEAD` 輕量確認。
+正式發布流程與 Release Gate 原則以 [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) 為準；以下只保留 release tooling 的操作參考。
 
 ```powershell
 $version = "1.4.2"
 
-# 1. Update established version surfaces, commit, and push main.
-# 2. Confirm main, clean worktree, and HEAD == origin/main.
-
-# 3. Run the canonical regression exactly once.
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-tests.ps1
-if ($LASTEXITCODE -ne 0) { throw "Canonical regression failed." }
-
-# 4. Produce a fresh portable build.
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
-if ($LASTEXITCODE -ne 0) { throw "Portable build failed." }
-
-# 5. Smoke the exact final ZIP from a disposable extraction:
-#    portable CLI, GUI startup, 127.0.0.1 bind, manual and idle shutdown.
-
-# 6. Validate source and artifact identity. This does not rerun regression.
+# Publication 前驗證 source 與 artifact identity。
 & .\scripts\release-preflight.ps1 -Version $version
 if ($LASTEXITCODE -ne 0) { throw "Release preflight failed." }
 
-# 7. Manually create/push the annotated tag and GitHub Release.
-#    Upload only LinkChecker-portable.zip and LinkChecker-portable.zip.sha256.
-
-# 8. Verify the published tag, release, assets, and GitHub ZIP digest.
+# Publication 後驗證 tag、Release、assets 與 GitHub ZIP digest。
 & .\scripts\release-verify.ps1 -Version $version
 if ($LASTEXITCODE -ne 0) { throw "Release verification failed." }
 ```
 
-`scripts\run-tests.ps1` 是唯一 canonical full regression entry，每次正常 release 只執行一次。`release-preflight.ps1` 會自動推導 HEAD、report schema、artifact hashes 與簽章狀態，不要求維護者先抄錄再回填。
+`release-preflight.ps1` 會自動推導 HEAD、report schema、artifact hashes 與簽章狀態，不要求維護者先抄錄再回填。
 
 Preflight 必須確認 bundled Node Authenticode 為 `Valid`。Launcher local/self-signed 狀態只記錄；`NotSigned`、`NotTrusted` 或預期的 local self-signed `UnknownError` 不會單獨阻擋 release，但 `HashMismatch` 仍會失敗。
 
@@ -262,9 +245,7 @@ Preflight 必須確認 bundled Node Authenticode 為 `Valid`。Launcher local/se
 & .\scripts\release-verify.ps1 -Version $version -Deep
 ```
 
-Deep mode 下載公開 ZIP 與 `.sha256`，重新計算 ZIP hash 並驗證 sidecar semantics。Real-site scan 屬於 development evidence、bug reproduction 或 feature validation，不是一般 release gate。
-
-正常 release notes 只需列出 main changes、必要的 compatibility / limitations、canonical regression result、source commit 與 portable ZIP SHA256。Signer details、component hashes、manifest hashes 與完整 smoke evidence 留在 technical evidence。
+Deep mode 下載公開 ZIP 與 `.sha256`，重新計算 ZIP hash 並驗證 sidecar semantics。
 
 ## 規則檔格式
 

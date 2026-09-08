@@ -792,7 +792,7 @@ Build、publication 與 verification 是分開的 release steps。Publication �
 - bundled Node Authenticode `Valid`
 - launcher signature actual status；local/self-signed trust state 只記錄，`HashMismatch` 仍屬失敗
 
-Canonical regression 由正常 SOP 在 build 前直接執行一次 `scripts/run-tests.ps1`；preflight 不重跑。Preflight 也不探測 tag / Release absence、GitHub authentication 或 write permission。
+Preflight 不執行 development regression，也不探測 tag / Release absence、GitHub authentication 或 write permission。
 
 `scripts/release-verify.ps1` 在 publication 後驗證：
 
