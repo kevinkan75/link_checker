@@ -11,7 +11,7 @@
 
 ## Analyzer UX 原則
 
-- Portable 的正常產品入口是 `Start Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`；External Link Analyzer 從 main GUI 的「外部連結分析」進入，不另設 `analyzer.cmd`。
+- Portable 的正常產品入口是 `Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`；External Link Analyzer 從 main GUI 的「外部連結分析」進入，不另設 `analyzer.cmd`。
 - External Link Analyzer 選擇檔案後會自動載入與分析，再顯示結果；匯出是選用操作，不把 Analyzer 呈現成必須逐步完成的 wizard。
 - 待判讀清單優先於摘要、排行與掃描概況。
 - 畫面文案先呈現處理建議，再呈現技術狀態。

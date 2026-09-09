@@ -191,7 +191,7 @@ Windows portable package 由根目錄 `build-portable.ps1` 產生：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 ```
 
-Portable 的產品 launcher 為 `Start Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`。External Link Analyzer 由 main GUI 的「外部連結分析」進入，也保留 `/analyzer.html` route；不另提供 Analyzer launcher script。
+Portable 的產品 launcher 為 `Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`。External Link Analyzer 由 main GUI 的「外部連結分析」進入，也保留 `/analyzer.html` route；不另提供 Analyzer launcher script。
 
 主要產物：
 
@@ -201,15 +201,15 @@ Portable 的產品 launcher 為 `Start Link Checker.exe`、`gui.cmd` 與 `check-
 | `dist\LinkChecker-portable.build-manifest.json` | zip 層級 release metadata，包含來源 commit、Node runtime version、zip hash、launcher / Node 簽章資訊 |
 | `dist\LinkChecker-portable.zip.sha256` | zip SHA256 文字檔 |
 | `dist\LinkChecker-portable\BUILD-MANIFEST.json` | portable 資料夾內每個 bundled 檔案的 SHA256 清單 |
-| `dist\LinkChecker-portable\PORTABLE-README.txt` | 使用與安全模型說明 |
+| `dist\LinkChecker-portable\使用說明.txt` | 一般使用者快速操作說明 |
 
 驗證重點：
 
 - `LinkChecker-portable.zip.sha256` 必須等於實際 zip SHA256。
 - external manifest 的 `build.gitCommit` 應等於要發佈的來源 commit。
 - external manifest 與 package manifest 的 Node runtime version 應一致。
-- package manifest 內必要檔案應包含 `runtime\node.exe`、`Start Link Checker.exe`、`gui.cmd`、`check-links.cmd`、`PORTABLE-README.txt`、`README.md`、`ROADMAP.md`、`docs\README.md`、`public\analyzer.js`、`gui-server.mjs` 與 `link-checker.mjs`。
-- `runtime\node.exe` 應保留有效 Authenticode 簽章；`Start Link Checker.exe` 的簽章狀態以 manifest 為準，可能是 `NotSigned`，也可能是 local self-signed。local self-signed 不是公開信任 code signing。
+- package manifest 內必要檔案應包含 `runtime\node.exe`、`Link Checker.exe`、`gui.cmd`、`check-links.cmd`、`使用說明.txt`、`README.md`、`ROADMAP.md`、`docs\README.md`、`public\analyzer.js`、`gui-server.mjs` 與 `link-checker.mjs`。
+- `runtime\node.exe` 應保留有效 Authenticode 簽章；`Link Checker.exe` 的簽章狀態以 manifest 為準，可能是 `NotSigned`，也可能是 local self-signed。local self-signed 不是公開信任 code signing。
 - 若 package 內有 `LinkChecker-local-code-signing.cer`，它只應出現在 launcher 已成功 local self-signed 的 build，供內部手動信任或匯入流程使用；一般使用者不需要安裝，也不能用來取代 zip SHA256 / manifest 驗證。
 
 ## 維護者：正式版本發布驗證
@@ -431,7 +431,7 @@ node .\report-diff.mjs old-report.json new-report.json --output diff.json
 .\check-links.cmd https://example.com --system-ca
 ```
 
-CLI 使用 `--system-ca` 時會以 Node 原生 `--use-system-ca` 重新啟動檢查程序，讓憑證信任來源在 process level 生效；CLI 未指定時仍使用既有 bundled Node CA baseline。`Start Link Checker.exe` 與 `.\gui.cmd` 則預設讓 GUI 載入 Windows 系統根憑證；若例外工作階段未啟用，GUI 會顯示「啟用 Windows 系統憑證」。
+CLI 使用 `--system-ca` 時會以 Node 原生 `--use-system-ca` 重新啟動檢查程序，讓憑證信任來源在 process level 生效；CLI 未指定時仍使用既有 bundled Node CA baseline。`Link Checker.exe` 與 `.\gui.cmd` 則預設讓 GUI 載入 Windows 系統根憑證；若例外工作階段未啟用，GUI 會顯示「啟用 Windows 系統憑證」。
 
 ## Redirect 判讀
 

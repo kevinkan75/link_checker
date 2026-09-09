@@ -341,7 +341,7 @@ try {
         $zipHashPath = Join-Path $resolvedDistPath "LinkChecker-portable.zip.sha256"
         $externalManifestPath = Join-Path $resolvedDistPath "LinkChecker-portable.build-manifest.json"
         $packageManifestPath = Join-Path $packageDir "BUILD-MANIFEST.json"
-        $launcherPath = Join-Path $packageDir "Start Link Checker.exe"
+        $launcherPath = Join-Path $packageDir "Link Checker.exe"
         $bundledNodePath = Join-Path $packageDir "runtime\node.exe"
 
         $artifactChecks = @(

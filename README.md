@@ -36,7 +36,7 @@ Portable 版本目前以 Windows 本機環境為主要支援方式；原始碼�
 
 1. 從 [v1.5.1 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.5.1/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
-3. 執行 `Start Link Checker.exe`，或在資料夾內執行：
+3. 執行 `Link Checker.exe`，或在資料夾內執行：
 
 ```powershell
 .\gui.cmd
@@ -47,6 +47,8 @@ Portable 版本目前以 Windows 本機環境為主要支援方式；原始碼�
 ```text
 http://127.0.0.1:8787
 ```
+
+套件內的 `使用說明.txt` 提供一般使用者的簡短操作指引。
 
 下載後可用 release 頁提供的 `LinkChecker-portable.zip.sha256` 核對 ZIP 完整性。解壓縮後的 `BUILD-MANIFEST.json` 保存套件來源與檔案雜湊，供需要技術追查時使用。Portable launcher 可能未簽或使用 local self-signed 簽章；若資料夾內出現 `LinkChecker-local-code-signing.cer`，它只供內部手動信任流程使用，一般使用者不需要安裝。
 
@@ -62,7 +64,7 @@ http://127.0.0.1:8787
 
 GUI 的「連結檢查」使用較保守的日常掃描設定，並預設檢查外部連結。
 
-`Start Link Checker.exe` 與 `gui.cmd` 啟動 GUI 時預設使用 Windows 系統憑證。若目前工作階段未啟用且檢查出現憑證問題，GUI 才會顯示「啟用 Windows 系統憑證」的例外操作。
+`Link Checker.exe` 與 `gui.cmd` 啟動 GUI 時預設使用 Windows 系統憑證。若目前工作階段未啟用且檢查出現憑證問題，GUI 才會顯示「啟用 Windows 系統憑證」的例外操作。
 
 ### 使用 CLI
 
@@ -188,7 +190,7 @@ GUI 每次掃描會在 `logs/YYYYMMDD-HHMMSS--host--status/` 產生輸出。執�
 
 ### 外部連結分析
 
-從 `Start Link Checker.exe` 開啟主 GUI，選擇「外部連結分析」。選擇分析檔案後會自動載入與分析；查看結果後可視需要匯出，不需要額外的分析步驟。
+從 `Link Checker.exe` 開啟主 GUI，選擇「外部連結分析」。選擇分析檔案後會自動載入與分析；查看結果後可視需要匯出，不需要額外的分析步驟。
 
 一般建議匯入 GUI 輸出的 `report.json`，整理外部網域、分類與治理狀態。
 

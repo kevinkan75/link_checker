@@ -51,6 +51,14 @@ function assertCliWrapper(text, label) {
 const sourceGuiCmd = await readFile(new URL("./gui.cmd", import.meta.url), "utf8");
 const sourceCheckLinksCmd = await readFile(new URL("./check-links.cmd", import.meta.url), "utf8");
 const buildPortable = await readFile(new URL("./build-portable.ps1", import.meta.url), "utf8");
+const launcherSource = await readFile(new URL("./launcher/StartLinkChecker.cs", import.meta.url), "utf8");
+const quickGuide = await readFile(new URL("./使用說明.txt", import.meta.url), "utf8");
+const readme = await readFile(new URL("./README.md", import.meta.url), "utf8");
+const projectContext = await readFile(new URL("./docs/PROJECT_CONTEXT.md", import.meta.url), "utf8");
+const cliReference = await readFile(new URL("./docs/CLI_REFERENCE.md", import.meta.url), "utf8");
+const technicalSpec = await readFile(new URL("./docs/TECHNICAL_SPEC.md", import.meta.url), "utf8");
+const releasePreflight = await readFile(new URL("./scripts/release-preflight.ps1", import.meta.url), "utf8");
+const releaseVerify = await readFile(new URL("./scripts/release-verify.ps1", import.meta.url), "utf8");
 
 assertWrapperLifecycle(sourceGuiCmd, "source gui.cmd");
 assertCliWrapper(sourceCheckLinksCmd, "source check-links.cmd");
@@ -71,4 +79,45 @@ assertNotIncludes(buildPortable, "$checkLinksCmd", "build-portable.ps1");
 assertNotIncludes(buildPortable, ":runGui", "build-portable.ps1");
 assertNotIncludes(buildPortable, '"%NODE_EXE%" "%~dp0link-checker.mjs" %*', "build-portable.ps1");
 
-console.log("ok portable command wrapper single source");
+assertIncludes(buildPortable, '$launcherExe = Join-Path $packageDir "Link Checker.exe"', "build-portable.ps1");
+assertIncludes(buildPortable, 'path = "Link Checker.exe"', "package manifest launcher metadata");
+assertIncludes(buildPortable, 'path = "$packageName\\Link Checker.exe"', "external manifest launcher metadata");
+assertIncludes(
+  buildPortable,
+  'Copy-Item -LiteralPath (Join-Path $root "使用說明.txt") -Destination $packageDir',
+  "build-portable.ps1"
+);
+assertNotIncludes(buildPortable, "Decode-Utf8Base64Text", "build-portable.ps1");
+assertNotIncludes(buildPortable, "$portableReadme", "build-portable.ps1");
+assertNotIncludes(buildPortable, "PORTABLE-README.txt", "build-portable.ps1");
+assertIncludes(buildPortable, "function Get-OrCreate-CodeSigningCertificate", "build-portable.ps1");
+assertIncludes(buildPortable, "function Sign-PortableLauncher", "build-portable.ps1");
+assertIncludes(buildPortable, "$launcherSigned = Sign-PortableLauncher -FilePath $launcherExe", "build-portable.ps1");
+assertIncludes(buildPortable, "Compress-Archive -LiteralPath $packageDir", "build-portable.ps1");
+
+assertIncludes(launcherSource, "internal static class StartLinkChecker", "launcher source implementation");
+assertIncludes(launcherSource, 'AssemblyProduct("Link Checker")', "launcher product metadata");
+assertIncludes(launcherSource, "then run Link Checker.exe from that folder", "launcher missing-file guidance");
+assertIncludes(releasePreflight, '$launcherPath = Join-Path $packageDir "Link Checker.exe"', "release preflight");
+
+assertIncludes(quickGuide, "Link Checker 使用說明", "quick guide");
+assertIncludes(quickGuide, "雙擊「Link Checker.exe」", "quick guide");
+assertIncludes(quickGuide, "完整解壓縮", "quick guide");
+assertIncludes(quickGuide, "SmartScreen", "quick guide");
+assertIncludes(quickGuide, "gui.cmd", "quick guide");
+assertIncludes(quickGuide, "check-links.cmd", "quick guide");
+
+for (const [label, text] of [
+  ["build-portable.ps1", buildPortable],
+  ["launcher source", launcherSource],
+  ["README.md", readme],
+  ["docs/PROJECT_CONTEXT.md", projectContext],
+  ["docs/CLI_REFERENCE.md", cliReference],
+  ["docs/TECHNICAL_SPEC.md", technicalSpec],
+  ["scripts/release-preflight.ps1", releasePreflight],
+  ["scripts/release-verify.ps1", releaseVerify],
+]) {
+  assertNotIncludes(text, "Start Link Checker.exe", label);
+}
+
+console.log("ok portable launcher, quick guide, and command wrapper contracts");

@@ -18,13 +18,13 @@ Local Link Checker 是一個本機執行的網站連結檢查工具。核心目�
 | 入口 | 檔案 | 用途 |
 | --- | --- | --- |
 | CLI | `link-checker.mjs` / `check-links.cmd` | 單站掃描、JSON 輸出、命令列診斷。 |
-| GUI server | `gui-server.mjs` / `Start Link Checker.exe` / `gui.cmd` | 本機 HTTP GUI、工作佇列、log 自動保存。 |
+| GUI server | `gui-server.mjs` / `Link Checker.exe` / `gui.cmd` | 本機 HTTP GUI、工作佇列、log 自動保存。 |
 | GUI frontend | `public/index.html`、`public/app.js` | 掃描表單、即時事件、待判讀結果表格、隊列控制。 |
 | External analyzer | `/analyzer.html`、`public/analyzer.js`、`public/analyzer.css` | 分析 `report.json`、`external-links.csv` 或 `external-links.ndjson` 的外連治理結果。 |
 | Report analyzer | `public/report-analyzer.js` | 分析單份 `report.json` 的待判讀結果、判讀分類與來源頁。 |
 | Portable build | `build-portable.ps1` | 打包 Windows portable zip，包含 Node runtime、GUI、docs 與 public assets。 |
 
-Portable 對外 launcher surface 固定為 `Start Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`。External Link Analyzer 保留在 main GUI 與 `/analyzer.html` route，不另提供 `analyzer.cmd`。
+Portable 對外 launcher surface 固定為 `Link Checker.exe`、`gui.cmd` 與 `check-links.cmd`。External Link Analyzer 保留在 main GUI 與 `/analyzer.html` route，不另提供 `analyzer.cmd`。
 
 ## 3. 核心掃描流程
 
@@ -763,9 +763,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 
 Package 包含：
 
-- `Start Link Checker.exe`
+- `Link Checker.exe`
 - `gui.cmd`
 - `check-links.cmd`
+- `使用說明.txt`
 - `link-checker.mjs`
 - `gui-server.mjs`
 - public frontend assets
@@ -811,6 +812,6 @@ Portable package 的安全與完整性原則：
 - `BUILD-MANIFEST.json` 記錄 portable 資料夾內 bundled file 清單與 SHA256，並保留在 ZIP 內供 provenance / diagnostics。
 - external build manifest 記錄 zip SHA256、來源 commit、Node runtime version、launcher / Node hash 與 Authenticode 簽章資訊；正常 release 保留為本機技術 evidence，不要求另行公開。
 - 正常 GitHub Release 公開 `LinkChecker-portable.zip` 與 `LinkChecker-portable.zip.sha256`；SHA256 是使用者核對 artifact 的主要入口。
-- `Start Link Checker.exe` 的簽章狀態以 build manifest 為準；可能是 `NotSigned`，也可能是 local self-signed Authenticode。local self-signed 只適合內部 trust/import 流程，不是公開信任 code signing，不能期待消除 Windows SmartScreen 警告。
+- `Link Checker.exe` 的簽章狀態以 build manifest 為準；可能是 `NotSigned`，也可能是 local self-signed Authenticode。local self-signed 只適合內部 trust/import 流程，不是公開信任 code signing，不能期待消除 Windows SmartScreen 警告。
 - `LinkChecker-local-code-signing.cer` 只應在 launcher 成功 local self-signed 時保留於 package；它是該簽章憑證的公開憑證，供內部手動信任或匯入流程使用，一般使用者不需要安裝，也不能取代 zip SHA256 / manifest 驗證。
 - 若要正式公開發佈，應在 P11f 或正式 release 流程中評估公開信任 code signing certificate 或可信代管簽章服務。

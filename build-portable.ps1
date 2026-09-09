@@ -9,7 +9,7 @@ $zipHashPath = Join-Path $dist "$packageName.zip.sha256"
 $externalManifestPath = Join-Path $dist "$packageName.build-manifest.json"
 $runtimeDir = Join-Path $packageDir "runtime"
 $launcherSource = Join-Path $root "launcher\StartLinkChecker.cs"
-$launcherExe = Join-Path $packageDir "Start Link Checker.exe"
+$launcherExe = Join-Path $packageDir "Link Checker.exe"
 $packageManifestPath = Join-Path $packageDir "BUILD-MANIFEST.json"
 $selfSignedSubject = "CN=Link Checker Local Self-Signed Code Signing"
 $selfSignedCertExport = Join-Path $packageDir "LinkChecker-local-code-signing.cer"
@@ -246,7 +246,7 @@ function Write-PackageBuildManifest {
     build = Get-BuildMetadata -NodeExe $NodeExe
     artifacts = [ordered]@{
       launcher = [ordered]@{
-        path = "Start Link Checker.exe"
+        path = "Link Checker.exe"
         sha256 = Get-FileSha256 -FilePath $LauncherExe
         signature = Get-SignatureInfo -FilePath $LauncherExe
       }
@@ -285,7 +285,7 @@ function Write-ExternalBuildManifest {
         sha256 = Get-FileSha256 -FilePath $ZipPath
       }
       launcher = [ordered]@{
-        path = "$packageName\Start Link Checker.exe"
+        path = "$packageName\Link Checker.exe"
         sha256 = Get-FileSha256 -FilePath $LauncherExe
         signature = Get-SignatureInfo -FilePath $LauncherExe
       }
@@ -344,6 +344,7 @@ Copy-Item -LiteralPath (Join-Path $root "gui-server.mjs") -Destination $packageD
 Copy-Item -LiteralPath (Join-Path $root "convert-ut1-rules.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "check-links.cmd") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "gui.cmd") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $root "使用說明.txt") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "ROADMAP.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "docs") -Destination $packageDir -Recurse
@@ -366,23 +367,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $launcherSigned = Sign-PortableLauncher -FilePath $launcherExe
-function Decode-Utf8Base64Text {
-  param(
-    [Parameter(Mandatory = $true)][string]$Value
-  )
-
-  return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Value))
-}
-
-$portableReadmePrefix = Decode-Utf8Base64Text "TGluayBDaGVja2VyIOWPr+aUnOeJiAoK5L2/55So5pa55byP77yaCjEuIOino+Wjk+e4ruaVtOWAi+izh+aWmeWkvu+8jOiri+S4jeimgeWPquenu+WLleWFtuS4reS4gOWAi+aqlOahiOOAggoyLiDln7fooYwgU3RhcnQgTGluayBDaGVja2VyLmV4ZeOAggozLiDmnKzmqZ8gR1VJIOWVn+WLleW+jO+8jOeAj+imveWZqOacg+iHquWLlemWi+WVn+OAggo0LiDoi6XpnIDopoHlkb3ku6TliJfoqLrmlrfvvIzlj6/mlLnnlKggZ3VpLmNtZCDllZ/li5XjgIIKNS4g6Iul6KaB5YiG5p6Q5aSW6YCj5Yyv5Ye66LOH5paZ77yM5Y+v5Z+36KGMIGFuYWx5emVyLmNtZO+8jOaIluW+niBHVUkg6ZaL5ZWf5aSW6YOo6YCj57WQ5YiG5p6Q6aCB44CCCgrlkb3ku6TliJfnr4TkvovvvJoKICBjaGVjay1saW5rcy5jbWQgaHR0cHM6Ly9leGFtcGxlLmNvbQogIGNoZWNrLWxpbmtzLmNtZCBodHRwczovL2V4YW1wbGUuY29tIC0tc3lzdGVtLWNhCiAgcnVudGltZVxub2RlLmV4ZSByZXBvcnQtZGlmZi5tanMgb2xkLXJlcG9ydC5qc29uIG5ldy1yZXBvcnQuanNvbiAtLW91dHB1dCBkaWZmLmpzb24KICBydW50aW1lXG5vZGUuZXhlIGNvbnZlcnQtdXQxLXJ1bGVzLm1qcyAtLWlucHV0IHBhdGhcdG9cdXQxXGJsYWNrbGlzdHMgLS1vdXRwdXQgdXQxLXJ1bGVzLmpzb24gLS1wcmV0dHkKClN5c3RlbSBDQSDmqKHlvI/vvJoKICBTdGFydCBMaW5rIENoZWNrZXIuZXhlIOiIhyBndWkuY21kIOmgkOiorei8ieWFpSBXaW5kb3dzIOezu+e1seagueaGkeitieOAggogIGNoZWNrLWxpbmtzLmNtZCDntq3mjIEgYnVuZGxlZCBOb2RlIENBIGJhc2VsaW5l77yb6ZyA6KaB5pmC6KuL5piO56K65L2/55SoIC0tc3lzdGVtLWNh44CCCgpCdWlsZCDlrozmlbTmgKfvvJoKLSBCVUlMRC1NQU5JRkVTVC5qc29uIOacg+WIl+WHuuatpOWPr+aUnOizh+aWmeWkvuWFp+eahOaqlOahiOiIhyBTSEEyNTbjgIIKLSBMaW5rQ2hlY2tlci1wb3J0YWJsZS5idWlsZC1tYW5pZmVzdC5qc29uIOiIhyBMaW5rQ2hlY2tlci1wb3J0YWJsZS56aXAuc2hhMjU2IOacg+i8uOWHuuWcqCB6aXAg5peB6YKK44CCCi0g5pWj5biD5YmN6KuL55So5aSW6YOoIG1hbmlmZXN0IOmpl+itiSB6aXAgaGFzaOOAggoK5a6J5YWo5qih5Z6L77yaCi0gR1VJIHNlcnZlciDlj6ogbGlzdGVuIDEyNy4wLjAuMe+8jOS4jeacg+aatOmcsuWIsOe2sui3r+OAggotIOatpOWPr+aUnOeJiOS4jeacg+WuieijnSBXaW5kb3dzIHNlcnZpY2XjgIIKLSDmraTlj6/mlJzniYjkuI3mnIPlr6vlhaUgcmVnaXN0cnkg5ZWf5YuV6aCF55uu44CCCi0g5q2k5Y+v5pSc54mI5LiN5pyD6Kit5a6a6ZaL5qmf6Ieq5YuV5ZWf5YuV44CCCi0g5q2k5Y+v5pSc54mI5LiN5pyD6YCj5o6l6YGg56uv5o6n5Yi25Ly65pyN5Zmo44CCCi0g5Y+v5pSc54mIIC5jbWQg5qqU5Y+q5L2/55SoIGJ1bmRsZWQgcnVudGltZVxub2RlLmV4Ze+8m+iLpSBydW50aW1lIOS4jeWtmOWcqOacg+ebtOaOpeWBnOatouOAggoK5rOo5oSP5LqL6aCF77yaCi0g6KuL5L+d5oyB5pW05YCL6LOH5paZ5aS+5a6M5pW077yM5LiN6KaB5Y+q56e75YuV5Zau5LiAIGNtZCDmqpTjgIIKLSBTdGFydCBMaW5rIENoZWNrZXIuZXhlIOacg+WVn+WLleacrOapn+acjeWLmeS4pumWi+WVn+ato+eiuueahOeAj+imveWZqOe2suWdgOOAggotIOiLpeaykuaciemWi+WVn+S4reeahCBHVUkg6aCB6Z2i5LiU5rKS5pyJ5Z+36KGM5Lit55qE5bel5L2c77yM5pys5qmf5pyN5YuZ57SEIDUg5YiG6ZCY5b6M5pyD6Ieq5YuV57WQ5p2f44CCCi0g5beyIGJ1bmRsZWQgcnVudGltZVxub2RlLmV4Ze+8jOS9v+eUqOiAheS4jemcgOimgeWPpuWkluWuieijnSBOb2RlLmpz44CC"
-$portableSignedNote = Decode-Utf8Base64Text "LSBTdGFydCBMaW5rIENoZWNrZXIuZXhlIOW3sueUqCBidWlsZCBzY3JpcHQg55Si55Sf55qE5pys5qmf6Ieq57C95oaR6K2J57C9572y44CCCi0g5pys5qmf6Ieq57C95oaR6K2J5LiN5piv5YWs6ZaL5L+h5Lu755qEIGNvZGUgc2lnbmluZ++8jOWPr+iDveeEoeazlea2iOmZpCBXaW5kb3dzIFNtYXJ0U2NyZWVuIOitpuWRiuOAggotIExpbmtDaGVja2VyLWxvY2FsLWNvZGUtc2lnbmluZy5jZXIg5piv5pys5qyh57C9572y5oaR6K2J55qE5YWs6ZaL5oaR6K2J77yM5Y+q5L6b5YWn6YOo5omL5YuV5L+h5Lu75oiW5Yyv5YWl5rWB56iL5L2/55So77yb5LiN6ZyA6KaB5LiA6Iis5L2/55So6ICF5a6J6KOd77yM5Lmf5LiN5Luj6KGoIHppcCDkvobmupDlt7LnlLHlhazplosgQ0Eg6IOM5pu444CC"
-$portableUnsignedNote = Decode-Utf8Base64Text "LSBTdGFydCBMaW5rIENoZWNrZXIuZXhlIOWcqOatpCBidWlsZCDkuK3mnKrnsL3nvbLvvIzljp/lm6DmmK/mnKzmqZ/oh6rnsL3mtYHnqIvkuI3lj6/nlKjjgIIKLSDmlaPluIPliY3oq4vkvb/nlKggTGlua0NoZWNrZXItcG9ydGFibGUuemlwLnNoYTI1NiDoiIflpJbpg6ggYnVpbGQgbWFuaWZlc3Qg6amX6K2JIExpbmtDaGVja2VyLXBvcnRhYmxlLnppcOOAggotIOacquewvee9sueahOacrOapnyBsYXVuY2hlciBidWlsZCDlj6/og73op7jnmbwgU21hcnRTY3JlZW4g5oiW56uv6bue6Ziy6K235o+Q56S644CCCi0g6IiK5YyF5oiW5omL5YuV5YyF6KOd6Iul5Ye654++IExpbmtDaGVja2VyLWxvY2FsLWNvZGUtc2lnbmluZy5jZXLvvIzoq4voppbngrrnsL3nvbLlmJfoqabmrpjnlZnmqpTvvJvmnKrnsL3nvbIgYnVpbGQg5LiN6ZyA6KaB5a6J6KOd5q2k5oaR6K2J77yM5LiU5paw54mIIGJ1aWxkIHNjcmlwdCDmnIPlnKjmiZPljIXmmYLnp7vpmaTlroPjgII="
-$portableReadmeSuffix = Decode-Utf8Base64Text "LSBHVUkg5qqi5p+l5pyD6Ieq5YuV5bCH57SA6YyE5YSy5a2Y5ZyoIGxvZ3Mg6LOH5paZ5aS+44CCCi0g5aSW6YOo6YCj57WQ5YiG5p6Q5Y+v5Yyv5YWlIHJlcG9ydC5qc29uIOaIliBleHRlcm5hbC1saW5rcy5jc3bvvIzkuZ/lj6/mkK3phY3pgbjnlKjnmoQgZG9tYWluIHJ1bGVzIEpTT07jgIIKLSBHVUkg5L2H5YiX5Y+v5Zyo5pys5qmf5ZCM5pmC5qqi5p+l5aSa5YCL57ay56uZ44CCCi0g5qqi5p+l5YWs6ZaL5oiW5pS/5bqc57ay56uZ5pmC77yM5bu66K2w57at5oyB6LyD5L2O55qE5ZCM5pmC5qqi5p+l57ay56uZ5pW444CC"
-
-$portableSignatureNote = if ($launcherSigned) { $portableSignedNote } else { $portableUnsignedNote }
-$portableReadme = @($portableReadmePrefix, $portableSignatureNote, $portableReadmeSuffix) -join [Environment]::NewLine
-
-Set-Content -LiteralPath (Join-Path $packageDir "PORTABLE-README.txt") -Value $portableReadme -Encoding UTF8
 
 Write-PackageBuildManifest `
   -PackageDir $packageDir `

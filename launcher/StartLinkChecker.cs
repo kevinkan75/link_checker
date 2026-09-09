@@ -45,7 +45,7 @@ internal static class StartLinkChecker
             ShowError(
                 "Link Checker cannot start because a required file is missing.",
                 missing + Environment.NewLine + Environment.NewLine +
-                "Please extract the complete portable folder again, then run Start Link Checker.exe from that folder.");
+                "Please extract the complete portable folder again, then run Link Checker.exe from that folder.");
             return 1;
         }
 
