@@ -1053,7 +1053,7 @@ function showLogLocation(data) {
 function updateStatus(status) {
   scanInProgress = ["running", "stopping"].includes(status.state || "running");
   setState(status.state || "running");
-  elapsed.textContent = `${status.elapsedSeconds || 0}s`;
+  elapsed.textContent = formatElapsedTime(status.elapsedSeconds);
   const pagesCrawled = Number(status.pagesCrawled || 0);
   const maxPages = Number(status.maxPages || maxPagesInput.value || 0);
   const queuedPages = Number(status.queuedPages || 0);
@@ -1087,6 +1087,19 @@ function updateStatus(status) {
   updateIncrementalSummary(null);
 
   setProgressValue(getScanProgress(status));
+}
+
+function formatElapsedTime(seconds) {
+  const numericSeconds = Number(seconds);
+  const totalSeconds = Number.isFinite(numericSeconds) ? Math.max(0, Math.floor(numericSeconds)) : 0;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+  const paddedSeconds = String(remainingSeconds).padStart(2, "0");
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${paddedSeconds}`;
+  }
+  return `${minutes}:${paddedSeconds}`;
 }
 
 function setProgressValue(value) {

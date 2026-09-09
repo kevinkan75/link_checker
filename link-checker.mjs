@@ -2873,6 +2873,7 @@ class LinkChecker {
           protected: 0,
           suspectedWaf: 0,
           suspectedBot: 0,
+          blockedUrls: 0,
           retryAfterResponses: 0,
           retryAfterCooldowns: 0,
           retryAfterCooldownMs: 0,
@@ -2893,20 +2894,28 @@ class LinkChecker {
       if (!result.ok && result.status >= 400) {
         item.httpErrors += 1;
       }
-      if (result.status === 403 || result.classification === "access_denied" || result.issueType === "access_denied") {
+      const isAccessDenied = result.status === 403 || result.classification === "access_denied" || result.issueType === "access_denied";
+      const isRateLimited = result.status === 429;
+      const isProtected = result.classification === "protected";
+      const isSuspectedWaf = Boolean(result.suspectedWaf);
+      const isSuspectedBot = Boolean(result.suspectedBot);
+      if (isAccessDenied) {
         item.accessDenied += 1;
       }
-      if (result.status === 429) {
+      if (isRateLimited) {
         item.rateLimited += 1;
       }
-      if (result.classification === "protected") {
+      if (isProtected) {
         item.protected += 1;
       }
-      if (result.suspectedWaf) {
+      if (isSuspectedWaf) {
         item.suspectedWaf += 1;
       }
-      if (result.suspectedBot) {
+      if (isSuspectedBot) {
         item.suspectedBot += 1;
+      }
+      if (isAccessDenied || isRateLimited || isProtected || isSuspectedWaf || isSuspectedBot) {
+        item.blockedUrls += 1;
       }
       if (result.retryAfter) {
         item.retryAfterResponses += 1;
@@ -2922,8 +2931,7 @@ class LinkChecker {
     }
 
     const hostItems = [...hosts.values()].map((item) => {
-      const blockCount = item.accessDenied + item.rateLimited + item.protected + item.suspectedWaf + item.suspectedBot;
-      const blockRate = item.urlsChecked > 0 ? blockCount / item.urlsChecked : 0;
+      const blockRate = item.urlsChecked > 0 ? item.blockedUrls / item.urlsChecked : 0;
       if (item.rateLimited > 0 || item.retryAfterCooldowns > 0) {
         item.warningCodes.add("rate_limited_host");
       }
