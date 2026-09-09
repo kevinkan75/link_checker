@@ -1,20 +1,20 @@
 # 開發路線圖
 
-更新日期：2026-09-08
+更新日期：2026-09-09
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
 ## Current State
 
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
-- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` patch release scope 已凍結為 404 證據式判讀、Cloudflare Email Protection 與 Form Action semantics 三項 accuracy / false-positive corrections。
+- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` 已發布 accuracy / false-positive corrections；`v1.5.2` 收斂 GUI、portable packaging、host diagnostics 與 Report Analyzer 的 maintenance refinements。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
 
 ## Current Focus
 
-目前焦點是依 lightweight SOP 完成 `v1.5.1` patch release；不新增功能、不變更 report schema，也不延伸其他 correctness refinement。
+目前焦點是依 Fast Release policy 完成 `v1.5.2` patch release；不新增 scanner behavior、不變更 report schema，也不延伸其他 correctness refinement。
 
 後續工作以 real-site evidence、實際使用問題、regression evidence 與維護成本作為是否啟動 Future Candidate 的依據；Roadmap 中存在候選項目不代表自動進入實作。
 
@@ -24,7 +24,6 @@
 
 | Candidate | Status | Activation criteria / Boundary |
 | --- | --- | --- |
-| Report Analyzer internal / external scope filter | CANDIDATE / EVIDENCE-REQUIRED | 只有實際承辦／交辦使用證明現有 interpretation filter、domain search / ranking 與 external-link analysis 不足以快速區分本站與外部責任時才恢復評估；優先 reuse start origin / URL evidence，不建立 crawler-side scope engine，也不修改 report schema。 |
 | GUI rules URL input | CANDIDATE | 讓使用者不必切 CLI 即可載入 site-specific rules；必須保留安全提示、錯誤呈現與權限邊界。 |
 | Fragment / duplicate anchor optional check | LOW PRIORITY | 已有 real-site evidence 顯示 HTTP 200 不代表 `#fragment` 目標存在；定位為 optional quality check，不影響 broken-link core judgment。 |
 | Report Analyzer large-file UX improvement | EVIDENCE-REQUIRED | 優先評估現有 `report.json` 處理流程及 NDJSON compatibility input 的 UX 改善；不因大型檔案需求恢復預設 NDJSON sidecar 輸出。只有實際效能或記憶體 evidence 顯示現行資料契約不足時，才重新評估 output strategy。 |
