@@ -447,7 +447,7 @@ body.is-empty .links-panel {
 
 .result-toolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.42fr) minmax(170px, 0.5fr) minmax(160px, auto);
+  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(140px, 0.42fr)) minmax(160px, auto);
   gap: 12px;
   margin-bottom: 14px;
   min-width: 0;
@@ -621,6 +621,13 @@ tr:last-child td {
   border-color: #c9d7d9;
   background: #f4fbfb;
   color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.meta-badge.scope {
+  border-color: #bdd8c8;
+  background: #f0faf4;
+  color: #25603e;
   font-weight: 700;
 }
 

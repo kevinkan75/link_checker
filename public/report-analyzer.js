@@ -1,6 +1,7 @@
 ﻿const reportFileInput = document.querySelector("#report-file");
 const searchInput = document.querySelector("#search");
 const issueFilterInput = document.querySelector("#issue-filter");
+const scopeFilterInput = document.querySelector("#scope-filter");
 const statusFilterInput = document.querySelector("#status-filter");
 const exportCsvButton = document.querySelector("#export-csv-button");
 const clearButton = document.querySelector("#clear-button");
@@ -83,6 +84,12 @@ const INTERPRETATION_SEVERITY = {
   page_quality_notice: "notice",
 };
 
+const MANAGEMENT_SCOPE_LABELS = {
+  internal: "本站",
+  same_domain: "同網域",
+  external: "外部網站",
+};
+
 const FILE_SIZE_WARN_BYTES = 15 * 1024 * 1024;
 const FILE_SIZE_LARGE_BYTES = 50 * 1024 * 1024;
 const BROKEN_LIST_INITIAL_COUNT = 200;
@@ -126,7 +133,7 @@ async function loadSessionToken() {
 
 reportFileInput.addEventListener("change", loadReportFile);
 
-for (const input of [searchInput, issueFilterInput, statusFilterInput]) {
+for (const input of [searchInput, issueFilterInput, scopeFilterInput, statusFilterInput]) {
   input.addEventListener("input", () => {
     if (currentAnalysis) {
       renderAnalysis(applyFilters(currentAnalysis));
@@ -148,6 +155,7 @@ clearButton.addEventListener("click", () => {
   reportFileInput.value = "";
   searchInput.value = "";
   resetSelect(issueFilterInput, "全部");
+  scopeFilterInput.value = "all";
   resetSelect(statusFilterInput, "全部");
   exportCsvButton.disabled = true;
   clearButton.disabled = true;
@@ -336,11 +344,13 @@ function analyzeReport(report) {
   const runStatus = normalizeRunStatus(report.runStatus);
   const broken = normalizeBrokenItems(report.broken || []);
   const checked = Array.isArray(report.checked) ? report.checked : [];
+  const externalLinks = Array.isArray(report.externalLinks) ? report.externalLinks : [];
   const enrichedBroken = broken.map((item) => ({
     ...item,
     issueType: inferIssueType(item),
     statusKey: normalizeStatus(item.status),
     domain: extractHostname(item.finalUrl || item.url),
+    managementScope: deriveManagementScope(report.startUrl, item.url, externalLinks),
   })).map((item) => ({
     ...item,
     interpretation: normalizeInterpretation(item, report),
@@ -649,12 +659,16 @@ function inferIssueType(item) {
 function applyFilters(analysis) {
   const query = searchInput.value.trim().toLowerCase();
   const issue = issueFilterInput.value;
+  const scope = scopeFilterInput.value || "all";
   const status = statusFilterInput.value;
   const filteredBroken = analysis.broken.filter((item) => {
     if (issue !== "all" && item.interpretationCategory !== issue) {
       return false;
     }
     if (status !== "all" && item.statusKey !== status) {
+      return false;
+    }
+    if (scope !== "all" && item.managementScope !== scope) {
       return false;
     }
     if (!query) {
@@ -669,6 +683,7 @@ function applyFilters(analysis) {
       item.interpretation.label,
       item.interpretation.action,
       item.interpretation.needsManualReview ? "需人工確認" : "",
+      getManagementScopeLabel(item.managementScope),
       item.issueType,
       ISSUE_LABELS[item.issueType],
       item.status,
@@ -827,6 +842,7 @@ function getBrokenListKey(items) {
   return [
     searchInput.value.trim().toLowerCase(),
     issueFilterInput.value,
+    scopeFilterInput.value,
     statusFilterInput.value,
     items.length,
   ].join("\u0001");
@@ -977,6 +993,9 @@ function renderIssueItem(item) {
 
   const header = document.createElement("div");
   header.className = "issue-item-header";
+  if (item.managementScope) {
+    header.append(metaBadge(getManagementScopeLabel(item.managementScope), "scope"));
+  }
   header.append(
     interpretationBadge(item.interpretation.category),
     metaBadge(formatStatusSummary(item), "status"),
@@ -1036,6 +1055,43 @@ function renderIssueItem(item) {
     row.append(detailLine("增量來源", formatIncrementalProvenance(item.incremental)));
   }
   return row;
+}
+
+function deriveManagementScope(startUrl, targetUrl, externalLinks) {
+  let start;
+  let target;
+  try {
+    start = new URL(startUrl);
+    target = new URL(targetUrl);
+  } catch {
+    return "";
+  }
+
+  if (target.hostname === start.hostname) {
+    return "internal";
+  }
+
+  const targetEvidence = externalLinks.find((item) => {
+    if (String(item.hostname || "").toLowerCase() === target.hostname) {
+      return true;
+    }
+    try {
+      return new URL(item.url).hostname === target.hostname;
+    } catch {
+      return false;
+    }
+  });
+  const targetDomain = String(targetEvidence?.registrableDomain || "").toLowerCase().replace(/\.$/, "");
+  if (!targetDomain) {
+    return "";
+  }
+  return start.hostname === targetDomain || start.hostname.endsWith(`.${targetDomain}`)
+    ? "same_domain"
+    : "external";
+}
+
+function getManagementScopeLabel(scope) {
+  return MANAGEMENT_SCOPE_LABELS[scope] || "";
 }
 
 function sortBrokenItemsForDisplay(items) {
