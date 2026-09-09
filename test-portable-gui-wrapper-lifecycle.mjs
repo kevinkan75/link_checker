@@ -93,12 +93,28 @@ assertNotIncludes(buildPortable, "PORTABLE-README.txt", "build-portable.ps1");
 assertIncludes(buildPortable, "function Get-OrCreate-CodeSigningCertificate", "build-portable.ps1");
 assertIncludes(buildPortable, "function Sign-PortableLauncher", "build-portable.ps1");
 assertIncludes(buildPortable, "$launcherSigned = Sign-PortableLauncher -FilePath $launcherExe", "build-portable.ps1");
+assertIncludes(buildPortable, "function Assert-RequiredPortablePaths", "build-portable.ps1");
+assertIncludes(buildPortable, '"使用說明.txt",', "required portable paths");
+assertIncludes(buildPortable, 'throw "Required portable path is missing: $relativePath"', "required portable paths");
+const requiredPathGuardIndex = buildPortable.indexOf("Assert-RequiredPortablePaths -PackageDir $packageDir");
+const packageManifestIndex = buildPortable.indexOf("Write-PackageBuildManifest `");
+assert(
+  requiredPathGuardIndex >= 0 && requiredPathGuardIndex < packageManifestIndex,
+  "Required portable paths should be checked before writing BUILD-MANIFEST.json.",
+);
 assertIncludes(buildPortable, "Compress-Archive -LiteralPath $packageDir", "build-portable.ps1");
 
 assertIncludes(launcherSource, "internal static class StartLinkChecker", "launcher source implementation");
 assertIncludes(launcherSource, 'AssemblyProduct("Link Checker")', "launcher product metadata");
 assertIncludes(launcherSource, "then run Link Checker.exe from that folder", "launcher missing-file guidance");
 assertIncludes(releasePreflight, '$launcherPath = Join-Path $packageDir "Link Checker.exe"', "release preflight");
+assertIncludes(releasePreflight, '"ARTIFACT_USAGE_GUIDE"', "release preflight checks");
+assertIncludes(releasePreflight, '$usageGuidePath = Join-Path $packageDir "使用說明.txt"', "release preflight");
+assertIncludes(
+  releasePreflight,
+  '@{ Id = "ARTIFACT_USAGE_GUIDE"; Path = $usageGuidePath; Type = "Leaf" }',
+  "release preflight artifact checks",
+);
 
 assertIncludes(quickGuide, "Link Checker 使用說明", "quick guide");
 assertIncludes(quickGuide, "雙擊「Link Checker.exe」", "quick guide");

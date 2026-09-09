@@ -14,7 +14,7 @@ $checkIds = @(
     "SCHEMA_REPORT_COHERENCE",
     "ARTIFACT_PACKAGE_DIR", "ARTIFACT_ZIP", "ARTIFACT_ZIP_SHA256",
     "ARTIFACT_EXTERNAL_MANIFEST", "ARTIFACT_PACKAGE_MANIFEST",
-    "ARTIFACT_LAUNCHER", "ARTIFACT_NODE",
+    "ARTIFACT_LAUNCHER", "ARTIFACT_NODE", "ARTIFACT_USAGE_GUIDE",
     "MANIFEST_EXTERNAL", "MANIFEST_PACKAGE", "MANIFEST_SOURCE",
     "MANIFEST_PACKAGE_FILES", "MANIFEST_ARTIFACTS", "PACKAGE_VERSION_COHERENCE",
     "HASH_ZIP_SHA256_SEMANTIC", "SIGNATURE_NODE", "SIGNATURE_LAUNCHER",
@@ -343,6 +343,7 @@ try {
         $packageManifestPath = Join-Path $packageDir "BUILD-MANIFEST.json"
         $launcherPath = Join-Path $packageDir "Link Checker.exe"
         $bundledNodePath = Join-Path $packageDir "runtime\node.exe"
+        $usageGuidePath = Join-Path $packageDir "使用說明.txt"
 
         $artifactChecks = @(
             @{ Id = "ARTIFACT_PACKAGE_DIR"; Path = $packageDir; Type = "Container" },
@@ -351,7 +352,8 @@ try {
             @{ Id = "ARTIFACT_EXTERNAL_MANIFEST"; Path = $externalManifestPath; Type = "Leaf" },
             @{ Id = "ARTIFACT_PACKAGE_MANIFEST"; Path = $packageManifestPath; Type = "Leaf" },
             @{ Id = "ARTIFACT_LAUNCHER"; Path = $launcherPath; Type = "Leaf" },
-            @{ Id = "ARTIFACT_NODE"; Path = $bundledNodePath; Type = "Leaf" }
+            @{ Id = "ARTIFACT_NODE"; Path = $bundledNodePath; Type = "Leaf" },
+            @{ Id = "ARTIFACT_USAGE_GUIDE"; Path = $usageGuidePath; Type = "Leaf" }
         )
         foreach ($artifact in $artifactChecks) {
             if (Test-Path -LiteralPath $artifact.Path -PathType $artifact.Type) { Set-Check $artifact.Id "PASS" }

@@ -28,6 +28,30 @@ function Assert-ChildPath {
   }
 }
 
+function Assert-RequiredPortablePaths {
+  param(
+    [Parameter(Mandatory = $true)][string]$PackageDir
+  )
+
+  $requiredPortablePaths = @(
+    "Link Checker.exe",
+    "link-checker.mjs",
+    "gui-server.mjs",
+    "gui.cmd",
+    "check-links.cmd",
+    "使用說明.txt",
+    "runtime\node.exe",
+    "public"
+  )
+
+  foreach ($relativePath in $requiredPortablePaths) {
+    $requiredPath = Join-Path $PackageDir $relativePath
+    if (-not (Test-Path -LiteralPath $requiredPath)) {
+      throw "Required portable path is missing: $relativePath"
+    }
+  }
+}
+
 function Resolve-CSharpCompiler {
   $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
   if (Test-Path -LiteralPath $vswhere) {
@@ -367,6 +391,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $launcherSigned = Sign-PortableLauncher -FilePath $launcherExe
+
+Assert-RequiredPortablePaths -PackageDir $packageDir
 
 Write-PackageBuildManifest `
   -PackageDir $packageDir `
