@@ -15,12 +15,6 @@ function assertNotIncludes(text, unexpected, label) {
   );
 }
 
-function extractPortableGuiTemplate(buildScript) {
-  const match = /\$guiCmd\s*=\s*@'\r?\n([\s\S]*?)\r?\n'@/.exec(buildScript);
-  assert(match, "build-portable.ps1 should define a gui.cmd template.");
-  return match[1];
-}
-
 function assertWrapperLifecycle(text, label) {
   const defaultSystemCaIndex = text.indexOf("call :appendSystemCa");
   const wrapperMarkerIndex = text.indexOf('set "LINK_CHECKER_GUI_WRAPPER=cmd"');
@@ -48,18 +42,33 @@ function assertWrapperLifecycle(text, label) {
   );
 }
 
+function assertCliWrapper(text, label) {
+  assertIncludes(text, 'set "NODE_EXE=%~dp0runtime\\node.exe"', label);
+  assertIncludes(text, 'if not exist "%NODE_EXE%" set "NODE_EXE=node"', label);
+  assertIncludes(text, '"%NODE_EXE%" "%~dp0link-checker.mjs" %*', label);
+}
+
 const sourceGuiCmd = await readFile(new URL("./gui.cmd", import.meta.url), "utf8");
+const sourceCheckLinksCmd = await readFile(new URL("./check-links.cmd", import.meta.url), "utf8");
 const buildPortable = await readFile(new URL("./build-portable.ps1", import.meta.url), "utf8");
-const portableGuiTemplate = extractPortableGuiTemplate(buildPortable);
 
 assertWrapperLifecycle(sourceGuiCmd, "source gui.cmd");
-assertWrapperLifecycle(portableGuiTemplate, "portable gui.cmd template");
+assertCliWrapper(sourceCheckLinksCmd, "source check-links.cmd");
 
 assertIncludes(
-  portableGuiTemplate,
-  "Link Checker portable runtime was not found:",
-  "portable gui.cmd template"
+  buildPortable,
+  'Copy-Item -LiteralPath (Join-Path $root "gui.cmd") -Destination $packageDir',
+  "build-portable.ps1"
 );
-assertNotIncludes(portableGuiTemplate, "where node.exe", "portable gui.cmd template");
+assertIncludes(
+  buildPortable,
+  'Copy-Item -LiteralPath (Join-Path $root "check-links.cmd") -Destination $packageDir',
+  "build-portable.ps1"
+);
+assertNotIncludes(buildPortable, "Write-PortableCommandScripts", "build-portable.ps1");
+assertNotIncludes(buildPortable, "$guiCmd", "build-portable.ps1");
+assertNotIncludes(buildPortable, "$checkLinksCmd", "build-portable.ps1");
+assertNotIncludes(buildPortable, ":runGui", "build-portable.ps1");
+assertNotIncludes(buildPortable, '"%NODE_EXE%" "%~dp0link-checker.mjs" %*', "build-portable.ps1");
 
-console.log("ok portable gui wrapper lifecycle");
+console.log("ok portable command wrapper single source");

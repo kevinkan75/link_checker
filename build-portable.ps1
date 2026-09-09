@@ -305,75 +305,6 @@ function Write-ExternalBuildManifest {
   Set-Content -LiteralPath $zipHashPath -Value "$($manifest.artifacts.zip.sha256)  $([System.IO.Path]::GetFileName($ZipPath))" -Encoding ASCII
 }
 
-function Write-PortableCommandScripts {
-  param(
-    [Parameter(Mandatory = $true)][string]$PackageDir
-  )
-
-  $checkLinksCmd = @'
-@echo off
-setlocal
-set "NODE_EXE=%~dp0runtime\node.exe"
-if not exist "%NODE_EXE%" (
-  echo Link Checker portable runtime was not found:
-  echo   %NODE_EXE%
-  echo Please extract the complete portable folder again, then retry.
-  exit /b 1
-)
-"%NODE_EXE%" "%~dp0link-checker.mjs" %*
-'@
-
-  $guiCmd = @'
-@echo off
-setlocal
-set "NODE_EXE=%~dp0runtime\node.exe"
-if not exist "%NODE_EXE%" (
-  echo Link Checker portable runtime was not found:
-  echo   %NODE_EXE%
-  echo Please extract the complete portable folder again, then retry.
-  exit /b 1
-)
-call :appendSystemCa
-call :enableSystemCa %*
-set "LINK_CHECKER_GUI_WRAPPER=cmd"
-set "LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED="
-
-:runGui
-"%NODE_EXE%" "%~dp0gui-server.mjs" %*
-set "GUI_EXIT_CODE=%ERRORLEVEL%"
-if "%GUI_EXIT_CODE%"=="75" (
-  if defined LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED (
-    echo Link Checker system certificate restart did not complete after one retry.
-    exit /b %GUI_EXIT_CODE%
-  )
-  set "LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED=1"
-  call :appendSystemCa
-  goto runGui
-)
-exit /b %GUI_EXIT_CODE%
-
-:enableSystemCa
-if "%~1"=="" exit /b 0
-if /I "%~1"=="--system-ca" (
-  call :appendSystemCa
-  exit /b 0
-)
-shift
-goto :enableSystemCa
-
-:appendSystemCa
-if defined NODE_OPTIONS (
-  echo(%NODE_OPTIONS% | findstr /I /C:"--use-system-ca" >nul || set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"
-) else (
-  set "NODE_OPTIONS=--use-system-ca"
-)
-exit /b 0
-'@
-
-  Set-Content -LiteralPath (Join-Path $PackageDir "check-links.cmd") -Value $checkLinksCmd -Encoding ASCII
-  Set-Content -LiteralPath (Join-Path $PackageDir "gui.cmd") -Value $guiCmd -Encoding ASCII
-}
-
 $nodeCommand = Get-Command node -ErrorAction Stop
 $nodeExe = $nodeCommand.Source
 if (-not (Test-Path -LiteralPath $nodeExe)) {
@@ -411,7 +342,8 @@ Copy-Item -LiteralPath (Join-Path $root "link-checker.mjs") -Destination $packag
 Copy-Item -LiteralPath (Join-Path $root "report-diff.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "gui-server.mjs") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "convert-ut1-rules.mjs") -Destination $packageDir
-Write-PortableCommandScripts -PackageDir $packageDir
+Copy-Item -LiteralPath (Join-Path $root "check-links.cmd") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $root "gui.cmd") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "ROADMAP.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $root "docs") -Destination $packageDir -Recurse
