@@ -123,7 +123,7 @@ internal static class StartLinkChecker
             StandardErrorEncoding = Encoding.UTF8
         };
 
-        ApplyEnvironmentOptions(process.StartInfo, args);
+        ApplyEnvironmentOptions(process.StartInfo);
 
         process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs eventArgs)
         {
@@ -265,23 +265,8 @@ internal static class StartLinkChecker
         return false;
     }
 
-    private static void ApplyEnvironmentOptions(ProcessStartInfo startInfo, string[] args)
+    private static void ApplyEnvironmentOptions(ProcessStartInfo startInfo)
     {
-        bool systemCa = false;
-        foreach (string arg in args)
-        {
-            if (String.Equals(arg, "--system-ca", StringComparison.OrdinalIgnoreCase))
-            {
-                systemCa = true;
-                break;
-            }
-        }
-
-        if (!systemCa)
-        {
-            return;
-        }
-
         string current = startInfo.EnvironmentVariables["NODE_OPTIONS"] ?? "";
         if (current.IndexOf("--use-system-ca", StringComparison.OrdinalIgnoreCase) >= 0)
         {

@@ -153,14 +153,25 @@ async function assertFrontendRestartControl() {
   const html = await readFile("public/index.html", "utf8");
   const app = await readFile("public/app.js", "utf8");
   const wrapper = await readFile("gui.cmd", "utf8");
+  const launcher = await readFile("launcher/StartLinkChecker.cs", "utf8");
 
-  assert(html.includes('id="system-ca-restart"'), "Default GUI session should render a system CA restart action.");
+  assert(html.includes('id="system-ca-restart"'), "GUI should retain the exception-driven system CA restart action.");
   assert(app.includes("/api/restart-system-ca"), "Frontend should call the dedicated system CA restart endpoint.");
   assert(app.includes("waitForSystemCaSession"), "Frontend should wait for the restarted system CA session.");
   assert(app.includes("hasUnfinishedWork()"), "Frontend should prevent restart while local work is unfinished.");
   assert(wrapper.includes("LINK_CHECKER_GUI_WRAPPER=cmd"), "CMD wrapper should mark wrapper-owned GUI server sessions.");
   assert(wrapper.includes('if "%GUI_EXIT_CODE%"=="75"'), "CMD wrapper should handle the dedicated system CA restart exit code.");
   assert(wrapper.includes("goto runGui"), "CMD wrapper should relaunch in the same lifecycle loop.");
+
+  const environmentOptionsStart = launcher.indexOf("private static void ApplyEnvironmentOptions");
+  const environmentOptionsEnd = launcher.indexOf("private static string WaitForGuiUrl", environmentOptionsStart);
+  const environmentOptions = launcher.slice(environmentOptionsStart, environmentOptionsEnd);
+  assert(environmentOptionsStart >= 0 && environmentOptionsEnd > environmentOptionsStart, "Launcher should retain focused environment option handling.");
+  assert(launcher.includes("ApplyEnvironmentOptions(process.StartInfo);"), "Launcher GUI startup should enable system CA without requiring an argument.");
+  assert(environmentOptions.includes('EnvironmentVariables["NODE_OPTIONS"]'), "Launcher should preserve existing NODE_OPTIONS.");
+  assert(environmentOptions.includes('IndexOf("--use-system-ca", StringComparison.OrdinalIgnoreCase) >= 0'), "Launcher should avoid duplicate system CA options.");
+  assert(environmentOptions.includes('current + " --use-system-ca"'), "Launcher should append system CA to existing NODE_OPTIONS.");
+  assert(!environmentOptions.includes('String.Equals(arg, "--system-ca"'), "Launcher environment setup should not gate the GUI default on --system-ca.");
 }
 
 async function main() {

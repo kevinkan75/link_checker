@@ -22,6 +22,12 @@ function extractPortableGuiTemplate(buildScript) {
 }
 
 function assertWrapperLifecycle(text, label) {
+  const defaultSystemCaIndex = text.indexOf("call :appendSystemCa");
+  const wrapperMarkerIndex = text.indexOf('set "LINK_CHECKER_GUI_WRAPPER=cmd"');
+  assert(
+    defaultSystemCaIndex >= 0 && defaultSystemCaIndex < wrapperMarkerIndex,
+    `${label} should enable system CA before normal GUI startup.`,
+  );
   assertIncludes(text, 'set "LINK_CHECKER_GUI_WRAPPER=cmd"', label);
   assertIncludes(text, 'set "LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED="', label);
   assertIncludes(text, ":runGui", label);
@@ -31,6 +37,8 @@ function assertWrapperLifecycle(text, label) {
   assertIncludes(text, "if defined LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED", label);
   assertIncludes(text, 'set "LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED=1"', label);
   assertIncludes(text, "call :appendSystemCa", label);
+  assertIncludes(text, 'echo(%NODE_OPTIONS% | findstr /I /C:"--use-system-ca" >nul', label);
+  assertIncludes(text, 'set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"', label);
   assertIncludes(text, "goto runGui", label);
   assertIncludes(text, "exit /b %GUI_EXIT_CODE%", label);
   assertNotIncludes(

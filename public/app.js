@@ -18,7 +18,7 @@ const preferGetInput = document.querySelector("#prefer-get");
 const externalRefererInput = document.querySelector("#external-referer");
 const confirm404Input = document.querySelector("#confirm-404");
 const legacyTlsInput = document.querySelector("#legacy-tls");
-const systemCaStatus = document.querySelector("#system-ca-status");
+const systemCaPanel = document.querySelector("#system-ca-panel");
 const systemCaNote = document.querySelector("#system-ca-note");
 const systemCaRestartButton = document.querySelector("#system-ca-restart");
 const authorizedScanInput = document.querySelector("#authorized-scan");
@@ -418,8 +418,8 @@ function updateSystemCaRestartButton() {
   systemCaRestartButton.hidden = !shouldShow;
   systemCaRestartButton.disabled = systemCaRestarting || hasUnfinishedWork();
   systemCaRestartButton.textContent = systemCaRestarting
-    ? "正在重新啟動..."
-    : "重新啟動並使用 Windows 系統憑證";
+    ? "正在啟用..."
+    : "啟用 Windows 系統憑證";
 }
 
 async function restartWithSystemCa() {
@@ -462,7 +462,7 @@ async function restartWithSystemCa() {
   } catch (error) {
     systemCaRestarting = false;
     updateSystemCaStatus(sessionSystemCaEnabled);
-    window.alert(`重新啟動失敗：${error.message}\n\n請關閉 Link Checker 後，再使用系統憑證模式啟動。`);
+    window.alert(`重新啟動失敗：${error.message}\n\n請關閉後重新開啟 Link Checker。`);
   }
 }
 
@@ -553,14 +553,12 @@ async function loadSessionToken() {
 
 function updateSystemCaStatus(enabled) {
   sessionSystemCaEnabled = enabled === true;
-  if (!systemCaStatus || !systemCaNote) {
-    return;
+  if (systemCaPanel) {
+    systemCaPanel.hidden = sessionSystemCaEnabled;
   }
-  systemCaStatus.textContent = sessionSystemCaEnabled ? "已啟用" : "未啟用";
-  systemCaStatus.className = sessionSystemCaEnabled ? "session-status-enabled" : "session-status-disabled";
-  systemCaNote.textContent = sessionSystemCaEnabled
-    ? "此設定套用於目前 Link Checker 執行期間。"
-    : "如網站在瀏覽器可正常開啟，但掃描出現憑證問題，可重新啟動 Link Checker 並使用 Windows 系統信任憑證。";
+  if (systemCaNote) {
+    systemCaNote.textContent = "若網站在瀏覽器可正常開啟，但檢查時出現憑證問題，可啟用 Windows 系統憑證。";
+  }
   systemCaRestarting = false;
   updateSystemCaRestartButton();
 }

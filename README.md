@@ -62,7 +62,7 @@ http://127.0.0.1:8787
 
 GUI 的「連結檢查」使用較保守的日常掃描設定，並預設檢查外部連結。
 
-若 GUI 顯示「Windows 系統憑證：未啟用」，且網站在瀏覽器可正常開啟但掃描出現憑證問題，可在 GUI 中按「重新啟動並使用 Windows 系統憑證」切換為本次執行期間適用的系統憑證模式。
+`Start Link Checker.exe` 與 `gui.cmd` 啟動 GUI 時預設使用 Windows 系統憑證。若目前工作階段未啟用且檢查出現憑證問題，GUI 才會顯示「啟用 Windows 系統憑證」的例外操作。
 
 ### 使用 CLI
 
@@ -154,7 +154,7 @@ CLI 預設只檢查站內連結；若要檢查外部連結，需加上 `--extern
 
 | 情況 | 可嘗試的方式 |
 | --- | --- |
-| Windows 信任的政府或內部網站，在工具中出現憑證鏈錯誤 | GUI 可按「重新啟動並使用 Windows 系統憑證」；CLI 可使用 `--system-ca`。 |
+| Windows 信任的政府或內部網站，在工具中出現憑證鏈錯誤 | GUI 正常入口已預設使用 Windows 系統憑證；若出現例外提示可按「啟用 Windows 系統憑證」。CLI 可使用 `--system-ca`。 |
 | 舊伺服器 TLS 握手失敗 | 只有確認是舊 TLS 問題時才使用 `--legacy-tls`。 |
 | 網站容易限流、逾時或阻擋自動檢查 | 使用 `--conservative`，或降低單一 host 併發並增加延遲。 |
 | 外部網站回 `403`、`429`、timeout 或防護阻擋 | 先人工確認，不要直接判定外部連結失效。 |
@@ -169,7 +169,7 @@ CLI 預設只檢查站內連結；若要檢查外部連結，需加上 `--extern
 | 顯示執行進度 | CLI 使用 `--progress`。 |
 | 指定報告輸出位置 | CLI 使用 `--output <file>`。 |
 | 降低限流或阻擋風險 | CLI 使用 `--conservative`。 |
-| 使用 Windows / 系統信任憑證 | GUI 可直接重新啟動並使用 Windows 系統憑證；CLI 或 GUI 啟動時也可使用 `--system-ca`。 |
+| 使用 Windows / 系統信任憑證 | GUI 正常入口預設啟用；CLI 維持明確使用 `--system-ca`。 |
 
 完整 CLI 參數、cache、incremental、sitemap、rules、redaction 與 release 驗證說明請看 [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)。
 

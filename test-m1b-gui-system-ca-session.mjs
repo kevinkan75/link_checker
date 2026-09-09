@@ -190,9 +190,16 @@ async function assertFrontendSessionTruth() {
   const html = await readFile("public/index.html", "utf8");
   const app = await readFile("public/app.js", "utf8");
 
-  assert(html.includes('id="system-ca-status"'), "Main GUI should render a read-only system CA status.");
+  assert(html.includes('id="system-ca-panel"'), "Main GUI should retain an exception-only system CA panel.");
+  assert(html.includes('id="system-ca-panel" class="environment-panel" aria-labelledby="environment-title" hidden'), "System CA panel should be hidden before session truth is loaded.");
+  assert(html.includes("Windows 系統憑證尚未啟用"), "System CA exception panel should explain the disabled state.");
+  assert(html.includes(">啟用 Windows 系統憑證</button>"), "System CA exception action should use the concise product label.");
+  assert(html.includes("套用時 Link Checker 會自動重新啟動本機服務。"), "System CA exception panel should explain the restart effect separately.");
+  assert(!html.includes("重新啟動並使用 Windows 系統憑證"), "Main GUI should not use restart implementation detail as the action label.");
   assert(!html.includes('id="system-ca"'), "Main GUI should not keep an interactive system CA checkbox.");
   assert(app.includes("updateSystemCaStatus(data.systemCaEnabled === true)"), "Frontend should derive system CA display from server session truth.");
+  assert(app.includes("systemCaPanel.hidden = sessionSystemCaEnabled"), "Enabled system CA sessions should hide the exception panel.");
+  assert(app.includes("const shouldShow = !sessionSystemCaEnabled"), "Disabled system CA sessions should expose the exception action.");
   assert(!app.includes("systemCaInput.checked"), "Frontend should not read a scan-level system CA checkbox.");
   assert(!app.includes("systemCa:"), "Frontend scan payload should not send a per-job systemCa option.");
 }

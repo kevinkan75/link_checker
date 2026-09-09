@@ -12,6 +12,7 @@ if not exist "%NODE_EXE%" (
   )
   set "NODE_EXE=node"
 )
+call :appendSystemCa
 call :enableSystemCa %*
 set "LINK_CHECKER_GUI_WRAPPER=cmd"
 set "LINK_CHECKER_GUI_SYSTEM_CA_RESTARTED="
@@ -41,7 +42,7 @@ goto :enableSystemCa
 
 :appendSystemCa
 if defined NODE_OPTIONS (
-  echo(%NODE_OPTIONS% | findstr /C:"--use-system-ca" >nul || set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"
+  echo(%NODE_OPTIONS% | findstr /I /C:"--use-system-ca" >nul || set "NODE_OPTIONS=%NODE_OPTIONS% --use-system-ca"
 ) else (
   set "NODE_OPTIONS=--use-system-ca"
 )
