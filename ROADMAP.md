@@ -1,20 +1,20 @@
 # 開發路線圖
 
-更新日期：2026-09-09
+更新日期：2026-09-25
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
 ## Current State
 
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
-- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` 已發布 accuracy / false-positive corrections；`v1.5.2` 收斂 GUI、portable packaging、host diagnostics 與 Report Analyzer 的 maintenance refinements。
+- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` 已發布 accuracy / false-positive corrections；`v1.5.2` 收斂 GUI、portable packaging、host diagnostics 與 Report Analyzer 的 maintenance refinements；最新正式版本 `v1.5.3` 已完成 packaging-only maintenance patch。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
 
 ## Current Focus
 
-目前焦點是依 Fast Release policy 完成 `v1.5.2` patch release；不新增 scanner behavior、不變更 report schema，也不延伸其他 correctness refinement。
+目前專案階段是 maintenance / evidence-driven refinement。只依新的 deterministic evidence 啟動範圍明確的 correctness refinement；不因候選項目存在而自動擴張產品範圍或變更 report schema。
 
 後續工作以 real-site evidence、實際使用問題、regression evidence 與維護成本作為是否啟動 Future Candidate 的依據；Roadmap 中存在候選項目不代表自動進入實作。
 
@@ -29,6 +29,10 @@
 | Report Analyzer large-file UX improvement | EVIDENCE-REQUIRED | 優先評估現有 `report.json` 處理流程及 NDJSON compatibility input 的 UX 改善；不因大型檔案需求恢復預設 NDJSON sidecar 輸出。只有實際效能或記憶體 evidence 顯示現行資料契約不足時，才重新評估 output strategy。 |
 | External-risk rule governance refinement | CANDIDATE | 強化規則來源、白名單、分類依據與可追溯性；不擴張成 malware database、threat intelligence platform 或完整治理平台。 |
 | P12-2B robots-advertised sitemap | CANDIDATE / EVIDENCE-REQUIRED | 目前 real-site discovery evidence 尚不足，不屬已承諾 implementation；只有現有 static discovery fallback 仍存在實質缺口時才重新評估。 |
+| P13-6 Response Body Timeout Lifecycle | EVIDENCE-REQUIRED | 先建立 HTTP headers 立即可用、response body stall 超過 configured `timeoutMs` 的 deterministic fixture；只有可重現 configured timeout 未涵蓋 native fetch body consumption，才 reopen P13 implementation。本候選不授權變更 timeout behavior。 |
+| P6.5b-1 DNS Security Boundary Refinement | SECURITY REVIEW / EVIDENCE-REQUIRED | 已知 security `dnsLookup()` 與 native fetch connection 的實際 DNS resolution 未綁定同一 validated address，且 security DNS lookup failure 目前 fail open。後續須獨立完成 threat model、targeted reproduction、minimum design 與 security regression；不得直接將所有 DNS error 改為 fail closed。 |
+| P6.5a-3 Legacy TLS Decompressed Body Limit | LOW PRIORITY / EVIDENCE-REQUIRED | legacy TLS path 目前先以 `readBuffer(maxBytes)` 限制 compressed bytes，再進行 gzip / deflate sync decompression。只有新的安全或資源 evidence 才評估；目前不修改 legacy TLS。 |
+| P6.5b-2 Partial-run Validation Settlement | EVIDENCE-REQUIRED / NOT CONFIRMED | detached validation tasks 理論上可能在 partial / failed report snapshot 後才 settle，但目前沒有 deterministic evidence；先重現再決定是否需要 bounded correction。 |
 
 ## Deferred / Evidence-required
 
@@ -44,7 +48,7 @@
 | --- | --- | --- |
 | P0-P11 | COMPLETE / ACCEPTED | 已完成或驗收；歷史狀態由 [CURRENT_STATE_2026-08-03.md](docs/archive/CURRENT_STATE_2026-08-03.md) 與 [ROADMAP_HISTORY.md](docs/archive/ROADMAP_HISTORY.md) 承接。 |
 | P12 Static Discovery Resilience | COMPLETE / REFINEMENT ONLY | HTML sitemap fallback、weak initial frontier（0–1 個 crawlable same-origin page）的 conventional `/sitemap.xml` fallback 與 incomplete coverage notice 已完成；sitemap seed truncation 只依 direct page-budget omission evidence 判定。robots-advertised sitemap 維持 evidence-required candidate。 |
-| P13 HTTP Validation Resilience | RESOLVED | P13-1、P13-2、P13-4 DONE；P13-3、P13-5 SKIPPED / NOT REQUIRED。3 DONE、2 SKIPPED / NOT REQUIRED、0 remaining implementation items；只有新的可重現 evidence 才 reopen。維持 reuse-first，不建立平行 validation / confirmation engine、不擴充 generic 400 fallback、不建立 Facebook-specific workaround，且 protection uncertainty 不可蓋過 formal `confirmed_missing` semantics。詳細 acceptance、skip rationale 與 regression evidence 見 [P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md)。 |
+| P13 HTTP Validation Resilience | RESOLVED | P13-1、P13-2、P13-3、P13-4 DONE；P13-5 SKIPPED / NOT REQUIRED。4 DONE、5 / 5 disposition resolved、0 remaining implementation items。P13-3 因新 deterministic evidence 確認 3xx without `Location` 可保留 `ok=true` 並漏出 `broken[]`，已沿用既有 redirect failure semantics 完成 bounded correction。維持 reuse-first，不建立平行 validation / confirmation engine、不擴充 generic 400 fallback、不建立 Facebook-specific workaround，且 protection uncertainty 不可蓋過 formal `confirmed_missing` semantics。詳細 acceptance、skip rationale 與 regression evidence 見 [P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](docs/archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md)。 |
 | P14 Result Interpretation & Management Handoff | REVIEW COMPLETE / NO IMPLEMENTATION | necessity review complete；既有功能已主要承接需求，目前無 justified implementation item。`P14_AS_SEPARATE_IMPLEMENTATION_PHASE = NOT_JUSTIFIED`；`P14_IMPLEMENTATION_ITEMS_JUSTIFIED_NOW = 0`。Link Scope filter 已移至 Next Candidates；詳細 evidence 見 [P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md](docs/archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md)。 |
 
 2026-09 maintenance refinement 同時移除 redundant `analyzer.cmd` launcher；Analyzer 功能仍由 main GUI 提供，選檔後自動分析，不再呈現第二個 Analyze action 或三步 stepper。這是既有產品面的精簡，不建立新的 Analyzer phase。

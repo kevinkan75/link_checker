@@ -4906,25 +4906,21 @@ async function request(url, method, {
     if (isRedirectStatus(response.status)) {
       const location = response.headers.get("location");
       if (!location) {
-        const result = await buildResponseResult(response, {
+        await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
+        return buildRedirectFailureResult({
           url,
+          finalUrl: response.url,
           method,
-          currentMethod,
-          readBody,
-          referer,
-          started,
-          canonicalStrategy,
-          maxHtmlBytes,
-          maxBodyPreviewBytes,
-          maxDownloadProbeBytes,
-          protectionBodyHash,
+          status: response.status,
+          error: `HTTP ${response.status} redirect response did not include a Location header.`,
+          issueType: "redirect_without_location",
+          diagnosis: "Redirect response did not include a Location header.",
           redirectChain,
           maxRedirects,
           longRedirectThreshold,
+          canonicalStrategy,
+          started,
         });
-        result.redirectIssues.push("redirect_without_location");
-        result.redirectLabels.push("redirect_without_location");
-        return result;
       }
 
       const nextUrl = new URL(location, currentUrl).toString();

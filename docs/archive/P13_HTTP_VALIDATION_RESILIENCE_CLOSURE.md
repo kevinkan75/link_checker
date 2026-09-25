@@ -1,6 +1,6 @@
 # P13 HTTP Validation Resilience — Final Closure
 
-狀態：final closure record，更新於 2026-09-02。
+狀態：final closure record，更新於 2026-09-25。
 
 ## 1. Closure Purpose
 
@@ -26,14 +26,14 @@ P13 採 reuse-first：重用 `fetchUrl()`、既有 HEAD -> GET behavior、retry 
 | --- | --- |
 | P13-1 Extend Existing HEAD -> GET Fallback for Transport Failures | DONE |
 | P13-2 Redirect-to-404/410 Confirmation | DONE |
-| P13-3 Residual Redirect / Error-route Hardening | SKIPPED / NOT REQUIRED |
+| P13-3 Residual Redirect / Error-route Hardening | DONE |
 | P13-4 Protection-aware Interpretation | DONE |
 | P13-5 Special Endpoint HEAD Recheck | SKIPPED / NOT REQUIRED |
 
 ```text
-Implemented DONE = 3/5
+Implemented DONE = 4/5
 Disposition resolved = 5/5
-(3 DONE + 2 SKIPPED / NOT REQUIRED)
+(4 DONE + 1 SKIPPED / NOT REQUIRED)
 Remaining implementation items = 0
 ```
 
@@ -63,15 +63,15 @@ Acceptance evidence：focused tests = PASS；canonical regression = `40 / 40 PAS
 
 Real-site regression 未自然觀察到 recovered / protection confirmation case；相關路徑由 deterministic tests cover。
 
-## 6. P13-3 Skip Decision
+## 6. P13-3 Acceptance
 
-`P13-3 = SKIPPED / NOT REQUIRED`。
+`P13-3 = DONE`。
 
-Necessity review 結果：reproducible residual candidates = `0`；generic candidates = `0`；user-impacting residual candidates = `0`；candidates satisfying all activation criteria = `0`。
+2026-09-25 的新 deterministic fixture 證明 HTTP `301 / 302` response 缺少 `Location` 時，既有 request path 雖記錄 `redirect_without_location`，仍可能保留 `ok=true`、`redirected=false`、interpretation `ok`，並被排除於 `broken[]`。此結果符合 reproducible、generic、user-impacting、not already handled 與 bounded-fix activation criteria，因此 reopen P13-3。
 
-`redirect -> 404/410` 由 P13-2 處理；redirect + protection precedence 由 P13-4 處理；social-share HEAD noise 屬 P13-5 review scope；original/final link-scope semantics 屬 later interpretation / P14-related scope。
+Bounded correction 只調整 missing `Location` 的 redirect request branch，重用既有 `buildRedirectFailureResult()` 與 `redirect_error` semantics，使結果為 `ok=false`、`classification=redirect_error`、`issueType=redirect_without_location`，並自然進入既有 interpretation 與 `broken[]` flow。未修改 GUI、report schema、validation architecture 或其他 downstream consumer。
 
-只有新的 evidence 同時具備 reproducible、generic、user-impacting、not already handled 與 bounded-fix candidate 時才 reopen。不得因 `/notfound` 或 `/error` path 名稱建立 heuristic，也不得新增 hostname-specific workaround。
+Acceptance evidence：301 / 302 without `Location` targeted regression = PASS；valid 302 redirect、redirect loop、too many redirects regression = PASS；P13-2 redirect-to-404/410 confirmation regression = PASS；P13-4 protection-aware interpretation regression = PASS；canonical regression = `52 / 52 PASS`。未執行 real-site scan。
 
 ## 7. P13-4 Acceptance
 
@@ -116,7 +116,7 @@ NO_BOUNDED_REQUEST_LEVEL_FIX_FOUND
 
 ## 9. Compatibility and Non-actions
 
-`REPORT_SCHEMA_VERSION = 1.3.0` 維持不變；目前最新 formal release 仍是 `v1.3.1`。
+`REPORT_SCHEMA_VERSION = 1.3.0` 維持不變；目前最新 formal release 是 `v1.5.3`。
 
 P13 沒有引入 new validation framework、new confirmation framework、new WAF detector、new crawler architecture、new database、new service、new Dynamic Render 或 new hostname workaround。`summary.coverage`、`transportFallback`、confirmation evidence 與 interpretation correction 均屬既有 contract 下的 additive 或 corrective behavior。
 
@@ -127,11 +127,11 @@ P13_HTTP_VALIDATION_RESILIENCE_STATUS = CLOSED
 
 P13_1 = DONE
 P13_2 = DONE
-P13_3 = SKIPPED / NOT REQUIRED
+P13_3 = DONE
 P13_4 = DONE
 P13_5 = SKIPPED / NOT REQUIRED
 
-P13_IMPLEMENTED_DONE = 3 / 5
+P13_IMPLEMENTED_DONE = 4 / 5
 P13_DISPOSITION_RESOLVED = 5 / 5
 P13_REMAINING_IMPLEMENTATION_ITEMS = 0
 
