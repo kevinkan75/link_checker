@@ -80,6 +80,7 @@ function runCli(args) {
 async function main() {
   assert(STALL_MS >= TIMEOUT_MS * 3, "Fixture stall must be at least three times the configured timeout.");
 
+  let rulesHeadersAt = null;
   const server = await createServer((request, response) => {
     if (request.url === "/body-stall-required") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -100,6 +101,16 @@ async function main() {
       response.end("<html><body>ok</body></html>");
       return;
     }
+    if (request.url === "/body-fast-404") {
+      response.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+      response.end("<html><body>not found</body></html>");
+      return;
+    }
+    if (request.url === "/redirect-fast") {
+      response.writeHead(302, { location: "/body-fast" });
+      response.end();
+      return;
+    }
     if (request.url === "/header-stall") {
       setTimeout(() => {
         if (!response.destroyed && !response.writableEnded) {
@@ -113,6 +124,7 @@ async function main() {
       response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       response.flushHeaders();
       response.write('{"rules":[');
+      rulesHeadersAt = performance.now();
       endAfter(response, '{"category":"fixture","domains":["example.com"],"source":"p13-6"}]}');
       return;
     }
@@ -131,15 +143,27 @@ async function main() {
     const checker = createChecker(server.origin);
 
     const caseA = await measure(() => checker.checkUrl(`${server.origin}/body-stall-required`, { requireBody: true }));
-    const caseAPass = caseA.elapsedMs >= STALL_MS * 0.8
-      && caseA.elapsedMs > TIMEOUT_MS * 2
-      && caseA.result.status === 200
-      && caseA.result.issueType !== "timeout";
-    assert(caseAPass, "Required HTML body stall did not reproduce the timeout lifecycle gap.");
+    const caseAPass = caseA.result.status === null
+      && caseA.result.ok === false
+      && caseA.result.issueType === "timeout"
+      && caseA.result.classification === "network_error"
+      && caseA.elapsedMs >= TIMEOUT_MS * 0.5
+      && caseA.elapsedMs < STALL_MS * 0.8
+      && caseA.result.elapsedMs >= TIMEOUT_MS * 0.5
+      && Math.abs(caseA.elapsedMs - caseA.result.elapsedMs) < TIMEOUT_MS;
+    assert(caseAPass, "Required HTML body stall should use the existing timeout result within the timeout window.");
 
     const caseB = await measure(() => checker.checkUrl(`${server.origin}/body-stall-404`, { requireBody: false }));
-    const caseBPass = caseB.result.status === 404 && caseB.elapsedMs > TIMEOUT_MS * 2;
-    assert(caseBPass, "404 diagnostic body stall did not reproduce the timeout lifecycle gap.");
+    const caseBPass = caseB.result.status === 404
+      && caseB.result.ok === false
+      && caseB.result.issueType === "not_found"
+      && caseB.result.classification === "http_error"
+      && caseB.result.bodyTruncated === true
+      && caseB.elapsedMs >= TIMEOUT_MS * 0.5
+      && caseB.elapsedMs < STALL_MS * 0.8
+      && caseB.result.elapsedMs >= TIMEOUT_MS * 0.5
+      && Math.abs(caseB.elapsedMs - caseB.result.elapsedMs) < TIMEOUT_MS;
+    assert(caseBPass, "404 diagnostic body timeout should preserve HTTP evidence and mark the body truncated.");
 
     const caseC = await measure(() => checker.checkUrl(`${server.origin}/body-fast`, { requireBody: true }));
     const caseCPass = caseC.result.status === 200
@@ -147,6 +171,22 @@ async function main() {
       && caseC.result.issueType !== "timeout"
       && caseC.elapsedMs < STALL_MS / 2;
     assert(caseCPass, "Fast body control should complete well before the stalled fixtures.");
+
+    const fast404 = await measure(() => checker.checkUrl(`${server.origin}/body-fast-404`, { requireBody: false }));
+    const fast404Pass = fast404.result.status === 404
+      && fast404.result.issueType === "not_found"
+      && fast404.result.classification === "http_error"
+      && fast404.result.bodyTruncated === false
+      && fast404.elapsedMs < STALL_MS / 2;
+    assert(fast404Pass, "Fast 404 diagnostic body should retain its normal semantics.");
+
+    const fastRedirect = await measure(() => checker.checkUrl(`${server.origin}/redirect-fast`, { requireBody: true }));
+    const fastRedirectPass = fastRedirect.result.status === 200
+      && fastRedirect.result.ok === true
+      && fastRedirect.result.redirected === true
+      && fastRedirect.result.issueType === "ok"
+      && fastRedirect.elapsedMs < STALL_MS / 2;
+    assert(fastRedirectPass, "Fast redirect to a successful body should remain successful.");
 
     const caseD = await measure(() => checker.checkUrl(`${server.origin}/header-stall`, { requireBody: true }));
     const caseDPass = caseD.result.status === null
@@ -168,10 +208,13 @@ async function main() {
       "--no-robots",
       "--no-confirm-404",
     ]));
-    const caseEPass = caseE.result.code === 0
+    const rulesBodyElapsedMs = rulesHeadersAt === null ? null : Math.round(performance.now() - rulesHeadersAt);
+    const caseEPass = caseE.result.code === 1
       && caseE.result.signal === null
-      && caseE.elapsedMs > TIMEOUT_MS * 2;
-    assert(caseEPass, `Rules URL body stall did not reproduce cleanly: ${caseE.result.stderr.trim()}`);
+      && caseE.result.stderr.includes("Unable to load --domain-rules URL")
+      && rulesBodyElapsedMs >= TIMEOUT_MS * 0.5
+      && rulesBodyElapsedMs < STALL_MS * 0.8;
+    assert(caseEPass, `Rules URL body stall should fail within the timeout window: ${caseE.result.stderr.trim()}`);
 
     const stopChecker = createChecker(server.origin);
     const stopPromise = measure(() => stopChecker.checkUrl(`${server.origin}/body-stall-stop`, { requireBody: true }));
@@ -214,6 +257,24 @@ async function main() {
         classification: caseC.result.classification,
         elapsedMs: caseC.elapsedMs,
       },
+      fast404: {
+        pass: fast404Pass,
+        status: fast404.result.status,
+        issueType: fast404.result.issueType,
+        classification: fast404.result.classification,
+        bodyTruncated: fast404.result.bodyTruncated,
+        elapsedMs: fast404.elapsedMs,
+        resultElapsedMs: fast404.result.elapsedMs,
+      },
+      fastRedirect: {
+        pass: fastRedirectPass,
+        status: fastRedirect.result.status,
+        ok: fastRedirect.result.ok,
+        redirected: fastRedirect.result.redirected,
+        issueType: fastRedirect.result.issueType,
+        elapsedMs: fastRedirect.elapsedMs,
+        resultElapsedMs: fastRedirect.result.elapsedMs,
+      },
       caseD: {
         pass: caseDPass,
         status: caseD.result.status,
@@ -226,6 +287,7 @@ async function main() {
         pass: caseEPass,
         exitCode: caseE.result.code,
         elapsedMs: caseE.elapsedMs,
+        rulesBodyElapsedMs,
       },
       caseF: {
         pass: caseFPass,

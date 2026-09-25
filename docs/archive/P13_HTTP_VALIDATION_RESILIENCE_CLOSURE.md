@@ -17,6 +17,7 @@ P13 的目標是提高 HTTP validation reliability，並降低以下來源造成
 - redirect-to-error semantics
 - 404/410 confirmation gaps
 - WAF / Bot / protection uncertainty
+- response body timeout lifecycle
 
 P13 採 reuse-first：重用 `fetchUrl()`、既有 HEAD -> GET behavior、retry / scheduler、redirect handling、404/410 confirmation、protection detection 與 interpretation；不建立第二套 validation / confirmation framework。
 
@@ -29,11 +30,12 @@ P13 採 reuse-first：重用 `fetchUrl()`、既有 HEAD -> GET behavior、retry 
 | P13-3 Residual Redirect / Error-route Hardening | DONE |
 | P13-4 Protection-aware Interpretation | DONE |
 | P13-5 Special Endpoint HEAD Recheck | SKIPPED / NOT REQUIRED |
+| P13-6 Response Body Timeout Lifecycle | DONE |
 
 ```text
-Implemented DONE = 4/5
-Disposition resolved = 5/5
-(4 DONE + 1 SKIPPED / NOT REQUIRED)
+Implemented DONE = 5/6
+Disposition resolved = 6/6
+(5 DONE + 1 SKIPPED / NOT REQUIRED)
 Remaining implementation items = 0
 ```
 
@@ -114,13 +116,25 @@ NO_BOUNDED_REQUEST_LEVEL_FIX_FOUND
 
 只有新的可重現 evidence 證明 generic、bounded、request-level 且有效的 recovery path 時才 reopen。
 
-## 9. Compatibility and Non-actions
+## 9. P13-6 Acceptance
+
+`P13-6 = DONE`。
+
+Root cause：native `rawRequest()` 與 rules URL fetch 在 `fetch()` 取得 response headers 後立即清除 timeout timer，但 required / diagnostic / rules response body 尚未讀取完成；`buildResponseResult()` 的 `elapsedMs` 也在 body handling 前取值。因此 configured single-request timeout 未涵蓋完整 native response lifecycle，且 elapsed evidence 低估實際 operation duration。
+
+Deterministic fixture 使用 `timeoutMs=80`、`stallMs=300`，確認 required HTML body 與 404 diagnostic body 都等待約完整 stall duration，rules URL body 亦有同樣 gap；fast body、pre-header timeout 與 user stop controls 均成立。
+
+Bounded correction 重用既有 AbortController、`attachResponseAbortCleanup()` 與 `cleanupResponseAbort()`，讓 native fetch 與 rules URL timeout 維持至 body 完成、取消或失敗。Required-body timeout 沿用既有 `network_error / timeout` semantics；diagnostic-body timeout 保留已取得的 HTTP `404 / not_found / http_error` evidence，並使用既有 `bodyTruncated=true` 表示 body 未完整讀取。Rules URL body timeout 走既有 rules load failure path；user stop 仍優先產生 `cancelledByStop=true`。`elapsedMs` 改在 response handling 後更新，涵蓋 body read、truncation / cancellation 與 timeout。
+
+Acceptance evidence：P13-6 targeted fixture、P13-1、P13-2、P13-3、P13-4 與 body-limit regressions 全部 PASS；canonical regression = `53 / 53 PASS`、`TESTS_FAILED=0`。Valid fast 200、fast 404、302 -> 200、pre-header timeout、rules timeout 與 stop-during-body controls 均 PASS。未修改 legacy TLS、retry policy、GUI、dependency 或 report schema；未執行 real-site scan。
+
+## 10. Compatibility and Non-actions
 
 `REPORT_SCHEMA_VERSION = 1.3.0` 維持不變；目前最新 formal release 是 `v1.5.3`。
 
 P13 沒有引入 new validation framework、new confirmation framework、new WAF detector、new crawler architecture、new database、new service、new Dynamic Render 或 new hostname workaround。`summary.coverage`、`transportFallback`、confirmation evidence 與 interpretation correction 均屬既有 contract 下的 additive 或 corrective behavior。
 
-## 10. Final Closure Status
+## 11. Final Closure Status
 
 ```text
 P13_HTTP_VALIDATION_RESILIENCE_STATUS = CLOSED
@@ -130,9 +144,10 @@ P13_2 = DONE
 P13_3 = DONE
 P13_4 = DONE
 P13_5 = SKIPPED / NOT REQUIRED
+P13_6 = DONE
 
-P13_IMPLEMENTED_DONE = 4 / 5
-P13_DISPOSITION_RESOLVED = 5 / 5
+P13_IMPLEMENTED_DONE = 5 / 6
+P13_DISPOSITION_RESOLVED = 6 / 6
 P13_REMAINING_IMPLEMENTATION_ITEMS = 0
 
 P13_REOPEN_POLICY = NEW REPRODUCIBLE EVIDENCE REQUIRED

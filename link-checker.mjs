@@ -36,6 +36,7 @@ const DEFAULT_SITEMAP_SAMPLE_URLS = 5;
 const XML_SITEMAP_FALLBACK_CANDIDATE_LIMIT = 1;
 const WEAK_INITIAL_FRONTIER_MAX_PAGES = 1;
 const HTML_SITEMAP_FALLBACK_CANDIDATE_LIMIT = 6;
+const RESPONSE_ABORT_SIGNAL = Symbol("linkCheckerResponseAbortSignal");
 const HTML_SITEMAP_FALLBACK_PATHS = [
   "siteinformation/sitemap",
   "sitemap",
@@ -5037,10 +5038,14 @@ async function rawRequest(url, method, {
   });
 
   let response = null;
+  let responseCleanupAttached = false;
+  let timeoutManagedByResponse = false;
   try {
     if (legacyTls) {
       response = await legacyTlsRequest(url, method, { timeoutMs, headers, agents, signal: controller.signal });
-      return attachResponseAbortCleanup(response, cleanup);
+      const attached = attachResponseAbortCleanup(response, cleanup);
+      responseCleanupAttached = true;
+      return attached;
     }
 
     response = await fetch(url, {
@@ -5049,15 +5054,23 @@ async function rawRequest(url, method, {
       signal: controller.signal,
       headers,
     });
-    return attachResponseAbortCleanup(response, cleanup);
+    const attached = attachResponseAbortCleanup(response, () => {
+      clearTimeout(timer);
+      cleanup();
+    }, controller.signal);
+    responseCleanupAttached = true;
+    timeoutManagedByResponse = true;
+    return attached;
   } catch (error) {
     if (isStopAbortError(controller.signal.reason)) {
       throw controller.signal.reason;
     }
     throw error;
   } finally {
-    clearTimeout(timer);
-    if (!response) {
+    if (!timeoutManagedByResponse) {
+      clearTimeout(timer);
+    }
+    if (!responseCleanupAttached) {
       cleanup();
     }
   }
@@ -5283,7 +5296,7 @@ function getAbortSignalReason(signal) {
   return signal?.reason instanceof Error ? signal.reason : createAbortError();
 }
 
-function attachResponseAbortCleanup(response, cleanup) {
+function attachResponseAbortCleanup(response, cleanup, signal = null) {
   const existing = response?.[RESPONSE_ABORT_CLEANUP];
   Object.defineProperty(response, RESPONSE_ABORT_CLEANUP, {
     value: () => {
@@ -5294,7 +5307,18 @@ function attachResponseAbortCleanup(response, cleanup) {
     },
     configurable: true,
   });
+  if (signal) {
+    Object.defineProperty(response, RESPONSE_ABORT_SIGNAL, {
+      value: signal,
+      configurable: true,
+    });
+  }
   return response;
+}
+
+function getResponseAbortReason(response) {
+  const signal = response?.[RESPONSE_ABORT_SIGNAL];
+  return signal?.aborted ? signal.reason : null;
 }
 
 function cleanupResponseAbort(response) {
@@ -5303,6 +5327,7 @@ function cleanupResponseAbort(response) {
     cleanup();
     delete response[RESPONSE_ABORT_CLEANUP];
   }
+  delete response?.[RESPONSE_ABORT_SIGNAL];
 }
 
 function buildStopCancelledResult(url, { method, canonicalStrategy, started, reason }) {
@@ -5391,15 +5416,28 @@ async function buildResponseResult(response, {
       result.bodyBytesRead = body.bytesRead;
       result.bodyTruncated = body.truncated;
     } else if (!result.ok && isHtml(contentType)) {
-      const body = await readResponseText(response, maxBodyPreviewBytes);
-      result.diagnosticBody = body.text;
-      result.bodyBytesRead = body.bytesRead;
-      result.bodyTruncated = body.truncated;
+      try {
+        const body = await readResponseText(response, maxBodyPreviewBytes);
+        result.diagnosticBody = body.text;
+        result.bodyBytesRead = body.bytesRead;
+        result.bodyTruncated = body.truncated;
+      } catch (error) {
+        const abortReason = getResponseAbortReason(response);
+        if (isStopAbortError(abortReason)) {
+          throw abortReason;
+        }
+        if (abortReason?.name !== "AbortError") {
+          throw error;
+        }
+        result.bodyTruncated = true;
+      }
     } else {
       const release = await releaseResponseBody(response, { maxDrainBytes: maxDownloadProbeBytes });
       result.bodyBytesRead = release.bytesRead;
       result.bodyTruncated = release.truncated;
     }
+
+    result.elapsedMs = Math.round(performance.now() - started);
 
     const signature = buildBodySignature(result.body || result.diagnosticBody || "", {
       includeBodyHash: protectionBodyHash,
@@ -9482,8 +9520,9 @@ async function readRulesUrlText(source, optionName, options = DEFAULTS) {
 async function fetchRulesUrl(url, { timeoutMs, userAgent }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let responseCleanupAttached = false;
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       method: "GET",
       redirect: "manual",
       signal: controller.signal,
@@ -9492,42 +9531,51 @@ async function fetchRulesUrl(url, { timeoutMs, userAgent }) {
         "accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
       },
     });
+    const attached = attachResponseAbortCleanup(response, () => clearTimeout(timer), controller.signal);
+    responseCleanupAttached = true;
+    return attached;
   } finally {
-    clearTimeout(timer);
+    if (!responseCleanupAttached) {
+      clearTimeout(timer);
+    }
   }
 }
 
 async function readResponseTextWithinLimit(response, maxBytes) {
-  const limit = Math.max(0, Number.isFinite(maxBytes) ? Math.floor(maxBytes) : DEFAULT_MAX_RULES_BYTES);
-  const reader = response.body?.getReader?.();
-  if (!reader) {
-    const text = await response.text();
-    const byteSize = Buffer.byteLength(text, "utf8");
-    if (byteSize > limit) {
-      throw new Error(`Rules body exceeds ${limit} bytes`);
+  try {
+    const limit = Math.max(0, Number.isFinite(maxBytes) ? Math.floor(maxBytes) : DEFAULT_MAX_RULES_BYTES);
+    const reader = response.body?.getReader?.();
+    if (!reader) {
+      const text = await response.text();
+      const byteSize = Buffer.byteLength(text, "utf8");
+      if (byteSize > limit) {
+        throw new Error(`Rules body exceeds ${limit} bytes`);
+      }
+      return { text, byteSize };
     }
-    return { text, byteSize };
-  }
 
-  const chunks = [];
-  let byteSize = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
+    const chunks = [];
+    let byteSize = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      const chunk = Buffer.from(value);
+      byteSize += chunk.length;
+      if (byteSize > limit) {
+        await reader.cancel();
+        throw new Error(`Rules body exceeds ${limit} bytes`);
+      }
+      chunks.push(chunk);
     }
-    const chunk = Buffer.from(value);
-    byteSize += chunk.length;
-    if (byteSize > limit) {
-      await reader.cancel();
-      throw new Error(`Rules body exceeds ${limit} bytes`);
-    }
-    chunks.push(chunk);
+    return {
+      text: Buffer.concat(chunks).toString("utf8"),
+      byteSize,
+    };
+  } finally {
+    cleanupResponseAbort(response);
   }
-  return {
-    text: Buffer.concat(chunks).toString("utf8"),
-    byteSize,
-  };
 }
 
 async function cancelResponseBody(response) {
@@ -9535,6 +9583,8 @@ async function cancelResponseBody(response) {
     await response.body?.cancel?.();
   } catch {
     // Ignore body cancellation errors while preparing a clearer rules loading error.
+  } finally {
+    cleanupResponseAbort(response);
   }
 }
 
