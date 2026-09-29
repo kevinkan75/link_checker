@@ -345,6 +345,7 @@ async function runQueue() {
     }
     queue.running = false;
     queue.currentItemIds.clear();
+    queue.stopRequested = false;
     queue.finishedAt = new Date().toISOString();
   }
 }
@@ -372,6 +373,10 @@ function startQueueItem(item) {
 }
 
 function stopQueue() {
+  if (!queue.running && queue.currentItemIds.size === 0) {
+    return;
+  }
+
   queue.stopRequested = true;
   const runningItems = queue.items.filter((item) => item.state === "running" && item.jobId);
   for (const current of runningItems) {

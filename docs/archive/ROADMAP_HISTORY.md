@@ -17,6 +17,10 @@
 - idle shutdown 只在無執行中掃描、無停止中任務、queue 未運作，且超過 idle timeout 無 heartbeat 時觸發。
 - 關閉前盡量呼叫 `server.close()`，必要時以短暫 timeout 強制結束 process。
 
+#### P0-1 Queue Stop State Lifecycle Refinement（已完成）
+
+Deterministic localhost evidence 確認 idle queue stop 與 running queue stop settlement 都可能殘留 `stopRequested=true`，使已停止的 queue 持續阻擋手動關閉、System CA restart 與 idle shutdown eligibility。Bounded correction 將 `stopRequested` 維持為 transient control flag：idle stop 保持 no-op，running stop 僅在 draining 期間保留旗標，待 running job settlement、pending item stop disposition 與 active item cleanup 完成後清除。Pending item 不啟動、queue reuse、manual shutdown 與 restart eligibility 均通過 targeted acceptance；canonical regression `54 / 54` PASS，report schema 不變。
+
 ### P1. 結果模型補強（已完成）
 
 狀態：已完成並通過本機 smoke test。404 與 Cloudflare-like 403 報告可輸出 P1 欄位與 WAF/Bot 診斷。

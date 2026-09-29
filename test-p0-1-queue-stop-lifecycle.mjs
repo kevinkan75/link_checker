@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { hasRestartBlockingWork } from "./gui-server.mjs";
 
 const STALL_MS = 800;
 const POLL_INTERVAL_MS = 20;
@@ -189,7 +190,7 @@ function queueInput(urls) {
   };
 }
 
-async function reproduceIdleStopImpact() {
+async function verifyIdleStop() {
   const gui = await startGuiServer();
   try {
     const session = await getSession(gui);
@@ -202,34 +203,20 @@ async function reproduceIdleStopImpact() {
     assert(stopResponse.status === 200, "Idle queue stop should return HTTP 200.");
     const afterStop = await getQueue(gui);
     assert(afterStop.running === false, "Idle queue should remain non-running after stop.");
-    assert(afterStop.stopRequested === true, "Idle queue stop should reproduce the stale stop flag.");
+    assert(afterStop.stopRequested === false, "Idle queue stop should remain an idle no-op.");
     assert(afterStop.activeSites === 0, "Idle queue stop should have no active sites.");
 
-    const restart = await post(gui, session, "/api/restart-system-ca");
-    assert(restart.status === 409, "Stale idle stop state should block System CA restart.");
-
-    const shutdown = await post(gui, session, "/api/shutdown");
-    assert(shutdown.status === 409, "Stale idle stop state should block manual shutdown.");
-    assert(
-      shutdown.data.error === "Cannot shut down while a scan or queue is still running.",
-      "Manual shutdown should report the queue-running conflict.",
-    );
-
     return {
-      afterStop: {
-        running: afterStop.running,
-        stopRequested: afterStop.stopRequested,
-        activeSites: afterStop.activeSites,
-      },
-      manualShutdownStatus: shutdown.status,
-      systemCaRestartStatus: restart.status,
+      running: afterStop.running,
+      stopRequested: afterStop.stopRequested,
+      activeSites: afterStop.activeSites,
     };
   } finally {
     await gui.stop();
   }
 }
 
-async function reproduceRunningStop(fixture) {
+async function verifyRunningStop(fixture) {
   const gui = await startGuiServer();
   try {
     const session = await getSession(gui);
@@ -258,6 +245,8 @@ async function reproduceRunningStop(fixture) {
 
     const stop = await post(gui, session, "/api/queue/stop");
     assert(stop.status === 200, "Running queue stop should return HTTP 200.");
+    assert(stop.data.running === true, "Queue should remain running while stop settlement is in progress.");
+    assert(stop.data.stopRequested === true, "Stop flag should remain true while the queue is draining.");
 
     const settled = await waitFor(
       () => getQueue(gui),
@@ -269,9 +258,26 @@ async function reproduceRunningStop(fixture) {
     assert(first?.state !== "running", "Active item should no longer be running after settlement.");
     assert(second?.state === "stopped", "Pending item should settle as stopped without starting.");
     assert(second.startedAt === null, "Pending item should never have started.");
-    assert(settled.stopRequested === true, "Running queue settlement should reproduce the stale stop flag.");
+    assert(settled.stopRequested === false, "Running queue settlement should clear the transient stop flag.");
+
+    const restartBlockingWork = hasRestartBlockingWork({
+      currentQueue: {
+        ...settled,
+        currentItemIds: new Set(settled.currentItemIds),
+      },
+      currentJobs: new Map(),
+    });
+    assert(restartBlockingWork === false, "Settled stopped queue should not block System CA restart.");
+
+    const shutdown = await post(gui, session, "/api/shutdown");
+    assert(shutdown.status === 200, "Settled stopped queue should allow manual shutdown.");
 
     return {
+      stopping: {
+        running: stop.data.running,
+        stopRequested: stop.data.stopRequested,
+        activeSites: stop.data.activeSites,
+      },
       afterSettlement: {
         running: settled.running,
         stopRequested: settled.stopRequested,
@@ -279,6 +285,8 @@ async function reproduceRunningStop(fixture) {
       },
       firstItemState: first?.state,
       secondItemState: second?.state,
+      manualShutdownStatus: shutdown.status,
+      restartBlockingWork,
     };
   } finally {
     await gui.stop();
@@ -289,8 +297,26 @@ async function verifyQueueRestartControl(fixture) {
   const gui = await startGuiServer();
   try {
     const session = await getSession(gui);
-    const idleStop = await post(gui, session, "/api/queue/stop");
-    assert(idleStop.status === 200 && idleStop.data.stopRequested === true, "Control should begin with stale idle stop state.");
+    const slowRequestsBefore = fixture.slowRequests;
+    const firstAdd = await post(gui, session, "/api/queue/items", queueInput(`${fixture.origin}/slow`));
+    assert(firstAdd.status === 201, "Stop settlement control item should be accepted.");
+
+    const firstStart = await post(gui, session, "/api/queue/start", { maxConcurrentSites: 1 });
+    assert(firstStart.status === 200, "Stop settlement control queue should start.");
+    await waitFor(
+      async () => ({ queue: await getQueue(gui), slowRequests: fixture.slowRequests }),
+      ({ queue, slowRequests }) => queue.running === true && slowRequests > slowRequestsBefore,
+      "restart control slow request",
+    );
+
+    const firstStop = await post(gui, session, "/api/queue/stop");
+    assert(firstStop.status === 200, "Stop settlement control queue should accept stop.");
+    const stopped = await waitFor(
+      () => getQueue(gui),
+      (queue) => queue.running === false && queue.activeSites === 0,
+      "restart control stop settlement",
+    );
+    assert(stopped.stopRequested === false, "Stop settlement should clear the stop flag before queue reuse.");
 
     const add = await post(gui, session, "/api/queue/items", queueInput(`${fixture.origin}/fast`));
     assert(add.status === 201, "Restart control item should be accepted.");
@@ -298,9 +324,9 @@ async function verifyQueueRestartControl(fixture) {
     assert(itemId, "Restart control should receive a queue item id.");
 
     const start = await post(gui, session, "/api/queue/start", { maxConcurrentSites: 1 });
-    assert(start.status === 200, "Queue should accept a new start after stale stop state.");
+    assert(start.status === 200, "Queue should accept a new start after stop settlement.");
     assert(start.data.running === true, "Restarted queue should report running.");
-    assert(start.data.stopRequested === false, "Queue start should clear the stale stop flag.");
+    assert(start.data.stopRequested === false, "Reused queue should start with a clear stop flag.");
 
     const settled = await waitFor(
       () => getQueue(gui),
@@ -324,27 +350,28 @@ async function verifyQueueRestartControl(fixture) {
 let fixture;
 try {
   fixture = await startFixtureServer();
-  const idle = await reproduceIdleStopImpact();
-  const running = await reproduceRunningStop(fixture);
+  const idle = await verifyIdleStop();
+  const running = await verifyRunningStop(fixture);
   const restartControl = await verifyQueueRestartControl(fixture);
 
   console.log(JSON.stringify({
     stallMs: STALL_MS,
-    caseA: idle.afterStop,
+    caseA: idle,
     caseB: running.afterSettlement,
     caseC: {
       firstItemState: running.firstItemState,
       secondItemState: running.secondItemState,
     },
     caseD: {
-      manualShutdownStatus: idle.manualShutdownStatus,
+      manualShutdownStatus: running.manualShutdownStatus,
     },
     caseE: {
-      systemCaRestartStatus: idle.systemCaRestartStatus,
+      restartBlockingWork: running.restartBlockingWork,
     },
     caseF: restartControl,
+    caseG: running.stopping,
   }, null, 2));
-  console.log("ok p0-1 queue stop lifecycle reproduction");
+  console.log("ok p0-1 queue stop lifecycle acceptance");
 } finally {
   if (fixture) {
     await fixture.close();
