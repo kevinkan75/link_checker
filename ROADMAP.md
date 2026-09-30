@@ -1,13 +1,13 @@
 # 開發路線圖
 
-更新日期：2026-09-25
+更新日期：2026-09-30
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
 ## Current State
 
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
-- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` 已發布 accuracy / false-positive corrections；`v1.5.2` 收斂 GUI、portable packaging、host diagnostics 與 Report Analyzer 的 maintenance refinements；最新正式版本 `v1.5.3` 已完成 packaging-only maintenance patch。
+- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` 已發布 accuracy / false-positive corrections；`v1.5.2` 收斂 GUI、portable packaging、host diagnostics 與 Report Analyzer 的 maintenance refinements；`v1.5.3` 已完成 packaging-only maintenance patch；最新正式版本 `v1.5.4` 已完成 P13-3、P13-6 與 P0-1 correctness / lifecycle maintenance corrections。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
