@@ -2,6 +2,26 @@
 
 本資料夾保存 Local Link Checker 的使用參考、技術契約、評估紀錄與歸檔文件。日常使用請先看根目錄 [README.md](../README.md)；目前開發狀態請看 [ROADMAP.md](../ROADMAP.md)。
 
+## 文件權威與用途
+
+下表明文化目前既有文件分工，不建立新的 policy layer：
+
+| 資訊類型 | Current authority |
+| --- | --- |
+| 使用方式與目前正式版本 | 根目錄 [README.md](../README.md) |
+| Current project state、priorities 與 phase disposition | 根目錄 [ROADMAP.md](../ROADMAP.md) |
+| Maintenance principles、release policy 與 release gate | [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) |
+| Current implementation behavior 與 technical contract | [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) |
+| CLI options 與 CLI usage contract | [CLI_REFERENCE.md](CLI_REFERENCE.md) |
+| Report schema | [schemas/report.schema.json](../schemas/report.schema.json) 與目前 report-producing implementation（主要為 [link-checker.mjs](../link-checker.mjs)） |
+| Report diff / normalization semantics | [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md) |
+| Deferred Dynamic Render research | [JS_DYNAMIC_SCAN_PLAN.md](JS_DYNAMIC_SCAN_PLAN.md)；current priority 仍由根目錄 `ROADMAP.md` 決定 |
+| Historical decisions、assessments 與 acceptance evidence | [archive/](archive/README.md) |
+
+Active documents 描述目前有效的使用方式、狀態、契約或維護政策；`archive/` 保存特定時間點的歷史決策、評估、驗收與 evidence，不因專案後續演進而持續改寫 current state。Archive 並非不可修改：可修正明顯錯字、失效 link / path、metadata 或索引錯誤，也可增加必要的 historical clarification；但不應為了同步 current state 而重寫歷史內容。
+
+文件間若出現 current-state 衝突，先辨識資訊類型並查閱上表所列 authority，再以目前 implementation / repository evidence 驗證。Archive 只代表其記錄時點，不覆蓋 current authority；若 current authority 與 implementation evidence 不一致，應依 evidence 修正對應 active document。
+
 ## 使用與規格
 
 - [CLI_REFERENCE.md](CLI_REFERENCE.md)：CLI 參數、範例、cache、incremental、sitemap、rules、portable package 與 formal-release verification 說明。
