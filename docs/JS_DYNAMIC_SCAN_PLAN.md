@@ -1,23 +1,24 @@
 # JS Dynamic Scan Plan
 
-狀態：`DEFERRED / PRESERVED`。此文件保留原本「針對依賴 JavaScript 的動態網站提供掃描能力」的規劃方向，但 Dynamic Render 目前不是 main branch 的立即實作項目。
+狀態：`DEFERRED / EVIDENCE-REQUIRED`。
+
+文件定位：`Deferred design record / preserved research`。此文件保留原本「針對依賴 JavaScript 的動態網站提供掃描能力」的研究、限制、設計選項與重新啟動條件，但 Dynamic Render 目前不是 active product mainline。專案目前階段、優先順序與已授權工作一律以 [ROADMAP.md](../ROADMAP.md) 為準，本文件不另行定義 current project priority。
 
 ## Current Product Status
 
 ```text
 DYNAMIC_RENDER_RESEARCH = PRESERVED
-DYNAMIC_RENDER_PRODUCT_PRIORITY = DEFERRED
+DYNAMIC_RENDER_STATUS = DEFERRED / EVIDENCE-REQUIRED
+DYNAMIC_RENDER_ACTIVE_MAINLINE = NO
 DYNAMIC_RENDER_RELEASE_BLOCKER = NO
-CURRENT_PRODUCT_PRIORITY = STATIC_DISCOVERY_RESILIENCE
+CURRENT_PROJECT_STATE_AUTHORITY = ../ROADMAP.md
 ```
 
-這是產品優先順序決定，不是 Dynamic Render 失敗、放棄、不可行或本質不安全。現有 production 靜態連結檢查流程已支援 Local Link Checker 的主要使用情境；繼續 Browser / network / security work 的工程與維護成本，暫時不符合目前產品需求。
+這是 Dynamic Render 的 deferred disposition，不代表 Dynamic Render 失敗、放棄、不可行或本質不安全。現有 production 靜態連結檢查流程已支援 Local Link Checker 的主要使用情境；繼續 Browser / network / security work 的工程與維護成本，暫時不符合目前產品需求。
 
 詳細 implementation / security 研究保存在 `feature/js-dynamic-scan`。main branch 只記錄產品層級停止點，不匯入該研究分支的 implementation、tests、dependencies、security evidence 或 task packets。
 
-目前產品開發優先方向是 `STATIC_DISCOVERY_RESILIENCE`：真實網站相容性診斷、低連結產出 / 弱 frontier 偵測、sitemap / seed fallback、HTML site-map / site-navigation discovery 與「掃描覆蓋可能不完整」提示。
-
-Dynamic Render 只有在以下較安全的 static / fallback discovery 仍被實際產品證據證明不足時，才應重新列為 active product candidate：
+Dynamic Render 只有在新的 real-site / deterministic evidence 證明以下既有 static / fallback discovery 仍無法發現重要連結時，才應重新列為評估候選：
 
 1. Normal static HTML link extraction.
 2. SPA / payload / static-signal extraction.
@@ -199,7 +200,7 @@ Browser runtime DOM execution demonstrably exposes important additional links th
 
 ## 下一步
 
-以下是原始規劃中的 Phase 0 + Phase 1 小範圍 spike 順序；目前不代表 main branch 的已授權下一步。現階段應先執行 `STATIC_DISCOVERY_RESILIENCE` 方向的產品驗證，確認較安全的 static / fallback discovery 仍不足以發現重要連結後，再考慮恢復 Dynamic Render。
+以下是原始規劃中的 Phase 0 + Phase 1 小範圍 spike 順序，僅作為 preserved research，不代表 main branch 的已授權下一步。只有新的 real-site / deterministic evidence 證明既有 static discovery mechanisms 仍無法發現重要連結，且 browser runtime execution 能明確補足該缺口時，才重新評估 Dynamic Render；任何實作仍需另行授權。
 
 1. 建立 CSR / timeout / security fixture。
 2. 新增 opt-in headless render 流程，只抽取渲染後 DOM 連結。

@@ -7,13 +7,14 @@
 - [CLI_REFERENCE.md](CLI_REFERENCE.md)：CLI 參數、範例、cache、incremental、sitemap、rules、portable package 與 formal-release verification 說明。
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)：核心流程、URL inventory、request policy、report schema、GUI API、Analyzer 契約與 release / packaging 技術細節。
 - [REPORT_NORMALIZATION.md](REPORT_NORMALIZATION.md)：report-to-report diff 與 normalization 設計。
-- [JS_DYNAMIC_SCAN_PLAN.md](JS_DYNAMIC_SCAN_PLAN.md)：依賴 JavaScript 的動態網站掃描初步規劃、分階段方向與安全邊界。
+- [JS_DYNAMIC_SCAN_PLAN.md](JS_DYNAMIC_SCAN_PLAN.md)：Dynamic Render 延後設計紀錄，保存依賴 JavaScript 網站掃描之研究、分階段構想、安全邊界及重新評估條件。
 - [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)：新流程開始前可回顧的共享維護脈絡、UX 原則、驗證慣例與 release gate 原則。
 - [rules/basic-domain-rules.template.json](rules/basic-domain-rules.template.json)：外連分類規則入門範本，需複製後替換成自己的網域，不會自動套用。
 - [rules/cec-site-link-rules.json](rules/cec-site-link-rules.json)：CEC SPA / CMS site link rules 範例。
 
 ## 歸檔入口
 
+- [archive/V1_5_4_RELEASE_PROVENANCE_NOTE.md](archive/V1_5_4_RELEASE_PROVENANCE_NOTE.md)：`v1.5.4` artifact build source 與 tag target 的 historical provenance exception 紀錄。
 - [archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md](archive/P13_HTTP_VALIDATION_RESILIENCE_CLOSURE.md)：P13 HTTP Validation Resilience 最終 disposition、acceptance / real-site regression evidence 與收尾紀錄。
 - [archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md](archive/P14_RESULT_INTERPRETATION_HANDOFF_ASSESSMENT.md)：P14 管理導向結果呈現與交辦 necessity review、既有能力稽核及最終 disposition。
 - [archive/README.md](archive/README.md)：歸檔文件索引。

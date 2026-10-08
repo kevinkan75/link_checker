@@ -42,6 +42,7 @@
 | 文件 | 說明 |
 | --- | --- |
 | [RELEASE_SECURITY_ASSESSMENT.md](RELEASE_SECURITY_ASSESSMENT.md) | portable `.cmd` / `.exe`、bundled runtime、SmartScreen 與 release security 評估 |
+| [V1_5_4_RELEASE_PROVENANCE_NOTE.md](V1_5_4_RELEASE_PROVENANCE_NOTE.md) | `v1.5.4` artifact build source 與 tag target 的 provenance exception、release validation tooling delta 及 future alignment reminder |
 
 ## 維護提醒
 
