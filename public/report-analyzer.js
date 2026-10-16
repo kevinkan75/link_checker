@@ -487,6 +487,9 @@ function deriveCoverageStatusForReport(report, summary = report?.summary || {}, 
   if (sitemapSeedTruncated) {
     discoveryReasons.push("sitemap_seed_truncated");
   }
+  if (summary.scanQuality?.warnings?.includes("client_rendered_content_not_scanned")) {
+    discoveryReasons.push("client_rendered_content_not_scanned");
+  }
   if (
     maxPages > 0
     && pagesCrawled >= maxPages
@@ -953,6 +956,9 @@ function formatCoverageNotice(coverage) {
   if (coverage?.discovery?.incomplete) {
     if (coverage.discovery.reasons?.includes("start_page_fetch_failed")) {
       return "起始頁面無法取得可供探索的內容，因此本次結果可能未涵蓋網站連結。";
+    }
+    if (coverage.discovery.reasons?.includes("client_rendered_content_not_scanned")) {
+      return "偵測到需由 JavaScript 載入內容的空白入口頁。本次未執行 JavaScript，這些頁面渲染後的連結可能未納入檢查，即使網站地圖所列網址回應正常，也不代表內容連結均正常；請以一般瀏覽器人工確認重要頁面。";
     }
     return "本次已完成排定的 URL 驗證，但網站探索範圍受頁面上限或 sitemap seed 限制，結果可能未涵蓋完整網站。";
   }

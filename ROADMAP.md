@@ -1,6 +1,6 @@
 # 開發路線圖
 
-更新日期：2026-09-30
+更新日期：2026-10-16
 
 本文件只保留目前狀態、當前焦點、後續候選、延後項目與長期決策邊界。使用說明請看 [README.md](README.md)，文件導覽請看 [docs/README.md](docs/README.md)，已完成階段與歷史判斷請看 [docs/archive/README.md](docs/archive/README.md)。
 
@@ -11,6 +11,7 @@
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
+- 未發布的 maintenance refinement：依新竹市觀光旅遊網 v1.5.4 報告與原始 HTML，補上 generic JavaScript app shell 偵測及 CLI / GUI / Analyzer 的 discovery limitation 提醒；僅修正診斷，不啟動 Dynamic Render。
 
 ## Current Focus
 

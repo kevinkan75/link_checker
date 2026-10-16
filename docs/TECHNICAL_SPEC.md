@@ -192,6 +192,12 @@ Report summary 會輸出 `spaDetection`，包含：
 
 常見 signals 包含 Nuxt asset、Nuxt payload、低 anchor count、大量 URL literal 等。
 
+`client_rendered_shell` 是不依賴特定框架的保守診斷：原始 HTML 同時包含外部可執行腳本、空白的 `root` / `app` / `__nuxt` / `__next` 掛載容器，且 body 缺乏可見文字、導覽連結及媒體或互動內容。註解、script、style、noscript 與 template 的內容不作為可見內容依據。此訊號不推定 React、Vue 或建置工具。
+
+發現上述訊號時，`summary.scanQuality.warnings` 與 `summary.coverage.discovery.reasons` 會包含 `client_rendered_content_not_scanned`。即使 sitemap fallback 已成功且所有排定的 URL 均已驗證，discovery 仍標為 incomplete；`runStatus.status` 與 validation 的完成狀態分別保留。此診斷不將 HTTP 200 改判為壞連結。CLI、主 GUI 及 Report Analyzer 應說明尚未執行 JavaScript，並建議以一般瀏覽器人工確認重要頁面。缺乏 HTML 或正式診斷證據的舊報告，不可僅憑相同的 Content-Length / ETag 追認為 SPA。
+
+`spaDetection.stats` 統計的是已記錄 SPA 偵測訊號的頁面，不是所有已抓取 HTML 的總量；數值為 0 不代表工具實際收到空白回應。Report schema 維持 `1.3.0`。
+
 ### 5.2 SPA links mode
 
 `--spa-links` 支援：
