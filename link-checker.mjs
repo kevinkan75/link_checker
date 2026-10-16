@@ -1779,7 +1779,10 @@ class LinkChecker {
     if (this.options.spaLinks === "strict") {
       return true;
     }
-    return Boolean(spaDetection?.detected || hasSiteLinkRules(this.siteLinkRules));
+    // The generic shell signal is diagnostic only. Preserve the existing auto
+    // extraction decision; it does not establish that inline payloads exist.
+    const hasPayloadSignals = spaDetection?.signals?.some((signal) => signal !== "client_rendered_shell");
+    return Boolean((spaDetection?.detected && hasPayloadSignals) || hasSiteLinkRules(this.siteLinkRules));
   }
 
   recordSpaDetection(pageUrl, finalUrl, detection) {
@@ -2805,7 +2808,9 @@ class LinkChecker {
         urlLiteralCount,
       },
       recommendation: this.spaDetections.length > 0
-        ? "SPA/framework signals were detected; keep SPA payload extraction enabled or review scan quality warnings."
+        ? (signals.has("client_rendered_shell")
+            ? "Empty JavaScript app shells were detected. JavaScript was not executed; rendered content links may be missing. Review important pages in a browser."
+            : "SPA/framework signals were detected; keep SPA payload extraction enabled or review scan quality warnings.")
         : "No strong SPA/framework signals were detected.",
     };
   }
@@ -2843,6 +2848,9 @@ class LinkChecker {
     }
     if (spaDetection?.detected && this.options.spaLinks === "off") {
       warnings.push("spa_links_disabled");
+    }
+    if (spaDetection?.signals?.includes("client_rendered_shell")) {
+      warnings.push("client_rendered_content_not_scanned");
     }
     if (startPageFetchFailed) {
       warnings.push("start_page_fetch_failed");
@@ -6344,6 +6352,9 @@ function detectSpaFramework(html) {
   if (html.includes("__NEXT_DATA__")) {
     signals.push("next_data");
   }
+  if (hasClientRenderedShell(html)) {
+    signals.push("client_rendered_shell");
+  }
   if (htmlLength > 100000 && anchorCount < 10) {
     signals.push("large_html_low_anchor_count");
   }
@@ -6361,6 +6372,38 @@ function detectSpaFramework(html) {
       urlLiteralCount,
     },
   };
+}
+
+function hasClientRenderedShell(html) {
+  // Require combined evidence; a root ID, a module script or a small page alone
+  // does not establish that static discovery missed client-rendered content.
+  let hasExternalScript = false;
+  const markup = html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<script\b([^>]*)>[\s\S]*?<\/script\s*>/gi, (_, input) => {
+      const attributes = parseAttributes(input);
+      const type = (attributes.get("type") || "").toLowerCase();
+      if (attributes.get("src") && ["", "module", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript"].includes(type)) {
+        hasExternalScript = true;
+      }
+      return "";
+    });
+  const body = /<body\b[^>]*>([\s\S]*?)<\/body\s*>/i.exec(markup)?.[1];
+  if (!hasExternalScript || !body) {
+    return false;
+  }
+  const hasEmptyMount = [...body.matchAll(/<(div|main)\b([^>]*)>\s*<\/\1\s*>/gi)]
+    .some((match) => /^(root|app|__nuxt|__next)$/.test(parseAttributes(match[2]).get("id") || ""));
+  if (!hasEmptyMount || /<(?:a|area)\b[^>]*\shref\s*=/i.test(body)) {
+    return false;
+  }
+  // Keep static notices, media pages and server-rendered content out of this
+  // conservative diagnostic, even if they also have an empty optional widget.
+  if (/<(?:img|svg|video|audio|iframe|object|embed|canvas|input|button|form)\b/i.test(body)) {
+    return false;
+  }
+  return decodeHtmlEntities(body.replace(/<[^>]*>/g, "")).trim().length === 0;
 }
 
 function inferSpaFramework(signals) {
@@ -8464,6 +8507,10 @@ function deriveCoverageStatus(reportLike = {}) {
     discoveryReasons.push("start_page_fetch_failed");
   }
 
+  if (summary.scanQuality?.warnings?.includes("client_rendered_content_not_scanned")) {
+    discoveryReasons.push("client_rendered_content_not_scanned");
+  }
+
   if (hasMaxPagesReachedEvidence({ summary, runStatus, details, discoveryReasons })) {
     discoveryReasons.push("max_pages_reached");
   }
@@ -9854,6 +9901,9 @@ function formatCoverageNotice(coverage) {
   if (coverage?.discovery?.incomplete) {
     if (coverage.discovery.reasons?.includes("start_page_fetch_failed")) {
       return "Scheduled URL validation completed, but the start page could not be fetched as usable HTML for discovery.";
+    }
+    if (coverage.discovery.reasons?.includes("client_rendered_content_not_scanned")) {
+      return "Empty JavaScript app shells were detected. JavaScript was not executed; rendered content links may be missing even when sitemap URLs return HTTP 200. Zero broken links does not establish site-wide link integrity. Review important pages in a browser.";
     }
     return "Scheduled URL validation completed, but site discovery was limited by page or sitemap seed budgets.";
   }
