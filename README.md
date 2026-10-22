@@ -4,9 +4,9 @@ Local Link Checker 是一套在本機執行的網站連結檢查工具，協助�
 
 所有掃描、匯入與輸出都在本機完成；GUI server 只綁定 `127.0.0.1`，不是公開網路服務。
 
-目前正式版本：`v1.5.5`
+目前正式版本：`v1.5.6`
 
-`v1.5.5` 是診斷與檢測範圍提醒的 maintenance patch，補上空白 JavaScript 應用程式入口頁偵測，並在 CLI、主 GUI 與報告分析提醒動態內容連結可能未納入檢查。既有 HTTP 判定維持不變，Report schema 維持 `1.3.0`。
+`v1.5.6` 是 portable runtime 安全性 maintenance patch，將隨附 Node.js 更新至 `v24.22.1`。Link Checker 檢測邏輯及 Report schema `1.3.0` 維持不變。
 
 ## 適合誰使用
 
@@ -34,7 +34,7 @@ Portable 版本目前以 Windows 本機環境為主要支援方式；原始碼�
 
 ### 使用 portable 版本
 
-1. 從 [v1.5.5 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.5.5/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
+1. 從 [v1.5.6 Portable](https://github.com/kevinkan75/link_checker/releases/download/v1.5.6/LinkChecker-portable.zip) 下載 `LinkChecker-portable.zip`。
 2. 解壓縮整個資料夾。
 3. 執行 `Link Checker.exe`，或在資料夾內執行：
 

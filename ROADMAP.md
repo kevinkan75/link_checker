@@ -7,11 +7,12 @@
 ## Current State
 
 - 目前沒有已知 release blocker；`v1.4.1` maintenance release 已完成 correctness stabilization 與 release validation foundation。
-- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` 已發布 accuracy / false-positive corrections；`v1.5.2` 收斂 GUI、portable packaging、host diagnostics 與 Report Analyzer 的 maintenance refinements；`v1.5.3` 已完成 packaging-only maintenance patch；`v1.5.4` 已完成 P13-3、P13-6 與 P0-1 correctness / lifecycle maintenance corrections；最新正式版本 `v1.5.5` 補上空白 JavaScript 應用程式入口頁診斷與檢測範圍提醒。
+- `v1.5.0` formal release 已完成 Static Discovery refinement 與 Analyzer maintenance cleanup；`v1.5.1` 已發布 accuracy / false-positive corrections；`v1.5.2` 收斂 GUI、portable packaging、host diagnostics 與 Report Analyzer 的 maintenance refinements；`v1.5.3` 已完成 packaging-only maintenance patch；`v1.5.4` 已完成 P13-3、P13-6 與 P0-1 correctness / lifecycle maintenance corrections；`v1.5.5` 補上空白 JavaScript 應用程式入口頁診斷與檢測範圍提醒；最新 patch `v1.5.6` 更新 portable Node.js runtime 至 `v24.22.1`。
 - Production 靜態掃描流程是目前支援的產品主線。
 - P12、P13、P14 均沒有目前待執行的已授權 implementation item。
 - 專案已進入 maintenance / evidence-driven refinement 階段，並保有 canonical full regression 與 formal release validation foundation。
 - `v1.5.5` maintenance refinement：依新竹市觀光旅遊網 v1.5.4 報告與原始 HTML，補上 generic JavaScript app shell 偵測及 CLI / GUI / Analyzer 的 discovery limitation 提醒；僅修正診斷，不啟動 Dynamic Render。
+- `v1.5.6` security maintenance patch：portable package 內含的 Node.js runtime 更新至 `v24.22.1`；Link Checker 檢測邏輯與 Report schema 維持不變。
 
 ## Current Focus
 
